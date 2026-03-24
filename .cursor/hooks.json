@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "node .cursor/hooks/runtime-policy-inject.js --cursor-host --session-start"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "command": "node .cursor/hooks/runtime-policy-inject.js --cursor-host"
+      }
+    ],
+    "SubagentStart": [
+      {
+        "command": "node .cursor/hooks/runtime-policy-inject.js --cursor-host --subagent-start"
+      }
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+# App (claw-scope/)
+claw-scope/node_modules/
+claw-scope/dist/
+claw-scope/src-tauri/target/
+
+# Env & local
+.env
+.env.*
+*.local
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

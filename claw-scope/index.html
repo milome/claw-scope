@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClawScope - 记忆可见，进化可期</title>
+    <style>
+      /* Windows 11 标准窗口控制按钮 */
+      .win-titlebar-btn {
+        width: 46px;
+        height: 40px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #333;
+        font-family: "Segoe MDL2 Assets", "Segoe UI Symbol", sans-serif;
+      }
+      .win-titlebar-btn:hover { background: #e5e5e5; }
+      .win-titlebar-btn:active { background: #cccccc; }
+      #titlebar-close:hover { background: #e81123; color: #fff; }
+      #titlebar-close:active { background: #c42b1c; color: #fff; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
