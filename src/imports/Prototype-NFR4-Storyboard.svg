@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="5120" height="768" viewBox="0 0 5120 768">
+  <desc>Figma: drag onto canvas. See README.md</desc>
+  <g id="01-Main-Memory" data-name="01 Main Memory">
+    <rect width="1024" height="768" fill="#f1f5f9"/>
+    <rect width="1024" height="40" fill="#fff" stroke="#e2e8f0"/>
+    <rect x="8" y="6" width="28" height="28" rx="6" fill="#38bdf8"/>
+    <text x="44" y="25" font-family="system-ui,sans-serif" font-size="13" fill="#0f172a">ClawScope</text>
+    <rect x="0" y="40" width="220" height="728" fill="#fff" stroke="#e2e8f0"/>
+    <text x="16" y="76" font-family="system-ui,sans-serif" font-size="14" font-weight="600" fill="#0ea5e9">Memory</text>
+    <text x="16" y="112" font-family="system-ui,sans-serif" font-size="13" fill="#0f172a">Config</text>
+    <text x="16" y="148" font-family="system-ui,sans-serif" font-size="13" fill="#0f172a">Evolve</text>
+    <text x="232" y="106" font-family="system-ui,sans-serif" font-size="13" fill="#0f172a">Filter</text>
+    <rect x="232" y="132" width="768" height="120" rx="8" fill="#fff" stroke="#e2e8f0"/>
+    <text x="248" y="188" font-family="system-ui,sans-serif" font-size="12" fill="#0f172a">Table row</text>
+  </g>
+  <g id="02-Memory-Filtered" data-name="02 Filtered" transform="translate(1024 0)">
+    <rect width="1024" height="768" fill="#f1f5f9"/>
+    <rect width="1024" height="40" fill="#fff" stroke="#e2e8f0"/>
+    <rect x="0" y="40" width="220" height="728" fill="#fff" stroke="#e2e8f0"/>
+    <text x="16" y="76" font-family="system-ui,sans-serif" font-size="14" font-weight="600" fill="#0ea5e9">Memory</text>
+    <rect x="232" y="88" width="280" height="28" rx="6" fill="#fef9c3" stroke="#fde047"/>
+    <text x="240" y="106" font-family="system-ui,sans-serif" font-size="12" fill="#0f172a">Filter chip</text>
+  </g>
+  <g id="03-Memory-Detail" data-name="03 Detail" transform="translate(2048 0)">
+    <rect width="1024" height="768" fill="#f1f5f9"/>
+    <rect x="232" y="56" width="760" height="320" rx="8" fill="#fff" stroke="#e2e8f0"/>
+    <text x="248" y="88" font-family="system-ui,sans-serif" font-size="14" font-weight="600" fill="#0f172a">Detail</text>
+  </g>
+  <g id="04-Config" data-name="04 Config" transform="translate(3072 0)">
+    <rect width="1024" height="768" fill="#f1f5f9"/>
+    <rect x="0" y="40" width="220" height="728" fill="#fff" stroke="#e2e8f0"/>
+    <text x="16" y="112" font-family="system-ui,sans-serif" font-size="14" font-weight="600" fill="#0ea5e9">Config</text>
+    <text x="232" y="100" font-family="system-ui,sans-serif" font-size="14" fill="#0f172a">Form</text>
+    <rect x="232" y="120" width="120" height="36" rx="6" fill="#0ea5e9"/>
+    <text x="268" y="142" font-family="system-ui,sans-serif" font-size="12" fill="#fff">Save</text>
+  </g>
+  <g id="05-Evolution" data-name="05 Evolution" transform="translate(4096 0)">
+    <rect width="1024" height="768" fill="#f1f5f9"/>
+    <rect x="0" y="40" width="220" height="728" fill="#fff" stroke="#e2e8f0"/>
+    <text x="16" y="148" font-family="system-ui,sans-serif" font-size="14" font-weight="600" fill="#0ea5e9">Evolve</text>
+    <rect x="232" y="96" width="200" height="72" rx="8" fill="#f0f9ff" stroke="#0ea5e9"/>
+    <text x="248" y="132" font-family="system-ui,sans-serif" font-size="13" fill="#0f172a">Conservative</text>
+    <rect x="232" y="200" width="760" height="100" rx="8" fill="#fff" stroke="#e2e8f0"/>
+    <text x="248" y="248" font-family="system-ui,sans-serif" font-size="12" fill="#0f172a">Diff</text>
+  </g>
+</svg>

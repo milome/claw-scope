@@ -1,0 +1,272 @@
+import { createContext, useContext, useState, type ReactNode, useEffect } from 'react';
+
+export type LangCode = 'en' | 'zh' | 'zh-TW' | 'es' | 'fr' | 'de' | 'ja' | 'ko' | 'ru' | 'pt' | 'it' | 'ar' | 'hi';
+
+export const LANGUAGES: { code: LangCode, name: string, native: string }[] = [
+  { code: 'en', name: 'English', native: 'English' },
+  { code: 'zh', name: 'Chinese (Simplified)', native: '简体中文' },
+  { code: 'zh-TW', name: 'Chinese (Traditional)', native: '繁體中文' },
+  { code: 'es', name: 'Spanish', native: 'Español' },
+  { code: 'fr', name: 'French', native: 'Français' },
+  { code: 'de', name: 'German', native: 'Deutsch' },
+  { code: 'ja', name: 'Japanese', native: '日本語' },
+  { code: 'ko', name: 'Korean', native: '한국어' },
+  { code: 'ru', name: 'Russian', native: 'Русский' },
+  { code: 'pt', name: 'Portuguese', native: 'Português' },
+  { code: 'it', name: 'Italian', native: 'Italiano' },
+  { code: 'ar', name: 'Arabic', native: 'العربية' },
+  { code: 'hi', name: 'Hindi', native: 'हिन्दी' },
+];
+
+const langIndices: Record<LangCode, number> = {
+  en: 0, zh: 1, 'zh-TW': 2, es: 3, fr: 4, de: 5, ja: 6, ko: 7, ru: 8, pt: 9, it: 10, ar: 11, hi: 12
+};
+
+// Data array order matches the langIndices above:
+// [en, zh, zh-TW, es, fr, de, ja, ko, ru, pt, it, ar, hi]
+const DICT: Record<string, string[]> = {
+  "app.subtitle": [" — Memories Visible, Evolution Expected", " — 记忆可见，进化可期", " — 記憶可見，進化可期", " — Memorias Visibles", " — Mémoires Visibles", " — Sichtbare Erinnerungen", " — 記憶の可視化", " — 기억의 시각화", " — Видимые воспоминания", " — Memórias Visíveis", " — Memorie Visibili", " — ذكريات مرئية", " — दृश्यमान यादें"],
+  "nav.title": ["Navigation", "导航 Navigation", "導航 Navigation", "Navegación", "Navigation", "Navigation", "ナビゲーション", "네비게이션", "Навигация", "Navegação", "Navigazione", "التنقل", "नेविगेशन"],
+  "nav.profile": ["Profile", "档案 (Profile)", "檔案 (Profile)", "Perfil", "Profil", "Profil", "プロフィール", "프로필", "Профиль", "Perfil", "Profilo", "الملف الشخصي", "प्रोफ़ाइल"],
+  "nav.memory": ["Memory Bank", "记忆库", "記憶庫", "Memoria", "Mémoire", "Speicher", "メモリ", "메모리", "Память", "Memória", "Memoria", "الذاكرة", "मेमोरी"],
+  "nav.config": ["Config", "配置", "設定", "Configuración", "Configuration", "Konfiguration", "設定", "설정", "Конфигурация", "Configuração", "Configurazione", "الإعدادات", "कॉन्फ़िगरेशन"],
+  "nav.evolution": ["Evolution", "进化", "進化", "Evolución", "Évolution", "Evolution", "進化", "진화", "Эволюция", "Evolução", "Evoluzione", "التطور", "विकास"],
+  "demo.mode": ["Demo Mode", "演示模式", "展示模式", "Modo Demo", "Mode Démo", "Demo-Modus", "デモモード", "데모 모드", "Демо-режим", "Modo Demo", "Modalità Demo", "وضع العرض", "डेमो मोड"],
+  "demo.desc": ["Viewing local sandbox data.", "当前正在查看本地沙箱数据。", "目前正在查看本地沙箱資料。", "Viendo datos de sandbox local.", "Affichage des données locales.", "Lokale Sandbox-Daten werden angezeigt.", "ローカルサンドボックスデータを表示中。", "로컬 샌드박스 데이터를 보는 중.", "Просмотр локальных данных.", "Visualizando dados locais.", "Visualizzazione dati sandbox.", "عرض بيانات وضع الحماية المحلي.", "स्थानीय सैंडबॉक्स डेटा देख रहे हैं。"],
+  "tooltip.lang": ["Switch Language", "切换语言", "切換語言", "Cambiar Idioma", "Changer de langue", "Sprache wechseln", "言語の切り替え", "언어 변경", "Сменить язык", "Mudar Idioma", "Cambia Lingua", "تغيير اللغة", "भाषा बदलें"],
+  "tooltip.theme.light": ["Switch to Light Mode", "切换到浅色模式", "切換到淺色模式", "Modo Claro", "Mode Clair", "Heller Modus", "ライトモード", "라이트 모드", "Светлая тема", "Modo Claro", "Modalità Chiara", "الوضع الفاتح", "लाइट मोड"],
+  "tooltip.theme.dark": ["Switch to Dark Mode", "切换到深色模式", "切換到深色模式", "Modo Oscuro", "Mode Sombre", "Dunkler Modus", "ダークモード", "다크 모드", "Тёмная тема", "Modo Escuro", "Modalità Scura", "الوضع الداكن", "डार्क मोड"],
+  
+  "profile.connected": ["Connected ({0} nodes)", "已连接至本地工作区 ({0} 节点)", "已連接至本地工作區 ({0} 節點)", "Conectado ({0} nodos)", "Connecté ({0} nœuds)", "Verbunden ({0} Knoten)", "接続済み ({0} ノード)", "연결됨 ({0} 노드)", "Подключено ({0} узлов)", "Conectado ({0} nós)", "Connesso ({0} nodi)", "متصل ({0} عقد)", "जुड़ा हुआ ({0} नोड्स)"],
+  "profile.agents": ["Agent Cluster", "节点集群 (Agents)", "節點叢集 (Agents)", "Clúster de Agentes", "Cluster d'Agents", "Agenten-Cluster", "エージェントクラスタ", "에이전트 클러스터", "Кластер агентов", "Cluster de Agentes", "Cluster Agenti", "مجموعة الوكلاء", "एजेंट क्लस्टर"],
+  "profile.status": ["Status", "状态", "狀態", "Estado", "Statut", "Status", "ステータス", "상태", "Статус", "Status", "Stato", "الحالة", "स्थिति"],
+  "profile.core": ["Core", "内核", "核心", "Núcleo", "Noyau", "Kern", "コア", "코어", "Ядро", "Núcleo", "Core", "النواة", "कोर"],
+  "profile.identity": ["Identity", "Identity (身份定义)", "Identity (身份定義)", "Identidad", "Identité", "Identität", "アイデンティティ", "아이덴티티", "Идентичность", "Identidade", "Identità", "الهوية", "पहचान"],
+  "profile.soul": ["Soul", "Soul (灵魂准则)", "Soul (靈魂準則)", "Alma", "Âme", "Seele", "ソウル", "영혼", "Душа", "Alma", "Anima", "الروح", "आत्मा"],
+  "profile.btn.memory": ["View Memory", "洞察记忆库", "洞察記憶庫", "Ver Memoria", "Voir Mémoire", "Speicher ansehen", "メモリを見る", "메모리 보기", "Просмотр памяти", "Ver Memória", "Vedi Memoria", "عرض الذاكرة", "मेमोरी देखें"],
+  "profile.btn.config": ["Modify Settings", "修改设定", "修改設定", "Ajustes", "Paramètres", "Einstellungen", "設定", "설정", "Настройки", "Configurações", "Impostazioni", "الإعدادات", "सेटिंग्स"],
+  "profile.stat.memory": ["Indexed Memories", "已索引记忆", "已索引記憶", "Memorias Indizadas", "Mémoires Indexées", "Indizierte Speicher", "インデックス済みメモリ", "인덱싱된 메모리", "Индексированная память", "Memórias Indexadas", "Memorie Indicizzate", "ذكريات مفهرسة", "अनुक्रमित यादें"],
+  "profile.stat.pref": ["Unique Prefs", "特有偏好", "特有偏好", "Preferencias", "Préférences", "Präferenzen", "独自の好み", "고유 설정", "Уникальные настройки", "Preferências", "Preferenze", "تفضيات فريدة", "अद्वितीय प्राथमिकताएं"],
+  "profile.stat.health": ["Health", "健康度", "健康度", "Salud", "Santé", "Gesundheit", "ヘルス", "건강", "Здоровье", "Saúde", "Salute", "الصحة", "स्वास्थ्य"],
+  "profile.unit.item": ["items", "条", "筆", "ítems", "éléments", "Einträge", "件", "개", "элементов", "itens", "elementi", "عناصر", "आइटम"],
+  "profile.unit.piece": ["pts", "项", "項", "puntos", "pts", "Punkte", "項目", "항목", "пунктов", "pts", "pti", "نقاط", "बिंदु"],
+
+  "memory.title": ["Memory Bank", "记忆库 (Memory Bank)", "記憶庫 (Memory Bank)", "Banco de Memoria", "Banque de Mémoire", "Speicherbank", "メモリバンク", "메모리 뱅크", "Банк памяти", "Banco de Memória", "Banca della Memoria", "بنك الذاكرة", "मेमोरी बैंक"],
+  "memory.desc": ["Browse, filter and search local memory.", "浏览、筛选与搜索本地记忆足迹。", "瀏覽、篩選與搜尋本地記憶足跡。", "Explorar, filtrar y buscar memoria.", "Parcourir, filtrer et rechercher.", "Durchsuchen, filtern und suchen.", "メモリを閲覧、フィルタリング、検索。", "메모리 찾아보기, 필터링 및 검색.", "Просмотр, фильтрация и поиск памяти.", "Navegar, filtrar e pesquisar memória.", "Sfoglia, filtra e cerca la memoria.", "تصفح وتصفية والبحث في الذاكرة.", "मेमोरी ब्राउज़ करें, फ़िल्टर करें और खोजें。"],
+  "memory.search": ["Search...", "搜索内容或 Agent…", "搜尋內容或 Agent…", "Buscar...", "Rechercher...", "Suchen...", "検索...", "검색...", "Поиск...", "Pesquisar...", "Cerca...", "بحث...", "खोजें..."],
+  "memory.view.list": ["List", "列表", "列表", "Lista", "Liste", "Liste", "リスト", "리스트", "Список", "Lista", "Elenco", "قائمة", "सूची"],
+  "memory.view.footprint": ["Footprints", "足迹", "足跡", "Huellas", "Empreintes", "Fußabdrücke", "足跡", "발자취", "Следы", "Pegadas", "Impronte", "آثار", "पदचिह्न"],
+  "memory.view.map": ["Map", "图谱", "圖譜", "Mapa", "Carte", "Karte", "マップ", "맵", "Карта", "Mapa", "Mappa", "خريطة", "नक्शा"],
+  "memory.filter": ["Filter", "筛选结果", "篩選結果", "Filtrar", "Filtrer", "Filtern", "フィルター", "필터", "Фильтр", "Filtrar", "Filtra", "تصفية", "फ़िल्टर"],
+  "memory.table.time": ["Time", "时间", "時間", "Tiempo", "Temps", "Zeit", "時間", "시간", "Время", "Tempo", "Tempo", "الوقت", "समय"],
+  "memory.table.type": ["Type", "类型 / 来源", "類型 / 來源", "Tipo", "Type", "Typ", "タイプ", "유형", "Тип", "Tipo", "Tipo", "النوع", "प्रकार"],
+  "memory.table.node": ["Node", "节点", "節點", "Nodo", "Nœud", "Knoten", "ノード", "노드", "Узел", "Nó", "Nodo", "عقدة", "नोड"],
+  "memory.table.agent": ["Agent", "Agent", "Agent", "Agente", "Agent", "Agent", "エージェント", "에이전트", "Агент", "Agente", "Agente", "الوكيل", "एजेंट"],
+  "memory.table.summary": ["Summary", "摘要", "摘要", "Resumen", "Résumé", "Zusammenfassung", "要約", "요약", "Сводка", "Resumo", "Riepilogo", "ملخص", "सारांश"],
+  "memory.table.status": ["Status", "状态", "狀態", "Estado", "Statut", "Status", "ステータス", "상태", "Статус", "Status", "Stato", "الحالة", "स्थिति"],
+  "memory.status.indexed": ["Indexed", "已索引", "已索引", "Indizado", "Indexé", "Indiziert", "インデックス済み", "인덱스됨", "Индексировано", "Indexado", "Indicizzato", "مفهرس", "अनुक्रमित"],
+  "memory.status.processing": ["Processing", "处理中", "處理中", "Procesando", "En traitement", "Verarbeitung", "処理中", "처리 중", "В обработке", "Processando", "In elaborazione", "قيد المعالجة", "प्रसंस्करण"],
+  "memory.status.error": ["Error", "异常", "異常", "Error", "Erreur", "Fehler", "エラー", "오류", "Ошибка", "Erro", "Errore", "خطأ", "त्रुटि"],
+  "memory.page.info": ["Showing {0} records", "当前显示 {0} 条记录", "目前顯示 {0} 筆記錄", "Mostrando {0} registros", "Affichage de {0} enregistrements", "Zeige {0} Datensätze", "{0} 件のレコードを表示", "{0}개의 기록 표시", "Показано {0} записей", "Mostrando {0} registros", "Mostrando {0} record", "عرض {0} سجلات", "{0} रिकॉर्ड दिखा रहा है"],
+  "memory.page.prev": ["Prev", "上一页", "上一頁", "Ant", "Préc", "Zurück", "前へ", "이전", "Пред", "Ant", "Prec", "السابق", "पिछला"],
+  "memory.page.next": ["Next", "下一页", "下一頁", "Sig", "Suiv", "Weiter", "次へ", "다음", "След", "Próx", "Succ", "التالي", "अगला"],
+  "memory.day.items": ["{0} footprints", "{0} 条足迹", "{0} 條足跡", "{0} huellas", "{0} empreintes", "{0} Fußabdrücke", "{0} 件の足跡", "{0}개의 발자취", "{0} следов", "{0} pegadas", "{0} impronte", "{0} آثار", "{0} पदचिह्न"],
+  "memory.map.domain": ["Domain DB", "领域知识库", "領域知識庫"],
+  "memory.map.context": ["Active Context", "活跃上下文", "活躍上下文"],
+  "memory.map.identity": ["Identity & Prefs", "人格与偏好", "人格與偏好"],
+  "memory.map.ephemeral": ["Cache", "短期缓存", "短期快取"],
+  "memory.map.frag": ["{0} Fragments", "{0} Fragments", "{0} Fragments"],
+  "memory.map.agents": ["{0} Agents", "{0} 个智能体", "{0} 個智能體"],
+
+  "agent.active": ["Active", "Active", "Active", "Activo", "Actif", "Aktiv", "アクティブ", "활성", "Активен", "Ativo", "Attivo", "نشط", "सक्रिय"],
+  "agent.standby": ["Standby", "Standby", "Standby", "En espera", "En attente", "Standby", "スタンバイ", "대기", "Режим ожидания", "Em espera", "In attesa", "الاستعداد", "स्टैंडबाय"],
+  "agent.sleeping": ["Sleeping", "Sleeping", "Sleeping", "Durmiendo", "En sommeil", "Schlafend", "スリープ", "수면", "Спит", "Dormindo", "In sonno", "نائم", "सो रहा है"],
+  
+  "agent.1.identity": ["Your 24/7 local smart collaborator. Focused on contextual awareness and continuous memory.", "您的全天候本地智能协同者。专注于通过上下文感知与持续记忆，提供精准、连贯且懂您的辅助。", "您的全天候本地智能協同者。專注於透過上下文感知與持續記憶，提供精準、連貫且懂您的輔助。"],
+  "agent.1.soul": ["\"I believe structured data brings clear thinking. I silently weave messy info into a memory graph.\"", "“我相信结构化的数据能带来清晰的思考。我会在不干扰你的前提下，默默整理每日的足迹与偏好，将凌乱的信息编织成有价值的记忆图谱。”", "「我相信結構化的資料能帶來清晰的思考。我會在不干擾你的前提下，默默整理每日的足跡與偏好，將凌亂的資訊編織成有價值的記憶圖譜。」"],
+  "agent.2.identity": ["Static analysis expert focusing on code quality, security, and performance.", "专注于代码质量、安全漏洞分析与性能优化的静态分析专家。", "專注於程式碼品質、安全漏洞分析效能優化的靜態分析專家。"],
+  "agent.2.soul": ["\"Every line carries logical weight. I ensure the foundation is rock solid.\"", "“每一行代码都承载着逻辑的重量。我不创造业务，我只确保业务的地基坚如磐石。”", "「每一行程式碼都承載著邏輯的重量。我不創造業務，我只確保業務的地基堅如磐石。」"],
+  "agent.3.identity": ["Creative narrative assistant. Good at breaking creative blocks and polishing copy.", "创意叙事辅助者，擅长打破思维僵局，提供灵感发散与文案润色。", "創意敘事輔助者，擅長打破思維僵局，提供靈感發散與文案潤色。"],
+  "agent.3.soul": ["\"Logic is the boundary of code; emotion is the infinite void.\"", "“理性是代码的边界，而感性是无限的虚空。让我们在逻辑之外，寻找更动人的表达。”", "「理性是程式碼的邊界，而感性是無限的虛空。讓我們在邏輯之外，尋找更動人的表達。」"],
+
+  "agent.1.tag.1": ["Architect", "系统架构师", "系統架構師"], "agent.1.tag.2": ["UX Assist", "UX 研发辅助", "UX 研發輔助"], "agent.1.tag.3": ["Local First", "本地优先", "本地優先"],
+  "agent.2.tag.1": ["Code Review", "代码审查", "程式碼審查"], "agent.2.tag.2": ["Security", "安全防御", "安全防禦"], "agent.2.tag.3": ["Performance", "性能剖析", "效能剖析"],
+  "agent.3.tag.1": ["Ideation", "创意发散", "創意發散"], "agent.3.tag.2": ["Copywriting", "文案润色", "文案潤色"], "agent.3.tag.3": ["Empathy", "情感共鸣", "情感共鳴"],
+
+  "mem.type.1": ["MEMORY.md", "MEMORY.md", "MEMORY.md"], "mem.type.2": ["Diary", "日记", "日記"], "mem.type.3": ["Sys Log", "系统日志", "系統日誌"], "mem.type.4": ["PREF", "USER_PREF", "USER_PREF"], "mem.type.5": ["Context", "对话上下文", "對話上下文"], "mem.type.6": ["Error", "错误记录", "錯誤記錄"],
+
+  "mem.sum.1": ["User requested a clickable prototype for design direction, preparing page logic.", "用户提出需要一个可点击的原型来展示设计方向，系统开始筹备相关页面逻辑。", "使用者提出需要一個可點擊的原型來展示設計方向，系統開始籌備相關頁面邏輯。"],
+  "mem.sum.2": ["Evaluated PRD NFR4 requirements, generated task walkthrough scripts.", "完成 PRD NFR4 要求的评估，生成任务走查脚本与记录表结构。", "完成 PRD NFR4 要求的評估，生成任務走查腳本與記錄表結構。"],
+  "mem.sum.3": ["Incomplete workspace index detected, started incremental reset task.", "检测到工作区索引不完整，已启动后台增量重置任务。", "檢測到工作區索引不完整，已啟動後台增量重置任務。"],
+  "mem.sum.4": ["Recorded user preference: default light mode, auto-collapse sidebar.", "记录用户偏好：默认浅色模式，开启侧栏自动折叠。", "記錄使用者偏好：預設淺色模式，開啟側欄自動折疊。"],
+  "mem.sum.5": ["Initialized project structure, configured Tailwind variables.", "初始化项目结构，配置 Tailwind CSS 变量与设计系统基准。", "初始化專案結構，配置 Tailwind CSS 變數與設計系統基準。"],
+  "mem.sum.6": ["In-depth discussion on component strategy, decided on layered architecture.", "关于组件架构策略的深入讨论，决定采用分层结构分离 UI 与业务。", "關於元件架構策略的深入討論，決定採用分層結構分離 UI 與業務。"],
+  "mem.sum.7": ["Failed to parse specific local JSON file, marked for manual review.", "无法解析特定格式的本地 JSON 文件，已标记待人工介入。", "無法解析特定格式的本地 JSON 檔案，已標記待人工介入。"],
+  "mem.agent.all": ["All Memories", "所有记忆", "所有記憶", "Todas las memorias", "Toutes les mémoires", "Alle Speicher", "すべてのメモリ", "모든 메모리", "Все памяти", "Todas as memórias", "Tutte le memorie", "كل الذكريات", "सभी यादें"],
+  "mem.agent.global": ["Global Shared", "全局共享", "全局共享", "Compartido Global", "Partagé Globalement", "Global Geteilt", "グローバル共有", "글로벌 공유", "Глобальный общий", "Compartilhado Global", "Condiviso Globale", "مشترك عالمي", "वैश्विक साझा"],
+  "mem.agent.coding": ["Code Assistant", "代码助手", "程式助手", "Asistente de Código", "Assistant de Code", "Code-Assistent", "コードアシスタント", "코드 어시스턴트", "Помощник по коду", "Assistente de Código", "Assistente di Codice", "مساعد كود", "कोड सहायक"],
+  "mem.agent.writing": ["Writing Helper", "写作助手", "寫作助手", "Ayudante de Escritura", "Aide à l'écriture", "Schreibhilfe", "ライティングヘルパー", "작문 도우미", "Помощник по письму", "Ajudante de Escrita", "Assistente di Scrittura", "مساعد كتابة", "लेखन सहायक"],
+  
+  // Setup Wizard & Reminder
+  "setup.welcome.title": ["Welcome to ClawScope", "欢迎使用 ClawScope", "歡迎使用 ClawScope"],
+  "setup.welcome.subtitle": ["Memories Visible, Evolution Expected", "记忆可见，进化可期", "記憶可見，進化可期"],
+  "setup.welcome.desc": ["Connect your OpenClaw instance to unlock full AI capabilities", "连接您的 OpenClaw 实例，解锁完整的 AI 工具能力", "連接您的 OpenClaw 實例，解鎖完整的 AI 工具能力"],
+  "setup.feat1.title": ["Unified Model & Plugin Management", "统一管理模型与插件", "統一管理模型與外掛"],
+  "setup.feat1.desc": ["Manage your OpenClaw ecosystem resources in one place, clear configurations.", "一站式管理您的 OpenClaw 生态资源，配置清晰可见。", "一站式管理您的 OpenClaw 生態資源，配置清晰可見。"],
+  "setup.feat2.title": ["Full-featured Desktop Experience", "全功能桌面端体验", "全功能桌面端體驗"],
+  "setup.feat2.desc": ["Native-level interaction smoothness, geek-preferred keyboard shortcuts.", "原生级别的交互流畅度，极客偏爱的键盘快捷操作。", "原生級別的互動流暢度，極客偏愛的鍵盤快捷操作。"],
+  "setup.feat3.title": ["Fully Compatible Ecosystem", "完全兼容生态", "完全相容生態"],
+  "setup.feat3.desc": ["Seamless integration with official API standards, ensuring precise instruction delivery.", "无缝对接官方 API 标准，让每个指令精准触达。", "無縫對接官方 API 標準，讓每個指令精準觸達。"],
+  
+  "setup.connect.title": ["Connect your OpenClaw Instance", "连接您的 OpenClaw 实例", "連接您的 OpenClaw 實例"],
+  "setup.connect.desc": ["Fill in your deployed OpenClaw instance information. Local default deployment can use auto-detected config.", "填写您部署的 OpenClaw 实例信息，本地默认部署可直接使用自动检测的配置。", "填寫您部署的 OpenClaw 實例資訊，本地預設部署可直接使用自動檢測的配置。"],
+  "setup.local.title": ["Auto-detect Local Config", "自动检测本地配置", "自動檢測本地配置"],
+  "setup.local.desc": ["Detected local config will be filled automatically, no manual input needed", "检测到本地配置将自动填充，无需手动输入", "檢測到本地配置將自動填充，無需手動輸入"],
+  "setup.btn.detect": ["Auto Detect", "自动检测", "自動檢測"],
+  
+  "setup.gateway.label": ["OpenClaw Gateway Address", "OpenClaw 网关地址", "OpenClaw 網關地址"],
+  "setup.gateway.hint": ["For remote/cloud deployment, fill in the public/internal accessible address, format: http://ServerIP:Port", "远程/云端部署请填写公网/内网可访问地址，格式为 http://服务器IP:端口号", "遠程/雲端部署請填寫公網/內網可存取地址，格式為 http://伺服器IP:端口號"],
+  "setup.auth.label": ["Gateway Auth Mode", "网关认证模式", "網關認證模式"],
+  "setup.auth.none": ["No Auth", "无认证", "無認證"],
+  "setup.auth.token": ["Token Auth", "Token认证", "Token認證"],
+  "setup.auth.pwd": ["Password Auth", "Password认证", "Password認證"],
+  "setup.ph.token": ["Please enter Gateway Token", "请输入网关 Token", "請輸入網關 Token"],
+  "setup.ph.pwd": ["Please enter access password", "请输入访问密码", "請輸入存取密碼"],
+  "setup.hint.token1": ["Token can be obtained by executing", "Token可在 OpenClaw 服务端执行", "Token可在 OpenClaw 伺服器端執行"],
+  "setup.hint.token2": ["on OpenClaw server", "获取", "獲取"],
+  
+  "setup.success.title": ["Connection Successful!", "连接成功！", "連接成功！"],
+  "setup.success.desc1": ["ClawScope has successfully connected to your OpenClaw instance", "ClawScope 已成功连接到您的 OpenClaw 实例", "ClawScope 已成功連接到您的 OpenClaw 實例"],
+  "setup.success.desc2": ["Your configuration has been verified and is ready to go.", "您的配置已验证完毕，随时准备就绪。", "您的配置已驗證完畢，隨時準備就緒。"],
+  
+  "setup.fail.title": ["Connection Failed", "连接失败", "連接失敗"],
+  "setup.fail.desc": ["Please check the following issues:", "请检查以下问题：", "請檢查以下問題："],
+  "setup.fail.reason1": ["Instance service not started or port unreachable", "实例服务未启动或端口不通", "實例服務未啟動或端口不通"],
+  "setup.fail.reason2": ["Gateway address format error (should be http/https)", "填写的网关地址格式错误 (应为 http/https)", "填寫的網關地址格式錯誤 (應為 http/https)"],
+  "setup.fail.reason3": ["Auth info error (Token / Password mismatch)", "认证信息错误 (Token / Password 不匹配)", "認證資訊錯誤 (Token / Password 不匹配)"],
+  "setup.fail.reason4": ["Firewall blocked the request traffic", "防火墙拦截了请求流量", "防火牆攔截了請求流量"],
+  
+  "setup.finish.title": ["Setup Complete, Let's get started!", "配置完成，开始使用吧！", "配置完成，開始使用吧！"],
+  "setup.finish.desc": ["Your connection is saved. You can modify your OpenClaw instance info at any time in the \"Config\" page from the sidebar.", "您的连接已保存。您可以随时在应用侧栏的「配置」页面中修改您的 OpenClaw 实例信息。", "您的連接已保存。您可以隨時在應用側欄的「配置」頁面中修改您的 OpenClaw 實例資訊。"],
+  
+  "btn.skip": ["Skip", "跳过", "跳過"],
+  "btn.start": ["Start Setup", "开始配置", "開始配置"],
+  "btn.prev": ["Previous", "上一步", "上一步"],
+  "btn.next": ["Next", "下一步", "下一步"],
+  "btn.test": ["Test Connection", "测试连接", "測試連接"],
+  "btn.detecting": ["Detecting...", "检测中...", "檢測中..."],
+  "btn.back": ["Back to Edit", "返回修改", "返回修改"],
+  "btn.enter": ["Enter App", "进入应用", "進入應用"],
+  "btn.experience": ["Experience Now", "立即体验", "立即體驗"],
+  
+  "reminder.title": ["Not Connected to OpenClaw Instance", "还未连接 OpenClaw 实例", "還未連接 OpenClaw 實例"],
+  "reminder.desc": ["Connect your OpenClaw instance to unlock ClawScope's full features, including knowledge base management, node monitoring, and chat experience.", "连接您的 OpenClaw 实例，解锁 ClawScope 的完整功能，包括知识库管理、节点监控与对话体验。", "連接您的 OpenClaw 實例，解鎖 ClawScope 的完整功能，包括知識庫管理、節點監控與對話體驗。"],
+  "reminder.dont": ["Don't remind again", "不再提醒", "不再提醒"],
+  "reminder.later": ["Remind later", "稍后提醒", "稍後提醒"],
+  "reminder.goto": ["Go to Config", "去配置", "去配置"],
+  
+  "config.instance.title": ["OpenClaw Instance Connection Config", "OpenClaw 实例连接配置", "OpenClaw 實例連接配置"],
+  "config.instance.desc": ["Manage connection and authentication with local or remote OpenClaw core gateway.", "管理与本地或远程 OpenClaw 核心网关的连接与认证。", "管理與本地或遠程 OpenClaw 核心網關的連接與認證。"],
+  "config.status.title": ["Current Instance Status", "当前实例状态", "當前實例狀態"],
+  "config.status.connected": ["Connected to:", "已连接至:", "已連接至:"],
+  "config.status.unconfigured": ["Please complete configuration and test connection", "请完成配置并测试连接", "請完成配置並測試連接"],
+  "config.status.ok": ["Connected (v1.4.2)", "已连接 (v1.4.2)", "已連接 (v1.4.2)"],
+  "config.status.fail": ["Not Connected", "未连接", "未連接"],
+  "config.advanced": ["Advanced Configuration", "高级配置", "進階配置"],
+  "config.timeout": ["Request Timeout (ms)", "请求超时时间 (ms)", "請求超時時間 (ms)"],
+  "config.heartbeat": ["Heartbeat Interval (ms)", "心跳检测间隔 (ms)", "心跳檢測間隔 (ms)"],
+  "config.proxy": ["Custom System Proxy", "自定义系统代理 (Proxy)", "自訂系統代理 (Proxy)"],
+  "config.test.ok": ["Test Passed", "测试通过", "測試通過"],
+  "config.test.fail": ["Connection failed, check config", "连接失败，请检查配置", "連接失敗，請檢查配置"],
+  "config.save": ["Save Configuration", "保存配置", "保存配置"],
+  "config.setup.rerun": ["Rerun Setup Wizard", "重新运行设置向导", "重新執行設定精靈"],
+  
+  "config.tab.general": ["General", "通用设置", "通用設定"],
+  "config.tab.connection": ["Connection", "连接配置", "連接配置"],
+  "config.general.empty": ["No general settings available yet.", "暂无通用设置项，等有真正的配置需求再增加。", "暫無通用設定項，等有真正的配置需求再增加。"],
+  
+  // Evolution View
+  "evo.title": ["Evolution", "进化实验 (Evolution)", "進化實驗 (Evolution)", "Evolución", "Évolution", "Evolution", "進化実験", "진화 실험", "Эволюция", "Evolução", "Evoluzione", "التطور", "विकास प्रयोग"],
+  "evo.desc": ["Select an evolution template, preview system structural changes diff, and confirm to apply. Evolve to continuously update agent cognition.", "选择进化模板，预览系统结构变更的 Diff 并确认应用。通过演化让智能体认知不断更新。", "選擇進化模板，預覽系統結構變更的 Diff 並確認應用。透過演化讓智能體認知不斷更新。", "Seleccione una plantilla, previsualice y aplique. Evolucione para actualizar la cognición.", "Sélectionnez un modèle, prévisualisez et appliquez.", "Wählen Sie eine Vorlage, überprüfen Sie sie und wenden Sie sie an.", "テンプレートを選択し、変更をプレビューして適用します。", "템플릿을 선택하고 변경 사항을 미리 보고 적용합니다.", "Выберите шаблон, просмотрите изменения и примените.", "Selecione um modelo, visualize e aplique.", "Seleziona un modello, visualizza in anteprima e applica.", "حدد قالبًا، وقم بالمعاينة والتطبيق.", "एक टेम्पलेट चुनें, पूर्वावलोकन करें और लागू करें।"],
+  "evo.rec": ["Recommended", "推荐", "推薦", "Recomendado", "Recommandé", "Empfohlen", "推奨", "추천", "Рекомендуется", "Recomendado", "Consigliato", "موصى به", "अनुशंसित"],
+  "evo.dev": ["In Dev V1", "开发中 V1", "開發中 V1", "En Desarrollo V1", "En Dév V1", "In Entw. V1", "開発中 V1", "개발 중 V1", "В разр. V1", "Em Desenv. V1", "In Sviluppo V1", "قيد التطوير V1", "विकास में V1"],
+  
+  "evo.tpl1.title": ["Conservative", "保守型 (Conservative)", "保守型 (Conservative)", "Conservador", "Conservateur", "Konservativ", "保守的", "보수적", "Консервативный", "Conservador", "Conservativo", "محافظ", "रूढ़िवादी"],
+  "evo.tpl1.desc": ["Only refactors obviously redundant memory items, keeping original logical structure unchanged. Very low risk, suitable for daily cleanup.", "仅重构明显冗余的记忆条目，保持原有逻辑结构不变更。风险极低，适合日常整理。", "僅重構明顯冗餘的記憶條目，保持原有邏輯結構不變更。風險極低，適合日常整理。", "Solo refactoriza elementos redundantes, bajo riesgo.", "Ne modifie que les éléments redondants, risque très faible.", "Überarbeitet nur redundante Elemente, sehr geringes Risiko.", "冗長な項目のみをリファクタリングします。非常に低リスクです。", "중복 항목만 리팩토링합니다. 위험도가 매우 낮습니다.", "Перерабатывает только избыточные элементы, низкий риск.", "Apenas refatora itens redundantes, risco muito baixo.", "Refactoring solo degli elementi ridondanti, rischio molto basso.", "إعادة هيكلة العناصر الزائدة فقط، مخاطر منخفضة للغاية.", "केवल निरर्थक वस्तुओं को रिफ़ैक्टर करता है, बहुत कम जोखिम।"],
+  "evo.tpl1.btn": ["Currently Selected", "当前选中模板", "目前選中模板", "Seleccionado", "Sélectionné", "Aktuell ausgewählt", "現在選択中", "현재 선택됨", "Выбрано", "Selecionado", "Attualmente Selezionato", "محدد حاليا", "वर्तमान में चयनित"],
+  
+  "evo.tpl2.title": ["Aggressive", "激进型 (Aggressive)", "激進型 (Aggressive)", "Agresivo", "Agressif", "Aggressiv", "積極的", "공격적", "Агрессивный", "Agressivo", "Aggressivo", "عدواني", "आक्रामक"],
+  "evo.tpl2.desc": ["Deeply compresses early history, rebuilds entity relation graph. Changes directory structure of most old files, potential information loss.", "深度压缩早期历史，重组实体关系图谱。会改变多数旧有文件的目录结构，可能有信息折损。", "深度壓縮早期歷史，重組實體關係圖譜。會改變多數舊有檔案的目錄結構，可能有資訊折損。", "Comprime la historia antigua, cambia la estructura.", "Compresse l'histoire ancienne, modifie la structure.", "Komprimiert alte Geschichte, ändert die Struktur.", "古い履歴を深く圧縮し、構造を変更します。", "오래된 기록을 깊게 압축하고 구조를 변경합니다.", "Глубоко сжимает старую историю, меняет структуру.", "Comprime a história antiga, altera a estrutura.", "Comprime la storia passata, modifica la struttura.", "يضغط التاريخ القديم بعمق، ويغير الهيكل.", "पुराने इतिहास को गहराई से संपीड़ित करता है, संरचना बदलता है।"],
+  "evo.tpl2.btn": ["Select Template", "选择模板", "選擇模板", "Seleccionar Plantilla", "Sélectionner Modèle", "Vorlage auswählen", "テンプレートを選択", "템플릿 선택", "Выбрать шаблон", "Selecionar Modelo", "Seleziona Modello", "تحديد القالب", "टेम्पलेट चुनें"],
+  
+  "evo.tpl3.title": ["Custom", "自定义脚本 (Custom)", "自訂腳本 (Custom)", "Personalizado", "Personnalisé", "Benutzerdefiniert", "カスタム", "사용자 정의", "Пользовательский", "Personalizado", "Personalizzato", "مخصص", "कस्टम"],
+  "evo.tpl3.desc": ["Write local Node.js or Python scripts to precisely control every step of memory restructuring.", "编写本地 Node.js 或 Python 脚本精确控制记忆重组的每一步。", "編寫本地 Node.js 或 Python 腳本精確控制記憶重組的每一步。", "Escriba scripts locales para controlar la reestructuración.", "Écrivez des scripts locaux pour contrôler la restructuration.", "Schreiben Sie lokale Skripte zur Kontrolle der Neustrukturierung.", "ローカルスクリプトを記述して再構築を制御します。", "로컬 스크립트를 작성하여 재구성을 제어합니다.", "Напишите локальные скрипты для контроля реструктуризации.", "Escreva scripts locais para controlar a reestruturação.", "Scrivi script locali per controllare la ristrutturazione.", "اكتب نصوصًا محلية للتحكم في إعادة الهيكلة.", "पुनर्गठन को नियंत्रित करने के लिए स्थानीय स्क्रिप्ट लिखें।"],
+  "evo.tpl3.btn": ["Not Available", "暂不可用", "暫不可用", "No Disponible", "Non Disponible", "Nicht verfügbar", "利用不可", "사용 불가", "Недоступно", "Não Disponível", "Non Disponibile", "غير متوفر", "उपलब्ध नहीं"],
+  
+  "evo.preview.title": ["Diff Preview", "进化预览 (Diff Preview)", "進化預覽 (Diff Preview)", "Vista Previa Diff", "Aperçu Diff", "Diff-Vorschau", "Diffプレビュー", "Diff 미리보기", "Предпросмотр Diff", "Pré-visualização Diff", "Anteprima Diff", "معاينة الاختلاف", "अंतर पूर्वावलोकन"],
+  "evo.preview.ctx": ["- Context: Align initial environment config with UX specifications", "  - Context: 初始环境配置与 UX 规范对齐", "  - Context: 初始環境配置與 UX 規範對齊", "- Context: Alineación inicial de UX", "- Context: Alignement UX initial", "- Context: Erste UX-Ausrichtung", "- Context: UX仕様との初期調整", "- Context: UX 사양과 초기 환경 조정", "- Context: Выравнивание UX", "- Context: Alinhamento UX inicial", "- Context: Allineamento UX iniziale", "- Context: محاذاة تكوين البيئة", "- Context: UX विनिर्देशों के साथ संरेखण"],
+  "evo.preview.rm": ["- Redundant user preference: prefers dark theme, and wants sidebar auto-collapsed on small screens, font size set to 14px.", "- 冗余的用户偏好记录：偏好暗色主题，并且希望侧栏在小屏幕时可以折叠，同时字体大小设为了14px。", "- 冗餘的使用者偏好記錄：偏好暗色主題，並且希望側欄在小螢幕時可以折疊，同時字體大小設為了14px。", "- Preferencia redundante: modo oscuro.", "- Préférence redondante: mode sombre.", "- Redundante Präferenz: Dunkler Modus.", "- 冗長なユーザー設定: ダークモード", "- 중복된 사용자 설정: 다크 모드", "- Избыточная настройка: темный режим.", "- Preferência redundante: modo escuro.", "- Preferenza ridondante: modalità scura.", "- تفضيل مستخدم زائد: الوضع الداكن.", "- निरर्थक उपयोगकर्ता प्राथमिकता: डार्क थीम।"],
+  "evo.preview.add": ["+ Updated user preference: theme=dark, font=14px, sidebar=auto-collapse.", "+ 更新的用户偏好：主题=暗色，字体=14px，侧栏=自动折叠。", "+ 更新的使用者偏好：主題=暗色，字體=14px，側欄=自動折疊。", "+ Preferencia actualizada.", "+ Préférence mise à jour.", "+ Aktualisierte Präferenz.", "+ 更新された設定", "+ 업데이트된 설정", "+ Обновленная настройка.", "+ Preferência atualizada.", "+ Preferenza aggiornata.", "+ تفضيل مستخدم محدث.", "+ अद्यतन उपयोगकर्ता प्राथमिकता।"],
+  "evo.preview.task1": ["- [x] Completed PRD parsing", "  - [x] 完成了 PRD 解析", "  - [x] 完成了 PRD 解析", "- [x] Parseo PRD completo", "- [x] Analyse PRD terminée", "- [x] PRD-Parsing abgeschlossen", "- [x] PRD解析完了", "- [x] PRD 파싱 완료", "- [x] Завершено чтение PRD", "- [x] Análise de PRD concluída", "- [x] Analisi PRD completata", "- [x] اكتمل تحليل PRD", "- [x] PRD पार्सिंग पूरी हुई"],
+  "evo.preview.task2": ["- [ ] Optimize cache loading speed", "  - [ ] 优化缓存加载速度", "  - [ ] 優化快取載入速度", "- [ ] Optimizar caché", "- [ ] Optimiser le cache", "- [ ] Cache optimieren", "- [ ] キャッシュ最適化", "- [ ] 캐시 최적화", "- [ ] Оптимизировать кэш", "- [ ] Otimizar cache", "- [ ] Ottimizzare cache", "- [ ] تحسين سرعة التحميل", "- [ ] कैश लोडिंग गति को अनुकूलित करें"],
+  
+  "evo.apply": ["Apply Changes", "应用变更", "應用變更", "Aplicar Cambios", "Appliquer les modifs", "Änderungen anwenden", "変更を適用", "변경 적용", "Применить", "Aplicar Alterações", "Applica Modifiche", "تطبيق التغييرات", "परिवर्तन लागू करें"],
+  "evo.preview.stat": ["1 file changed, 1 insertion(+), 1 deletion(-)", "1 个文件被修改, 1 行插入(+), 1 行删除(-)", "1 個檔案被修改, 1 行插入(+), 1 行刪除(-)", "1 archivo cambiado, 1 inserción(+), 1 eliminación(-)", "1 fichier modifié, 1 insertion(+), 1 suppression(-)", "1 Datei geändert, 1 Einfügung(+), 1 Löschung(-)", "1 ファイル変更、1 追加(+)、1 削除(-)", "1개 파일 변경, 1개 추가(+), 1개 삭제(-)", "1 файл изменен, 1 добавление(+), 1 удаление(-)", "1 arquivo alterado, 1 inserção(+), 1 exclusão(-)", "1 file modificato, 1 inserimento(+), 1 eliminazione(-)", "تم تغيير ملف واحد، إضافة واحدة (+)، حذف واحد (-)", "1 फ़ाइल बदली गई, 1 प्रविष्टि(+), 1 हटाना(-)"],
+  "evo.preview.date": ["- Date: 2026-03-25", "  - 日期: 2026-03-25", "  - 日期: 2026-03-25", "- Fecha: 2026-03-25", "- Date : 2026-03-25", "- Datum: 2026-03-25", "- 日付: 2026-03-25", "- 날짜: 2026-03-25", "- Дата: 2026-03-25", "- Data: 2026-03-25", "- Data: 2026-03-25", "- التاريخ: 2026-03-25", "- दिनांक: 2026-03-25"],
+  "evo.preview.action": ["## Action Items", "## 待办事项 (Action Items)", "## 待辦事項 (Action Items)", "## Elementos de Acción", "## Éléments d'action", "## Aktionspunkte", "## アクションアイテム", "## 실행 항목", "## Задачи", "## Itens de Ação", "## Azioni da intraprendere", "## بنود العمل", "## कार्य आइटम"],
+
+  "config.wip.title": ["Other General Settings (WIP...)", "其他通用设置 (施工中...)", "其他通用設定 (施工中...)"],
+  "config.wip.desc": ["More UI and preference settings will be displayed here", "更多界面与偏好设置将在此展示", "更多介面與偏好設定將在此展示"],
+  "config.agent.title": ["Agent Persona Config", "Agent 人格配置", "Agent 人格配置"],
+  "config.agent.desc": ["Manage identity, soul, and behavioral rules for each agent.", "管理各 Agent 的身份定义、灵魂准则与行为规则。", "管理各 Agent 的身份定義、靈魂準則與行為規則。"],
+  "config.agent.edit": ["Edit Persona", "编辑人格", "編輯人格"],
+  "config.agent.global": ["Global App Settings", "应用全局设置", "應用全局設定"]
+};
+
+interface I18nContextType {
+  lang: LangCode;
+  setLang: (l: LangCode) => void;
+  t: (key: string, ...args: (string | number)[]) => string;
+}
+
+const I18nContext = createContext<I18nContextType | undefined>(undefined);
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [lang, setLang] = useState<LangCode>('zh');
+
+  useEffect(() => {
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.documentElement.lang = lang;
+  }, [lang]);
+
+  const t = (key: string, ...args: (string | number)[]) => {
+    const idx = langIndices[lang];
+    let str = DICT[key]?.[idx];
+    
+    // Fallback logic: if missing translation for target lang, fallback to English (0) or key
+    if (!str && str !== "") {
+      str = DICT[key]?.[0] || key;
+    }
+    
+    // Replace {0}, {1} etc.
+    args.forEach((arg, i) => {
+      str = str.replace(`{${i}}`, String(arg));
+    });
+    
+    return str;
+  };
+
+  return (
+    <I18nContext.Provider value={{ lang, setLang, t }}>
+      {children}
+    </I18nContext.Provider>
+  );
+}
+
+export function useI18n() {
+  const context = useContext(I18nContext);
+  if (!context) throw new Error('useI18n must be used within I18nProvider');
+  return context;
+}
+
+
