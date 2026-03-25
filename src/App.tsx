@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { AppLogo } from "./components/AppLogo";
 
 function App() {
   useEffect(() => {
@@ -31,7 +32,7 @@ function App() {
           gap: 0,
         }}
       >
-        <img src="/logo.png" alt="" style={{ width: 36, height: 36, flexShrink: 0, alignSelf: "center" }} />
+        <AppLogo variant="titlebar" alt="" />
         <div
           id="titlebar-drag"
           data-tauri-drag-region
@@ -46,11 +47,7 @@ function App() {
         </div>
       </div>
       <div style={{ padding: 24, fontFamily: "system-ui", maxWidth: 640, marginTop: 0 }}>
-        <img
-          src="/logo.png"
-          alt="ClawScope"
-          style={{ width: 192, height: 192, marginBottom: 20, display: "block" }}
-        />
+        <AppLogo variant="hero" alt="ClawScope" />
         <h1 style={{ margin: 0 }}>ClawScope</h1>
         <p style={{ color: "#666", margin: "4px 0 16px" }}>记忆可见，进化可期</p>
         <p style={{ color: "#888", fontSize: 14 }}>OpenClaw 记忆与进化管理工具 · MVP 占位</p>

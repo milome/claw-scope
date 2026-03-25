@@ -1,0 +1,50 @@
+/**
+ * 与 Figma 导出 `figma-design/src/app/components/Shell.tsx` 标题栏左侧 logo 块对齐。
+ * 勿随意改尺寸/clip-path/blend — 若设计变更请同步 UX 与 `_bmad-output/.../project-context`。
+ */
+
+.titlebarWrap {
+  box-sizing: border-box;
+  align-self: center; /* 父级 titlebar 若 stretch，与旧 img alignSelf:center 一致 */
+  width: 1.75rem; /* Tailwind w-7 */
+  height: 1.75rem;
+  margin-right: 0.625rem; /* mr-2.5 */
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.05)); /* drop-shadow-sm */
+  mix-blend-mode: multiply;
+}
+
+/* md:w-6 md:h-6 — 与 Figma Shell 一致 */
+@media (min-width: 768px) {
+  .titlebarWrap {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+}
+
+/* 与 `dark:` 标题栏并存时避免发灰过度 */
+:global(.dark) .titlebarWrap {
+  mix-blend-mode: normal;
+}
+
+.titlebarImg {
+  width: 120%;
+  height: 120%;
+  object-fit: contain;
+  /* 与 Figma: [clip-path:circle(45%_at_50%_50%)] */
+  clip-path: circle(45% at 50% 50%);
+  display: block;
+}
+
+/* 首屏大图：同一资源，不裁圆，便于展示完整图标 */
+.heroImg {
+  width: 12rem;
+  height: 12rem;
+  object-fit: contain;
+  display: block;
+  margin-bottom: 1.25rem;
+}
