@@ -32,7 +32,7 @@ export function SetupWizard() {
   const [ripplePos, setRipplePos] = useState({ x: 0, y: 0, active: false });
   const [step, setStep] = useState(1);
   const [url, setUrl] = useState(DEFAULT_GATEWAY_URL);
-  const [authMode, setAuthMode] = useState<AuthMode>('none');
+  const [authMode, setAuthMode] = useState<AuthMode>('paired_device');
   const [authSecret, setAuthSecret] = useState('');
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -42,7 +42,7 @@ export function SetupWizard() {
   const shouldShowWizard = isSetupWizardOpen || (!isConfigured && !hasSkippedSetup);
   const isPairingRequired = lastError?.code === 'PAIRING_REQUIRED';
   const isTokenMismatch = lastError?.code === 'AUTH_TOKEN_MISMATCH';
-  const authSecretRequired = authMode !== 'none' && authSecret.trim().length === 0;
+  const authSecretRequired = authMode !== 'paired_device' && authSecret.trim().length === 0;
   const authSecretRequiredMessage = authMode === 'token' ? t('setup.auth.requiredToken') : t('setup.auth.requiredPassword');
 
   useEffect(() => {
@@ -97,7 +97,7 @@ export function SetupWizard() {
     setIsDetecting(true);
     setTimeout(() => {
       setUrl(DEFAULT_GATEWAY_URL);
-      setAuthMode('none');
+      setAuthMode('paired_device');
       setAuthSecret('');
       setIsDetecting(false);
     }, 800);
@@ -334,7 +334,7 @@ export function SetupWizard() {
                       </label>
                       <div className="grid grid-cols-3 gap-3 mb-3">
                         {[
-                          { id: 'none', label: t('setup.auth.none'), icon: Shield },
+                          { id: 'paired_device', label: t('setup.auth.pairedDevice'), icon: Shield },
                           { id: 'token', label: t('setup.auth.token'), icon: TerminalSquare },
                           { id: 'password', label: t('setup.auth.pwd'), icon: Server },
                         ].map((modeOption) => {
@@ -353,7 +353,7 @@ export function SetupWizard() {
                       </div>
 
                       <AnimatePresence>
-                        {authMode !== 'none' && (
+                        {authMode !== 'paired_device' && (
                           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                             <div className="relative mt-2">
                               <Shield className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -379,6 +379,9 @@ export function SetupWizard() {
                           </motion.div>
                         )}
                       </AnimatePresence>
+                      {authMode === 'paired_device' && (
+                        <p className="text-xs text-slate-500 mt-2">{t('setup.auth.pairedDeviceHint')}</p>
+                      )}
                     </div>
                   </div>
                 </div>

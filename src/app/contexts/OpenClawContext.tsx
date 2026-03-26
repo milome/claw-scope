@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
-export type AuthMode = 'none' | 'token' | 'password';
+export type AuthMode = 'paired_device' | 'token' | 'password';
 type GatewayConnectionPhase =
   | 'idle'
   | 'resolving_endpoint'
@@ -123,11 +123,28 @@ const AGENT_GRADIENTS = [
 
 function readStoredAuthMode(): AuthMode {
   const value = localStorage.getItem(STORAGE_KEYS.authMode);
-  return value === 'token' || value === 'password' || value === 'none' ? value : 'none';
+  if (value === 'paired_device' || value === 'token' || value === 'password') {
+    return value;
+  }
+
+  if (value === 'none') {
+    return 'paired_device';
+  }
+
+  return 'paired_device';
+}
+
+function readStoredAuthSecret(): string {
+  const mode = localStorage.getItem(STORAGE_KEYS.authMode);
+  if (mode === 'token' || mode === 'password') {
+    return localStorage.getItem(STORAGE_KEYS.authSecret) || '';
+  }
+
+  return '';
 }
 
 function normalizeAuthSecret(mode: AuthMode, secret: string): string | null {
-  if (mode === 'none') {
+  if (mode === 'paired_device') {
     return null;
   }
 
@@ -311,7 +328,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
   });
   const [gatewayUrl, setGatewayUrl] = useState(() => localStorage.getItem(STORAGE_KEYS.url) || DEFAULT_GATEWAY_URL);
   const [authMode, setAuthMode] = useState<AuthMode>(() => readStoredAuthMode());
-  const [authSecret, setAuthSecret] = useState(() => localStorage.getItem(STORAGE_KEYS.authSecret) || '');
+  const [authSecret, setAuthSecret] = useState(() => readStoredAuthSecret());
   const [isConnected, setIsConnected] = useState(false);
   const [connectedOrigin, setConnectedOrigin] = useState<string | null>(null);
   const [lastError, setLastError] = useState<GatewayErrorSummary | null>(null);
@@ -465,7 +482,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         if (persistConfig) {
           setGatewayUrl(url);
           setAuthMode(mode);
-          setAuthSecret(mode === 'none' ? '' : secret);
+          setAuthSecret(mode === 'paired_device' ? '' : secret);
           setIsConfigured(true);
           setHasSkippedSetupState(false);
           setShowReminder(false);

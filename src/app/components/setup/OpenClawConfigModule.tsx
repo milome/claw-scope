@@ -26,7 +26,7 @@ export function OpenClawConfigModule() {
   const [testResult, setTestResult] = useState<'none' | 'success' | 'fail'>('none');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const authSecretRequired = authMode !== 'none' && authSecret.trim().length === 0;
+  const authSecretRequired = authMode !== 'paired_device' && authSecret.trim().length === 0;
   const authSecretRequiredMessage = authMode === 'token' ? t('setup.auth.requiredToken') : t('setup.auth.requiredPassword');
 
   useEffect(() => {
@@ -135,7 +135,7 @@ export function OpenClawConfigModule() {
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
                 {[
-                  { id: 'none', label: t('setup.auth.none'), icon: Shield },
+                  { id: 'paired_device', label: t('setup.auth.pairedDevice'), icon: Shield },
                   { id: 'token', label: t('setup.auth.token'), icon: TerminalSquare },
                   { id: 'password', label: t('setup.auth.pwd'), icon: Server },
                 ].map((modeOption) => {
@@ -154,7 +154,7 @@ export function OpenClawConfigModule() {
               </div>
 
               <AnimatePresence>
-                {authMode !== 'none' && (
+                {authMode !== 'paired_device' && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                     <div className="relative mt-2">
                       <Shield className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -179,7 +179,7 @@ export function OpenClawConfigModule() {
                   </motion.div>
                 )}
               </AnimatePresence>
-              {authMode === 'none' && (
+              {authMode === 'paired_device' && (
                 <p className="text-xs text-slate-500 mt-2">{t('setup.auth.pairedDeviceHint')}</p>
               )}
             </div>

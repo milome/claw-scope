@@ -127,7 +127,7 @@ const DICT: Record<string, string[]> = {
   "setup.gateway.label": ["OpenClaw Gateway Address", "OpenClaw 网关地址", "OpenClaw 網關地址"],
   "setup.gateway.hint": ["For remote/cloud deployment, fill in the public/internal accessible address, format: http://ServerIP:Port", "远程/云端部署请填写公网/内网可访问地址，格式为 http://服务器IP:端口号", "遠程/雲端部署請填寫公網/內網可存取地址，格式為 http://伺服器IP:端口號"],
   "setup.auth.label": ["Gateway Auth Mode", "网关认证模式", "網關認證模式"],
-  "setup.auth.none": ["Paired Device", "已配对设备", "已配對裝置"],
+  "setup.auth.pairedDevice": ["Paired Device", "已配对设备", "已配對裝置"],
   "setup.auth.token": ["Token Auth", "Token认证", "Token認證"],
   "setup.auth.pwd": ["Password Auth", "Password认证", "Password認證"],
   "setup.auth.pairedDeviceHint": ["Use the device token issued to this paired device. First-time connection still requires pairing approval.", "使用当前已配对设备签发的 device token 连接；首次连接仍需先完成配对批准。", "使用目前已配對裝置簽發的 device token 連線；首次連線仍需先完成配對批准。"],

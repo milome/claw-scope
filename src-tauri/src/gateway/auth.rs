@@ -57,7 +57,7 @@ pub fn select_connect_auth(
         .map(ToOwned::to_owned);
 
     let should_use_stored_device_token = retry_with_stored_device_token
-        || (matches!(config.auth_mode, GatewayAuthMode::None)
+        || (matches!(config.auth_mode, GatewayAuthMode::PairedDevice)
             && explicit_gateway_token.is_none()
             && auth_password.is_none());
     let resolved_device_token = if should_use_stored_device_token {
@@ -161,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn none_auth_uses_stored_device_token_in_legacy_token_field() {
+    fn paired_device_auth_uses_stored_device_token_in_legacy_token_field() {
         let selected = select_connect_auth(&GatewayConnectConfig::default(), Some(&stored_entry()), false);
         let auth = selected.auth.expect("device auth payload");
         assert_eq!(auth.token.as_deref(), Some("stored-device-token"));

@@ -5,7 +5,8 @@ use crate::gateway::errors::GatewayErrorSummary;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum GatewayAuthMode {
-    None,
+    #[serde(alias = "none")]
+    PairedDevice,
     Token,
     Password,
 }
@@ -25,7 +26,7 @@ impl Default for GatewayConnectConfig {
     fn default() -> Self {
         Self {
             gateway_url: "http://127.0.0.1:18789".to_string(),
-            auth_mode: GatewayAuthMode::None,
+            auth_mode: GatewayAuthMode::PairedDevice,
             auth_secret: None,
             role: "operator".to_string(),
             scopes: vec!["operator.read".to_string()],
@@ -113,7 +114,23 @@ mod tests {
     fn gateway_connect_config_serializes() {
         let json = serde_json::to_string(&GatewayConnectConfig::default()).expect("serialize config");
         assert!(json.contains("gatewayUrl"));
+        assert!(json.contains("paired_device"));
         assert!(json.contains("operator.read"));
+    }
+
+    #[test]
+    fn legacy_none_auth_mode_deserializes_as_paired_device() {
+        let config: GatewayConnectConfig = serde_json::from_value(json!({
+            "gatewayUrl": "http://127.0.0.1:18789",
+            "authMode": "none",
+            "authSecret": null,
+            "role": "operator",
+            "scopes": ["operator.read"],
+            "profileLabel": null
+        }))
+        .expect("deserialize legacy auth mode");
+
+        assert_eq!(config.auth_mode, GatewayAuthMode::PairedDevice);
     }
 
     #[test]
