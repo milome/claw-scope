@@ -1,6 +1,18 @@
+import { invoke } from '@tauri-apps/api/core';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 export type AuthMode = 'none' | 'token' | 'password';
+type GatewayConnectionPhase =
+  | 'idle'
+  | 'resolving_endpoint'
+  | 'opening_socket'
+  | 'waiting_for_challenge'
+  | 'sending_connect'
+  | 'waiting_for_approval'
+  | 'connected'
+  | 'reconnecting'
+  | 'disconnected'
+  | 'failed';
 
 export interface Agent {
   id: string;
@@ -17,6 +29,55 @@ export interface Node {
   status: 'online' | 'offline';
 }
 
+export interface GatewayErrorSummary {
+  category: string;
+  code?: string | null;
+  message: string;
+  retryable: boolean;
+  hint?: string | null;
+}
+
+interface GatewayStatusSnapshot {
+  phase: GatewayConnectionPhase;
+  gatewayOrigin?: string | null;
+  deviceId?: string | null;
+  grantedRole?: string | null;
+  grantedScopes: string[];
+  lastError?: GatewayErrorSummary | null;
+  isPaired: boolean;
+  canRetryWithDeviceToken: boolean;
+}
+
+interface GatewayAgentIdentitySummary {
+  name?: string | null;
+  theme?: string | null;
+  emoji?: string | null;
+  avatar?: string | null;
+  avatarUrl?: string | null;
+}
+
+interface GatewayAgentSummary {
+  id: string;
+  name?: string | null;
+  identity?: GatewayAgentIdentitySummary | null;
+}
+
+interface GatewayAgentsListResult {
+  defaultId: string;
+  mainKey: string;
+  scope: string;
+  agents: GatewayAgentSummary[];
+}
+
+interface GatewayConnectConfig {
+  gatewayUrl: string;
+  authMode: AuthMode;
+  authSecret: string | null;
+  role: string;
+  scopes: string[];
+  profileLabel: string | null;
+}
+
 interface OpenClawContextType {
   isConnected: boolean;
   isConfigured: boolean;
@@ -25,10 +86,12 @@ interface OpenClawContextType {
   gatewayUrl: string;
   authMode: AuthMode;
   authSecret: string;
+  connectedOrigin: string | null;
+  lastError: GatewayErrorSummary | null;
   setHasSkippedSetup: (skipped: boolean) => void;
-  updateConfig: (url: string, mode: AuthMode, secret: string) => void;
+  updateConfig: (url: string, mode: AuthMode, secret: string) => Promise<boolean>;
   testConnection: (url: string, mode: AuthMode, secret: string) => Promise<boolean>;
-  disconnect: () => void;
+  disconnect: () => Promise<void>;
   reopenSetupWizard: () => void;
   closeSetupWizard: () => void;
   showReminder: boolean;
@@ -40,6 +103,8 @@ interface OpenClawContextType {
 const OpenClawContext = createContext<OpenClawContextType | undefined>(undefined);
 
 const DEFAULT_GATEWAY_URL = 'http://127.0.0.1:18789';
+const DEFAULT_CONNECT_ROLE = 'operator';
+const DEFAULT_CONNECT_SCOPES = ['operator.read'];
 const STORAGE_KEYS = {
   configured: 'oc_configured',
   skipped: 'oc_skipped',
@@ -47,21 +112,187 @@ const STORAGE_KEYS = {
   authMode: 'oc_auth_mode',
   authSecret: 'oc_auth_secret',
 } as const;
+const AGENT_GRADIENTS = [
+  'from-sky-400 to-blue-600',
+  'from-emerald-400 to-teal-600',
+  'from-amber-400 to-orange-600',
+  'from-fuchsia-400 to-purple-600',
+  'from-violet-400 to-indigo-600',
+  'from-rose-400 to-red-600',
+] as const;
 
-const MOCK_NODES: Node[] = [
-  { id: 'node-local', name: 'OpenClaw-Local', status: 'online' },
-  { id: 'node-east', name: 'OpenClaw-East', status: 'online' },
-  { id: 'node-west', name: 'OpenClaw-West', status: 'offline' },
-];
+function readStoredAuthMode(): AuthMode {
+  const value = localStorage.getItem(STORAGE_KEYS.authMode);
+  return value === 'token' || value === 'password' || value === 'none' ? value : 'none';
+}
 
-const MOCK_AGENTS: Agent[] = [
-  { id: 'c-7f8a-99x', name: 'ClawScope AI', nodeId: 'node-local', status: 'active', avatarColor: 'from-sky-400 to-blue-600', type: 'global' },
-  { id: 'a-3m2b-88z', name: 'CodeReviewer', nodeId: 'node-local', status: 'standby', avatarColor: 'from-emerald-400 to-teal-600', type: 'coding' },
-  { id: 'a-4t1c-77k', name: 'Terminal Agent', nodeId: 'node-local', status: 'active', avatarColor: 'from-amber-400 to-orange-600', type: 'coding' },
-  { id: 's-9k1c-11y', name: 'StoryCrafter', nodeId: 'node-east', status: 'sleeping', avatarColor: 'from-fuchsia-400 to-purple-600', type: 'writing' },
-  { id: 'd-1b2c-33x', name: 'DB Admin', nodeId: 'node-east', status: 'active', avatarColor: 'from-violet-400 to-indigo-600', type: 'db' },
-  { id: 'u-5m6n-88p', name: 'UX Tester', nodeId: 'node-west', status: 'sleeping', avatarColor: 'from-rose-400 to-red-600', type: 'design' },
-];
+function normalizeAuthSecret(mode: AuthMode, secret: string): string | null {
+  if (mode === 'none') {
+    return null;
+  }
+
+  const trimmedSecret = secret.trim();
+  return trimmedSecret.length > 0 ? trimmedSecret : null;
+}
+
+function createConnectConfig(url: string, mode: AuthMode, secret: string): GatewayConnectConfig {
+  return {
+    gatewayUrl: url,
+    authMode: mode,
+    authSecret: normalizeAuthSecret(mode, secret),
+    role: DEFAULT_CONNECT_ROLE,
+    scopes: [...DEFAULT_CONNECT_SCOPES],
+    profileLabel: null,
+  };
+}
+
+function isTauriRuntimeAvailable() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const runtimeWindow = window as Window & { __TAURI_INTERNALS__?: unknown };
+  return '__TAURI_INTERNALS__' in runtimeWindow;
+}
+
+function createRuntimeUnavailableError(): GatewayErrorSummary {
+  return {
+    category: 'runtime',
+    code: 'TAURI_RUNTIME_UNAVAILABLE',
+    message: '当前运行环境未注入 Tauri API，请通过桌面端启动 ClawScope。',
+    retryable: false,
+    hint: '请使用 `npm run tauri dev` 或正式桌面应用启动当前项目。',
+  };
+}
+
+function isGatewayErrorSummary(value: unknown): value is GatewayErrorSummary {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return typeof record.category === 'string' && typeof record.message === 'string' && typeof record.retryable === 'boolean';
+}
+
+function stringifyUnknownError(error: unknown) {
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Unknown gateway error';
+  }
+}
+
+function toGatewayErrorSummary(error: unknown): GatewayErrorSummary {
+  if (isGatewayErrorSummary(error)) {
+    return error;
+  }
+
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    return {
+      category: typeof record.category === 'string' ? record.category : 'unknown',
+      code: typeof record.code === 'string' ? record.code : null,
+      message:
+        typeof record.message === 'string'
+          ? record.message
+          : typeof record.error === 'string'
+            ? record.error
+            : stringifyUnknownError(error),
+      retryable: typeof record.retryable === 'boolean' ? record.retryable : false,
+      hint: typeof record.hint === 'string' ? record.hint : null,
+    };
+  }
+
+  return {
+    category: 'unknown',
+    code: null,
+    message: stringifyUnknownError(error),
+    retryable: false,
+    hint: null,
+  };
+}
+
+async function invokeGateway<T>(command: string, args?: Record<string, unknown>) {
+  if (!isTauriRuntimeAvailable()) {
+    throw createRuntimeUnavailableError();
+  }
+
+  return invoke<T>(command, args);
+}
+
+function isConnectedPhase(phase: GatewayConnectionPhase) {
+  return phase === 'connected';
+}
+
+function resolveOrigin(origin: string | null | undefined, fallback?: string) {
+  if (origin && origin.trim().length > 0) {
+    return origin;
+  }
+
+  if (fallback && fallback.trim().length > 0) {
+    return fallback;
+  }
+
+  return null;
+}
+
+function buildNodeId(origin: string) {
+  return `gateway:${origin}`;
+}
+
+function buildNodeName(origin: string) {
+  try {
+    const url = new URL(origin);
+    if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') {
+      return 'OpenClaw Local';
+    }
+
+    return `OpenClaw ${url.host}`;
+  } catch {
+    return origin;
+  }
+}
+
+function buildNode(origin: string): Node {
+  return {
+    id: buildNodeId(origin),
+    name: buildNodeName(origin),
+    status: 'online',
+  };
+}
+
+function hashValue(value: string) {
+  let hash = 0;
+
+  for (const char of value) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+
+  return hash;
+}
+
+function pickAgentGradient(agentId: string) {
+  return AGENT_GRADIENTS[hashValue(agentId) % AGENT_GRADIENTS.length];
+}
+
+function mapAgents(result: GatewayAgentsListResult, nodeId: string): Agent[] {
+  return result.agents.map((agent) => ({
+    id: agent.id,
+    name: agent.identity?.name ?? agent.name ?? agent.id,
+    nodeId,
+    status: agent.id === result.defaultId ? 'active' : 'standby',
+    avatarColor: pickAgentGradient(agent.id),
+    type: agent.identity?.theme ?? result.scope,
+  }));
+}
 
 export function OpenClawProvider({ children }: { children: ReactNode }) {
   const isDev = import.meta.env.DEV;
@@ -79,10 +310,14 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     return !configured && !skipped;
   });
   const [gatewayUrl, setGatewayUrl] = useState(() => localStorage.getItem(STORAGE_KEYS.url) || DEFAULT_GATEWAY_URL);
-  const [authMode, setAuthMode] = useState<AuthMode>(() => (localStorage.getItem(STORAGE_KEYS.authMode) as AuthMode) || 'none');
+  const [authMode, setAuthMode] = useState<AuthMode>(() => readStoredAuthMode());
   const [authSecret, setAuthSecret] = useState(() => localStorage.getItem(STORAGE_KEYS.authSecret) || '');
-  const [isConnected, setIsConnected] = useState(() => (isDev ? false : readFlag(STORAGE_KEYS.configured)));
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectedOrigin, setConnectedOrigin] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<GatewayErrorSummary | null>(null);
   const [showReminder, setShowReminder] = useState(false);
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.url, gatewayUrl);
@@ -110,6 +345,69 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     setShowReminder(false);
   }, [hasSkippedSetup, isConfigured, isSetupWizardOpen]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateGatewayState = async () => {
+      try {
+        const snapshot = await invokeGateway<GatewayStatusSnapshot>('gateway_status');
+        if (cancelled) {
+          return;
+        }
+
+        const origin = resolveOrigin(snapshot.gatewayOrigin, gatewayUrl);
+        if (!isConnectedPhase(snapshot.phase) || !origin) {
+          setIsConnected(false);
+          setConnectedOrigin(origin);
+          setLastError(snapshot.lastError ?? null);
+          setNodes([]);
+          setAgents([]);
+          return;
+        }
+
+        try {
+          const agentsList = await invokeGateway<GatewayAgentsListResult>('gateway_agents_list');
+          if (cancelled) {
+            return;
+          }
+
+          const node = buildNode(origin);
+          setIsConnected(true);
+          setConnectedOrigin(origin);
+          setLastError(null);
+          setNodes([node]);
+          setAgents(mapAgents(agentsList, node.id));
+        } catch (error) {
+          if (cancelled) {
+            return;
+          }
+
+          setIsConnected(false);
+          setConnectedOrigin(origin);
+          setLastError(toGatewayErrorSummary(error));
+          setNodes([]);
+          setAgents([]);
+        }
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setIsConnected(false);
+        setConnectedOrigin(null);
+        setLastError(toGatewayErrorSummary(error));
+        setNodes([]);
+        setAgents([]);
+      }
+    };
+
+    void hydrateGatewayState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gatewayUrl]);
+
   const setHasSkippedSetup = (skipped: boolean) => {
     setHasSkippedSetupState(skipped);
     if (skipped) {
@@ -129,28 +427,79 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     setIsSetupWizardOpen(false);
   };
 
-  const updateConfig = (url: string, mode: AuthMode, secret: string) => {
-    setGatewayUrl(url);
-    setAuthMode(mode);
-    setAuthSecret(secret);
-    setIsConfigured(true);
+  const applyConnectedState = (origin: string, agentsList: GatewayAgentsListResult) => {
+    const node = buildNode(origin);
     setIsConnected(true);
-    setHasSkippedSetupState(false);
-    setShowReminder(false);
-    setIsSetupWizardOpen(false);
+    setConnectedOrigin(origin);
+    setLastError(null);
+    setNodes([node]);
+    setAgents(mapAgents(agentsList, node.id));
   };
 
-  const testConnection = async (url: string) => {
-    return new Promise<boolean>((resolve) => {
-      setTimeout(() => {
-        resolve(url.startsWith('http'));
-      }, 1500);
-    });
-  };
-
-  const disconnect = () => {
+  const applyDisconnectedState = (error: GatewayErrorSummary | null, origin: string | null = null) => {
     setIsConnected(false);
-    setIsConfigured(false);
+    setConnectedOrigin(origin);
+    setLastError(error);
+    setNodes([]);
+    setAgents([]);
+  };
+
+  const connectAndLoadAgents = async (url: string, mode: AuthMode, secret: string, persistConfig: boolean) => {
+    setLastError(null);
+
+    try {
+      const snapshot = await invokeGateway<GatewayStatusSnapshot>('gateway_connect', {
+        config: createConnectConfig(url, mode, secret),
+      });
+      const origin = resolveOrigin(snapshot.gatewayOrigin, url);
+
+      if (!isConnectedPhase(snapshot.phase) || !origin) {
+        applyDisconnectedState(snapshot.lastError ?? null, origin);
+        return false;
+      }
+
+      try {
+        const agentsList = await invokeGateway<GatewayAgentsListResult>('gateway_agents_list');
+        applyConnectedState(origin, agentsList);
+
+        if (persistConfig) {
+          setGatewayUrl(url);
+          setAuthMode(mode);
+          setAuthSecret(mode === 'none' ? '' : secret);
+          setIsConfigured(true);
+          setHasSkippedSetupState(false);
+          setShowReminder(false);
+          setIsSetupWizardOpen(false);
+        }
+
+        return true;
+      } catch (error) {
+        applyDisconnectedState(toGatewayErrorSummary(error), origin);
+        return false;
+      }
+    } catch (error) {
+      applyDisconnectedState(toGatewayErrorSummary(error));
+      return false;
+    }
+  };
+
+  const updateConfig = async (url: string, mode: AuthMode, secret: string) => {
+    return connectAndLoadAgents(url, mode, secret, true);
+  };
+
+  const testConnection = async (url: string, mode: AuthMode, secret: string) => {
+    return connectAndLoadAgents(url, mode, secret, false);
+  };
+
+  const disconnect = async () => {
+    setLastError(null);
+
+    try {
+      await invokeGateway<GatewayStatusSnapshot>('gateway_disconnect');
+      applyDisconnectedState(null);
+    } catch (error) {
+      applyDisconnectedState(toGatewayErrorSummary(error));
+    }
   };
 
   return (
@@ -163,6 +512,8 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         gatewayUrl,
         authMode,
         authSecret,
+        connectedOrigin,
+        lastError,
         setHasSkippedSetup,
         updateConfig,
         testConnection,
@@ -171,8 +522,8 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         closeSetupWizard,
         showReminder,
         setShowReminder,
-        nodes: MOCK_NODES,
-        agents: MOCK_AGENTS,
+        nodes,
+        agents,
       }}
     >
       {children}

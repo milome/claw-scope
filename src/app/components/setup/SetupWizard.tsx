@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useOpenClaw, type AuthMode } from '../../contexts/OpenClawContext';
 import { CheckCircle2, XCircle, RefreshCw, Server, Shield, Globe, TerminalSquare, LayoutGrid, Cpu, Check, AlertCircle, ChevronRight, Moon, Sun } from 'lucide-react';
@@ -16,6 +16,8 @@ export function SetupWizard() {
     gatewayUrl,
     authMode: savedAuthMode,
     authSecret: savedAuthSecret,
+    connectedOrigin,
+    lastError,
     setHasSkippedSetup,
     updateConfig,
     testConnection,
@@ -33,10 +35,15 @@ export function SetupWizard() {
   const [authMode, setAuthMode] = useState<AuthMode>('none');
   const [authSecret, setAuthSecret] = useState('');
   const [isTesting, setIsTesting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [testResult, setTestResult] = useState<'none' | 'success' | 'fail'>('none');
   const [isDetecting, setIsDetecting] = useState(false);
 
   const shouldShowWizard = isSetupWizardOpen || (!isConfigured && !hasSkippedSetup);
+  const isPairingRequired = lastError?.code === 'PAIRING_REQUIRED';
+  const isTokenMismatch = lastError?.code === 'AUTH_TOKEN_MISMATCH';
+  const authSecretRequired = authMode !== 'none' && authSecret.trim().length === 0;
+  const authSecretRequiredMessage = authMode === 'token' ? t('setup.auth.requiredToken') : t('setup.auth.requiredPassword');
 
   useEffect(() => {
     setMounted(true);
@@ -60,6 +67,7 @@ export function SetupWizard() {
     setAuthMode(savedAuthMode);
     setAuthSecret(savedAuthSecret);
     setIsTesting(false);
+    setIsSaving(false);
     setTestResult('none');
     setIsDetecting(false);
   }, [shouldShowWizard, gatewayUrl, savedAuthMode, savedAuthSecret]);
@@ -106,9 +114,15 @@ export function SetupWizard() {
     setStep(3);
   };
 
-  const handleSaveAndFinish = () => {
-    updateConfig(url, authMode, authSecret);
-    closeSetupWizard();
+  const handleSaveAndFinish = async () => {
+    setIsSaving(true);
+    const success = await updateConfig(url, authMode, authSecret);
+    setIsSaving(false);
+
+    if (!success) {
+      setTestResult('fail');
+      setStep(3);
+    }
   };
 
   if (!shouldShowWizard) {
@@ -348,9 +362,19 @@ export function SetupWizard() {
                                 value={authSecret}
                                 onChange={(e) => setAuthSecret(e.target.value)}
                                 placeholder={authMode === 'token' ? t('setup.ph.token') : t('setup.ph.pwd')}
-                                className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all dark:text-slate-100"
+                                className={`w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border rounded-xl text-sm outline-none transition-all dark:text-slate-100 ${
+                                  authSecretRequired
+                                    ? 'border-red-300 dark:border-red-500/50 focus:ring-2 focus:ring-red-500/50 focus:border-red-500'
+                                    : 'border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                                }`}
                               />
                             </div>
+                            {authSecretRequired && (
+                              <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3" />
+                                {authSecretRequiredMessage}
+                              </p>
+                            )}
                             <p className="text-xs text-slate-500 mt-2">{t('setup.hint.token1')} <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[10px] font-mono">openclaw config get gateway.auth.token</code> {t('setup.hint.token2')}</p>
                           </motion.div>
                         )}
@@ -377,7 +401,12 @@ export function SetupWizard() {
                     </div>
                     <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">{t('setup.success.title')}</h2>
                     <p className="text-lg text-slate-600 dark:text-slate-300 mb-2">{t('setup.success.desc1')}</p>
-                    <p className="text-sm text-slate-500">{t('setup.success.desc2')}</p>
+                    <p className="text-sm text-slate-500 mb-4">{t('setup.success.desc2')}</p>
+                    {connectedOrigin && (
+                      <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300 font-medium">
+                        {connectedOrigin}
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>
@@ -387,13 +416,45 @@ export function SetupWizard() {
                     <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">{t('setup.fail.title')}</h2>
                     <p className="text-lg text-slate-600 dark:text-slate-300 mb-6">{t('setup.fail.desc')}</p>
 
-                    <div className="text-left bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 max-w-md w-full">
-                      <ul className="space-y-3">
-                        <li className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300"><AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" /> {t('setup.fail.reason1')}</li>
-                        <li className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300"><AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" /> {t('setup.fail.reason2')}</li>
-                        <li className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300"><AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" /> {t('setup.fail.reason3')}</li>
-                        <li className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300"><AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" /> {t('setup.fail.reason4')}</li>
-                      </ul>
+                    <div className="space-y-4 max-w-md w-full">
+                      {lastError && (
+                        <div className="text-left rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-950/30 p-4">
+                          <div className="flex items-start gap-2 text-sm text-red-700 dark:text-red-300 font-medium">
+                            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                            <span>{lastError.message}</span>
+                          </div>
+                          {lastError.hint && <p className="mt-2 text-xs text-red-600 dark:text-red-300/80">{lastError.hint}</p>}
+                        </div>
+                      )}
+
+                      {isPairingRequired ? (
+                        <div className="text-left bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 w-full space-y-4">
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            请到服务端执行以下命令批准当前设备，然后回到这里重新测试连接。
+                          </p>
+                          <code className="block rounded-lg bg-slate-900 px-4 py-3 text-sm text-slate-100 font-mono overflow-x-auto">
+                            openclaw devices approve --latest
+                          </code>
+                        </div>
+                      ) : isTokenMismatch ? (
+                        <div className="text-left bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 w-full space-y-4">
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            当前填写的 Gateway Token 与服务端配置不一致。请到服务端核对 token 后重新填写，再次测试连接。
+                          </p>
+                          <code className="block rounded-lg bg-slate-900 px-4 py-3 text-sm text-slate-100 font-mono overflow-x-auto">
+                            openclaw config get gateway.auth.token
+                          </code>
+                        </div>
+                      ) : (
+                        <div className="text-left bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 w-full">
+                          <ul className="space-y-3">
+                            <li className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300"><AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" /> {t('setup.fail.reason1')}</li>
+                            <li className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300"><AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" /> {t('setup.fail.reason2')}</li>
+                            <li className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300"><AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" /> {t('setup.fail.reason3')}</li>
+                            <li className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300"><AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" /> {t('setup.fail.reason4')}</li>
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
@@ -415,6 +476,7 @@ export function SetupWizard() {
                 </div>
                 <h2 className="text-4xl font-bold text-slate-900 dark:text-white tracking-tight mb-4">{t('setup.finish.title')}</h2>
                 <p className="text-lg text-slate-500 dark:text-slate-400 mb-12 max-w-lg">{t('setup.finish.desc')}</p>
+                {connectedOrigin && <p className="text-sm text-slate-500 dark:text-slate-400 font-mono">{connectedOrigin}</p>}
               </motion.div>
             )}
           </AnimatePresence>
@@ -434,7 +496,7 @@ export function SetupWizard() {
               <div className="flex gap-2 sm:gap-3">
                 <button
                   onClick={handleTestAndNext}
-                  disabled={!url || isTesting}
+                  disabled={!url || authSecretRequired || isTesting}
                   className="px-4 sm:px-6 py-2 sm:py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 text-sm font-semibold rounded-lg shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 sm:gap-2 focus:outline-none focus:ring-2 focus:ring-slate-500/50"
                 >
                   {isTesting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Server className="w-4 h-4" />}
@@ -459,7 +521,14 @@ export function SetupWizard() {
 
           {step === 4 && (
             <div className="w-full flex justify-center">
-              <button onClick={handleSaveAndFinish} className="px-8 sm:px-10 py-2.5 sm:py-3 bg-[#165DFF] hover:bg-blue-700 text-white text-[15px] font-semibold rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95 flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 dark:focus:ring-offset-slate-900">{t('btn.experience')} <Check className="w-5 h-5" /></button>
+              <button
+                onClick={handleSaveAndFinish}
+                disabled={isSaving}
+                className="px-8 sm:px-10 py-2.5 sm:py-3 bg-[#165DFF] hover:bg-blue-700 text-white text-[15px] font-semibold rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+              >
+                {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
+                {t('btn.experience')}
+              </button>
             </div>
           )}
         </div>
@@ -467,4 +536,9 @@ export function SetupWizard() {
     </div>
   );
 }
+
+
+
+
+
 

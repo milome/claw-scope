@@ -127,11 +127,14 @@ const DICT: Record<string, string[]> = {
   "setup.gateway.label": ["OpenClaw Gateway Address", "OpenClaw 网关地址", "OpenClaw 網關地址"],
   "setup.gateway.hint": ["For remote/cloud deployment, fill in the public/internal accessible address, format: http://ServerIP:Port", "远程/云端部署请填写公网/内网可访问地址，格式为 http://服务器IP:端口号", "遠程/雲端部署請填寫公網/內網可存取地址，格式為 http://伺服器IP:端口號"],
   "setup.auth.label": ["Gateway Auth Mode", "网关认证模式", "網關認證模式"],
-  "setup.auth.none": ["No Auth", "无认证", "無認證"],
+  "setup.auth.none": ["Paired Device", "已配对设备", "已配對裝置"],
   "setup.auth.token": ["Token Auth", "Token认证", "Token認證"],
   "setup.auth.pwd": ["Password Auth", "Password认证", "Password認證"],
+  "setup.auth.pairedDeviceHint": ["Use the device token issued to this paired device. First-time connection still requires pairing approval.", "使用当前已配对设备签发的 device token 连接；首次连接仍需先完成配对批准。", "使用目前已配對裝置簽發的 device token 連線；首次連線仍需先完成配對批准。"],
   "setup.ph.token": ["Please enter Gateway Token", "请输入网关 Token", "請輸入網關 Token"],
   "setup.ph.pwd": ["Please enter access password", "请输入访问密码", "請輸入存取密碼"],
+  "setup.auth.requiredToken": ["Gateway Token is required in token auth mode", "已选择 Token 认证，请填写 Gateway Token", "已選擇 Token 認證，請填寫 Gateway Token"],
+  "setup.auth.requiredPassword": ["Gateway password is required in password auth mode", "已选择 Password 认证，请填写访问密码", "已選擇 Password 認證，請填寫存取密碼"],
   "setup.hint.token1": ["Token can be obtained by executing", "Token可在 OpenClaw 服务端执行", "Token可在 OpenClaw 伺服器端執行"],
   "setup.hint.token2": ["on OpenClaw server", "获取", "獲取"],
   
@@ -268,5 +271,7 @@ export function useI18n() {
   if (!context) throw new Error('useI18n must be used within I18nProvider');
   return context;
 }
+
+
 
 
