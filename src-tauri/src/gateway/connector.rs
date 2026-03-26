@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use chrono::Utc;
 use futures_util::{stream::SplitStream, SinkExt, StreamExt};
 use rand::RngCore;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 use tokio::{sync::Mutex as AsyncMutex, time::timeout};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
@@ -26,8 +26,8 @@ use crate::gateway::{
         store_device_auth_token,
     },
     types::{
-        GatewayAgentsListResult, GatewayConnectConfig, GatewayConnectionPhase,
-        GatewayStatusSnapshot,
+        GatewayAgentFileGetResult, GatewayAgentIdentityResult, GatewayAgentsListResult,
+        GatewayConnectConfig, GatewayConnectionPhase, GatewayStatusSnapshot,
     },
 };
 
@@ -191,6 +191,51 @@ pub async fn agents_list(state: GatewayAppState) -> Result<GatewayAgentsListResu
     .await?;
     serde_json::from_value(value).map_err(|error| GatewayError::Protocol {
         message: format!("failed decoding agents.list payload: {error}"),
+    })
+}
+
+pub async fn agent_identity_get(
+    state: GatewayAppState,
+    agent_id: &str,
+) -> Result<GatewayAgentIdentityResult, GatewayError> {
+    let value = request_json(
+        state,
+        "agent.identity.get",
+        Some(json!({ "agentId": agent_id })),
+    )
+    .await?;
+    serde_json::from_value(value).map_err(|error| GatewayError::Protocol {
+        message: format!("failed decoding agent.identity.get payload: {error}"),
+    })
+}
+
+pub async fn agent_soul_get(
+    state: GatewayAppState,
+    agent_id: &str,
+) -> Result<GatewayAgentFileGetResult, GatewayError> {
+    agent_file_get(state, agent_id, "SOUL.md").await
+}
+
+pub async fn agent_workspace_identity_get(
+    state: GatewayAppState,
+    agent_id: &str,
+) -> Result<GatewayAgentFileGetResult, GatewayError> {
+    agent_file_get(state, agent_id, "IDENTITY.md").await
+}
+
+async fn agent_file_get(
+    state: GatewayAppState,
+    agent_id: &str,
+    name: &str,
+) -> Result<GatewayAgentFileGetResult, GatewayError> {
+    let value = request_json(
+        state,
+        "agents.files.get",
+        Some(json!({ "agentId": agent_id, "name": name })),
+    )
+    .await?;
+    serde_json::from_value(value).map_err(|error| GatewayError::Protocol {
+        message: format!("failed decoding agents.files.get payload for {name}: {error}"),
     })
 }
 

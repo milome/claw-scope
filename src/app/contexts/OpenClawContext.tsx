@@ -69,6 +69,28 @@ interface GatewayAgentSummary {
   identity?: GatewayAgentIdentitySummary | null;
 }
 
+export interface GatewayAgentIdentityResult {
+  agentId: string;
+  name?: string | null;
+  avatar?: string | null;
+  emoji?: string | null;
+}
+
+export interface GatewayAgentFileEntry {
+  name: string;
+  path: string;
+  missing: boolean;
+  size?: number | null;
+  updatedAtMs?: number | null;
+  content?: string | null;
+}
+
+export interface GatewayAgentFileGetResult {
+  agentId: string;
+  workspace: string;
+  file: GatewayAgentFileEntry;
+}
+
 interface GatewayAgentsListResult {
   defaultId: string;
   mainKey: string;
@@ -132,7 +154,7 @@ function createConnectConfig(url: string, mode: AuthMode, secret: string): Gatew
   };
 }
 
-function isTauriRuntimeAvailable() {
+export function isTauriRuntimeAvailable() {
   if (typeof window === 'undefined') {
     return false;
   }
@@ -212,6 +234,31 @@ async function invokeGateway<T>(command: string, args?: Record<string, unknown>)
   }
 
   return invoke<T>(command, args);
+}
+
+export async function gatewayAgentIdentityGet(agentId: string) {
+  return invokeGateway<GatewayAgentIdentityResult>('gateway_agent_identity_get', {
+    agentId,
+  });
+}
+
+export async function gatewayAgentSoulGet(agentId: string) {
+  return invokeGateway<GatewayAgentFileGetResult>('gateway_agent_soul_get', {
+    agentId,
+  });
+}
+
+export async function gatewayAgentWorkspaceIdentityGet(agentId: string) {
+  return invokeGateway<GatewayAgentFileGetResult>('gateway_agent_workspace_identity_get', {
+    agentId,
+  });
+}
+
+export async function gatewayExportMarkdownDocument(suggestedFileName: string, content: string) {
+  return invokeGateway<string | null>('export_markdown_document', {
+    suggestedFileName,
+    content,
+  });
 }
 
 function isConnectedPhase(phase: GatewayConnectionPhase) {

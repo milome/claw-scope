@@ -98,6 +98,34 @@ pub struct GatewayAgentSummary {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct GatewayAgentIdentityResult {
+    pub agent_id: String,
+    pub name: Option<String>,
+    pub avatar: Option<String>,
+    pub emoji: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayAgentFileEntry {
+    pub name: String,
+    pub path: String,
+    pub missing: bool,
+    pub size: Option<u64>,
+    pub updated_at_ms: Option<u64>,
+    pub content: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayAgentFileGetResult {
+    pub agent_id: String,
+    pub workspace: String,
+    pub file: GatewayAgentFileEntry,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct GatewayAgentsListResult {
     pub default_id: String,
     pub main_key: String,
@@ -170,6 +198,42 @@ mod tests {
                 .and_then(|identity| identity.emoji.as_deref()),
             Some("lobster")
         );
+    }
+
+    #[test]
+    fn agent_identity_result_deserializes_from_gateway_shape() {
+        let result: GatewayAgentIdentityResult = serde_json::from_value(json!({
+            "agentId": "main",
+            "name": "Main",
+            "avatar": "https://example.com/avatar.png",
+            "emoji": "🦞"
+        }))
+        .expect("deserialize agent identity");
+
+        assert_eq!(result.agent_id, "main");
+        assert_eq!(result.name.as_deref(), Some("Main"));
+        assert_eq!(result.emoji.as_deref(), Some("🦞"));
+    }
+
+    #[test]
+    fn agent_file_get_result_deserializes_from_gateway_shape() {
+        let result: GatewayAgentFileGetResult = serde_json::from_value(json!({
+            "agentId": "main",
+            "workspace": "~/.openclaw/workspace",
+            "file": {
+                "name": "SOUL.md",
+                "path": "~/.openclaw/workspace/SOUL.md",
+                "missing": false,
+                "size": 128,
+                "updatedAtMs": 1700000000000_u64,
+                "content": "# Soul"
+            }
+        }))
+        .expect("deserialize agent file get");
+
+        assert_eq!(result.agent_id, "main");
+        assert_eq!(result.file.name, "SOUL.md");
+        assert_eq!(result.file.updated_at_ms, Some(1700000000000_u64));
     }
 }
 
