@@ -1,7 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  OPENCLAW_STORAGE_KEYS as STORAGE_KEYS,
+  normalizeAuthSecret,
+  readStoredAuthMode,
+  readStoredAuthSecret,
+  type AuthMode,
+} from './openClawStorage';
 
-export type AuthMode = 'paired_device' | 'token' | 'password';
+export type { AuthMode } from './openClawStorage';
 type GatewayConnectionPhase =
   | 'idle'
   | 'resolving_endpoint'
@@ -105,13 +112,6 @@ const OpenClawContext = createContext<OpenClawContextType | undefined>(undefined
 const DEFAULT_GATEWAY_URL = 'http://127.0.0.1:18789';
 const DEFAULT_CONNECT_ROLE = 'operator';
 const DEFAULT_CONNECT_SCOPES = ['operator.read'];
-const STORAGE_KEYS = {
-  configured: 'oc_configured',
-  skipped: 'oc_skipped',
-  url: 'oc_url',
-  authMode: 'oc_auth_mode',
-  authSecret: 'oc_auth_secret',
-} as const;
 const AGENT_GRADIENTS = [
   'from-sky-400 to-blue-600',
   'from-emerald-400 to-teal-600',
@@ -120,37 +120,6 @@ const AGENT_GRADIENTS = [
   'from-violet-400 to-indigo-600',
   'from-rose-400 to-red-600',
 ] as const;
-
-function readStoredAuthMode(): AuthMode {
-  const value = localStorage.getItem(STORAGE_KEYS.authMode);
-  if (value === 'paired_device' || value === 'token' || value === 'password') {
-    return value;
-  }
-
-  if (value === 'none') {
-    return 'paired_device';
-  }
-
-  return 'paired_device';
-}
-
-function readStoredAuthSecret(): string {
-  const mode = localStorage.getItem(STORAGE_KEYS.authMode);
-  if (mode === 'token' || mode === 'password') {
-    return localStorage.getItem(STORAGE_KEYS.authSecret) || '';
-  }
-
-  return '';
-}
-
-function normalizeAuthSecret(mode: AuthMode, secret: string): string | null {
-  if (mode === 'paired_device') {
-    return null;
-  }
-
-  const trimmedSecret = secret.trim();
-  return trimmedSecret.length > 0 ? trimmedSecret : null;
-}
 
 function createConnectConfig(url: string, mode: AuthMode, secret: string): GatewayConnectConfig {
   return {
@@ -327,8 +296,8 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     return !configured && !skipped;
   });
   const [gatewayUrl, setGatewayUrl] = useState(() => localStorage.getItem(STORAGE_KEYS.url) || DEFAULT_GATEWAY_URL);
-  const [authMode, setAuthMode] = useState<AuthMode>(() => readStoredAuthMode());
-  const [authSecret, setAuthSecret] = useState(() => readStoredAuthSecret());
+  const [authMode, setAuthMode] = useState<AuthMode>(() => readStoredAuthMode(localStorage));
+  const [authSecret, setAuthSecret] = useState(() => readStoredAuthSecret(localStorage));
   const [isConnected, setIsConnected] = useState(false);
   const [connectedOrigin, setConnectedOrigin] = useState<string | null>(null);
   const [lastError, setLastError] = useState<GatewayErrorSummary | null>(null);
