@@ -87,6 +87,40 @@ pub async fn gateway_agent_workspace_identity_get(
 }
 
 #[tauri::command]
+pub async fn gateway_agent_workspace_identity_set(
+    state: State<'_, GatewayAppState>,
+    agent_id: String,
+    content: String,
+) -> Result<(), GatewayErrorSummary> {
+    connector::agent_workspace_identity_set(state.inner().clone(), &agent_id, &content)
+        .await
+        .map_err(|error| GatewayErrorSummary::from_error(&error))
+}
+
+#[tauri::command]
+pub async fn gateway_agent_soul_set(
+    state: State<'_, GatewayAppState>,
+    agent_id: String,
+    content: String,
+) -> Result<(), GatewayErrorSummary> {
+    connector::agent_soul_set(state.inner().clone(), &agent_id, &content)
+        .await
+        .map_err(|error| GatewayErrorSummary::from_error(&error))
+}
+
+#[tauri::command]
+pub async fn gateway_agent_update(
+    state: State<'_, GatewayAppState>,
+    agent_id: String,
+    name: Option<String>,
+    avatar: Option<String>,
+) -> Result<(), GatewayErrorSummary> {
+    connector::agent_update(state.inner().clone(), &agent_id, name, avatar)
+        .await
+        .map_err(|error| GatewayErrorSummary::from_error(&error))
+}
+
+#[tauri::command]
 pub async fn export_markdown_document(
     app: AppHandle,
     suggested_file_name: String,

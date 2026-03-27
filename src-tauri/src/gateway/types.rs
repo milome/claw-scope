@@ -29,7 +29,7 @@ impl Default for GatewayConnectConfig {
             auth_mode: GatewayAuthMode::PairedDevice,
             auth_secret: None,
             role: "operator".to_string(),
-            scopes: vec!["operator.read".to_string()],
+            scopes: vec!["operator.admin".to_string()],
             profile_label: None,
         }
     }
@@ -143,7 +143,7 @@ mod tests {
         let json = serde_json::to_string(&GatewayConnectConfig::default()).expect("serialize config");
         assert!(json.contains("gatewayUrl"));
         assert!(json.contains("paired_device"));
-        assert!(json.contains("operator.read"));
+        assert!(json.contains("operator.admin"));
     }
 
     #[test]
@@ -153,7 +153,7 @@ mod tests {
             "authMode": "none",
             "authSecret": null,
             "role": "operator",
-            "scopes": ["operator.read"],
+            "scopes": ["operator.admin"],
             "profileLabel": null
         }))
         .expect("deserialize legacy auth mode");

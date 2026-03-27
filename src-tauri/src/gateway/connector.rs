@@ -223,6 +223,47 @@ pub async fn agent_workspace_identity_get(
     agent_file_get(state, agent_id, "IDENTITY.md").await
 }
 
+pub async fn agent_workspace_identity_set(
+    state: GatewayAppState,
+    agent_id: &str,
+    content: &str,
+) -> Result<(), GatewayError> {
+    agent_file_set(state, agent_id, "IDENTITY.md", content).await
+}
+
+pub async fn agent_soul_set(
+    state: GatewayAppState,
+    agent_id: &str,
+    content: &str,
+) -> Result<(), GatewayError> {
+    agent_file_set(state, agent_id, "SOUL.md", content).await
+}
+
+pub async fn agent_update(
+    state: GatewayAppState,
+    agent_id: &str,
+    name: Option<String>,
+    avatar: Option<String>,
+) -> Result<(), GatewayError> {
+    let mut params = Map::new();
+    params.insert("agentId".to_string(), Value::String(agent_id.to_string()));
+
+    if let Some(name) = name {
+        params.insert("name".to_string(), Value::String(name));
+    }
+
+    if let Some(avatar) = avatar {
+        params.insert("avatar".to_string(), Value::String(avatar));
+    }
+
+    if params.len() == 1 {
+        return Ok(());
+    }
+
+    request_json(state, "agents.update", Some(Value::Object(params))).await?;
+    Ok(())
+}
+
 async fn agent_file_get(
     state: GatewayAppState,
     agent_id: &str,
@@ -237,6 +278,25 @@ async fn agent_file_get(
     serde_json::from_value(value).map_err(|error| GatewayError::Protocol {
         message: format!("failed decoding agents.files.get payload for {name}: {error}"),
     })
+}
+
+async fn agent_file_set(
+    state: GatewayAppState,
+    agent_id: &str,
+    name: &str,
+    content: &str,
+) -> Result<(), GatewayError> {
+    request_json(
+        state,
+        "agents.files.set",
+        Some(json!({
+            "agentId": agent_id,
+            "name": name,
+            "content": content,
+        })),
+    )
+    .await?;
+    Ok(())
 }
 
 async fn perform_handshake(
@@ -462,6 +522,7 @@ async fn wait_for_connect_response(
                     retryable,
                     can_retry_with_device_token: recovery.can_retry_with_device_token,
                     recommended_next_step: recovery.recommended_next_step,
+                    pairing_reason: recovery.pairing_reason,
                 });
             }
             InboundFrame::Unknown | InboundFrame::Event(_) | InboundFrame::Response(_) => continue,

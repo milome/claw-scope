@@ -19,6 +19,9 @@ pub fn run() {
             gateway::commands::gateway_agent_identity_get,
             gateway::commands::gateway_agent_soul_get,
             gateway::commands::gateway_agent_workspace_identity_get,
+            gateway::commands::gateway_agent_workspace_identity_set,
+            gateway::commands::gateway_agent_soul_set,
+            gateway::commands::gateway_agent_update,
             gateway::commands::export_markdown_document,
         ])
         .run(tauri::generate_context!())

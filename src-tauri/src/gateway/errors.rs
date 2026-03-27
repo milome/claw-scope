@@ -123,20 +123,27 @@ impl GatewayErrorSummary {
                 retryable,
                 can_retry_with_device_token,
                 recommended_next_step,
+                pairing_reason,
             } => {
                 let resolved_code = normalize_connect_rejection_code(code.as_deref(), message);
                 let resolved_retryable = *retryable
                     || *can_retry_with_device_token
                     || recommended_next_step.as_deref() == Some("wait_then_retry");
+                let resolved_message = connect_rejection_message(
+                    resolved_code.as_deref(),
+                    message,
+                    pairing_reason.as_deref(),
+                );
                 Self::new(
                     connect_rejection_category(resolved_code.as_deref()),
                     resolved_code.clone(),
-                    message.clone(),
+                    resolved_message,
                     resolved_retryable,
                     connect_rejection_hint(
                         resolved_code.as_deref(),
                         *can_retry_with_device_token,
                         recommended_next_step.as_deref(),
+                        pairing_reason.as_deref(),
                     ),
                 )
             }
@@ -144,13 +151,47 @@ impl GatewayErrorSummary {
                 code,
                 message,
                 retryable,
-            } => Self::new(
-                request_rejection_category(code.as_deref()),
-                code.clone(),
-                message.clone(),
-                *retryable,
-                Some("Gateway RPC 请求被拒绝，请检查当前 role/scopes 与目标方法是否匹配。".to_string()),
-            ),
+            } => {
+                let normalized_message = message.to_ascii_lowercase();
+                if normalized_message.contains("missing scope: operator.admin") {
+                    return Self::new(
+                        "auth",
+                        Some("MISSING_SCOPE_OPERATOR_ADMIN".to_string()),
+                        "当前连接缺少 operator.admin 权限，无法执行写入或管理操作。",
+                        *retryable,
+                        Some(
+                            "请重新连接并申请 operator.admin，或改用具备管理员权限的 Token / Password 认证。"
+                                .to_string(),
+                        ),
+                    );
+                }
+                if normalized_message.contains("missing scope: operator.write") {
+                    return Self::new(
+                        "auth",
+                        Some("MISSING_SCOPE_OPERATOR_WRITE".to_string()),
+                        "当前连接缺少 operator.write 权限，无法执行写入操作。",
+                        *retryable,
+                        Some("请重新连接并申请 operator.write 或更高权限。".to_string()),
+                    );
+                }
+                if normalized_message.contains("missing scope: operator.read") {
+                    return Self::new(
+                        "auth",
+                        Some("MISSING_SCOPE_OPERATOR_READ".to_string()),
+                        "当前连接缺少 operator.read 权限，无法读取目标数据。",
+                        *retryable,
+                        Some("请重新连接并申请 operator.read 或更高权限。".to_string()),
+                    );
+                }
+
+                Self::new(
+                    request_rejection_category(code.as_deref()),
+                    code.clone(),
+                    message.clone(),
+                    *retryable,
+                    Some("Gateway RPC 请求被拒绝，请检查当前 role/scopes 与目标方法是否匹配。".to_string()),
+                )
+            }
             GatewayError::NotImplemented { feature } => Self::new(
                 "unsupported",
                 Some("NOT_IMPLEMENTED".to_string()),
@@ -187,6 +228,7 @@ pub enum GatewayError {
         retryable: bool,
         can_retry_with_device_token: bool,
         recommended_next_step: Option<String>,
+        pairing_reason: Option<String>,
     },
     #[error("gateway request rejected: {message}")]
     RequestRejected {
@@ -271,15 +313,51 @@ fn request_rejection_category(code: Option<&str>) -> &'static str {
     }
 }
 
+fn connect_rejection_message(code: Option<&str>, message: &str, pairing_reason: Option<&str>) -> String {
+    match code {
+        Some(CONNECT_ERROR_PAIRING_REQUIRED) => match pairing_reason {
+            Some("scope-upgrade") => {
+                "该设备已配对，但当前申请权限高于已批准权限，需要服务端重新批准。".to_string()
+            }
+            Some("role-upgrade") => {
+                "该设备已配对，但当前申请的角色高于已批准角色，需要服务端重新批准。".to_string()
+            }
+            Some("metadata-upgrade") => {
+                "该设备已配对，但设备身份信息发生变化，需要服务端重新批准。".to_string()
+            }
+            Some("not-paired") => "当前设备尚未完成配对，需要先在服务端批准当前设备。".to_string(),
+            _ => "当前连接需要先完成设备配对批准。".to_string(),
+        },
+        _ => message.to_string(),
+    }
+}
+
 fn connect_rejection_hint(
     code: Option<&str>,
     can_retry_with_device_token: bool,
     recommended_next_step: Option<&str>,
+    pairing_reason: Option<&str>,
 ) -> Option<String> {
     match code {
-        Some(CONNECT_ERROR_PAIRING_REQUIRED) => {
-            Some("请到 OpenClaw 主机批准当前设备，然后重新连接。".to_string())
-        }
+        Some(CONNECT_ERROR_PAIRING_REQUIRED) => match pairing_reason {
+            Some("scope-upgrade") => Some(
+                "请到 OpenClaw 主机执行 `openclaw devices approve --latest`，批准新的权限申请后再重试。"
+                    .to_string(),
+            ),
+            Some("role-upgrade") => Some(
+                "请到 OpenClaw 主机执行 `openclaw devices approve --latest`，批准新的角色申请后再重试。"
+                    .to_string(),
+            ),
+            Some("metadata-upgrade") => Some(
+                "请到 OpenClaw 主机执行 `openclaw devices approve --latest`，确认新的设备身份信息后再重试。"
+                    .to_string(),
+            ),
+            Some("not-paired") => Some(
+                "请到 OpenClaw 主机执行 `openclaw devices approve --latest` 完成首次配对。"
+                    .to_string(),
+            ),
+            _ => Some("请到 OpenClaw 主机批准当前设备，然后重新连接。".to_string()),
+        },
         Some(CONNECT_ERROR_AUTH_TOKEN_MISMATCH) if can_retry_with_device_token => Some(
             "共享 token 未通过校验，但服务端允许改用已签发的 device token。".to_string(),
         ),
@@ -346,10 +424,33 @@ mod tests {
             retryable: false,
             can_retry_with_device_token: false,
             recommended_next_step: None,
+            pairing_reason: None,
         };
         let summary = GatewayErrorSummary::from_error(&error);
         assert_eq!(summary.category, "pairing");
         assert_eq!(summary.code.as_deref(), Some(CONNECT_ERROR_PAIRING_REQUIRED));
+    }
+
+    #[test]
+    fn pairing_scope_upgrade_maps_to_specific_summary() {
+        let error = GatewayError::ConnectRejected {
+            code: Some(CONNECT_ERROR_PAIRING_REQUIRED.to_string()),
+            message: "pairing required".to_string(),
+            retryable: false,
+            can_retry_with_device_token: false,
+            recommended_next_step: None,
+            pairing_reason: Some("scope-upgrade".to_string()),
+        };
+        let summary = GatewayErrorSummary::from_error(&error);
+        assert_eq!(summary.category, "pairing");
+        assert_eq!(
+            summary.message,
+            "该设备已配对，但当前申请权限高于已批准权限，需要服务端重新批准。"
+        );
+        assert_eq!(
+            summary.hint.as_deref(),
+            Some("请到 OpenClaw 主机执行 `openclaw devices approve --latest`，批准新的权限申请后再重试。")
+        );
     }
 
     #[test]
@@ -380,6 +481,7 @@ mod tests {
             retryable: false,
             can_retry_with_device_token: false,
             recommended_next_step: Some("retry_with_device_token".to_string()),
+            pairing_reason: None,
         };
         let summary = GatewayErrorSummary::from_error(&error);
         assert_eq!(summary.category, "auth");

@@ -13,6 +13,7 @@ export function OpenClawConfigModule() {
     authMode: savedAuthMode,
     authSecret: savedAuthSecret,
     connectedOrigin,
+    grantedScopes,
     lastError,
     updateConfig,
     testConnection,
@@ -84,6 +85,23 @@ export function OpenClawConfigModule() {
           <div>
             <h3 className="text-[15px] font-semibold mb-1">{t('config.status.title')}</h3>
             <p className="text-sm text-slate-500 dark:text-slate-400">{statusDescription}</p>
+            {isConnected && grantedScopes.length > 0 ? (
+              <div className="mt-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                  {t('config.status.scopes')}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {grantedScopes.map((scope) => (
+                    <span
+                      key={scope}
+                      className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300"
+                    >
+                      {scope}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">

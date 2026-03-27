@@ -199,6 +199,7 @@ pub struct ConnectErrorRecoveryAdvice {
     pub code: Option<String>,
     pub can_retry_with_device_token: bool,
     pub recommended_next_step: Option<String>,
+    pub pairing_reason: Option<String>,
 }
 
 pub fn parse_inbound_frame(text: &str) -> Result<InboundFrame, serde_json::Error> {
@@ -240,10 +241,17 @@ pub fn parse_connect_error_recovery(details: Option<&Value>) -> ConnectErrorReco
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned);
+    let pairing_reason = details
+        .get("reason")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
     ConnectErrorRecoveryAdvice {
         code,
         can_retry_with_device_token,
         recommended_next_step,
+        pairing_reason,
     }
 }
 
@@ -298,5 +306,15 @@ mod tests {
         assert_eq!(advice.code.as_deref(), Some("AUTH_TOKEN_MISMATCH"));
         assert!(advice.can_retry_with_device_token);
         assert_eq!(advice.recommended_next_step.as_deref(), Some("retry_with_device_token"));
+    }
+
+    #[test]
+    fn parses_pairing_reason_from_connect_recovery_details() {
+        let advice = parse_connect_error_recovery(Some(&json!({
+            "code": "PAIRING_REQUIRED",
+            "reason": "scope-upgrade"
+        })));
+        assert_eq!(advice.code.as_deref(), Some("PAIRING_REQUIRED"));
+        assert_eq!(advice.pairing_reason.as_deref(), Some("scope-upgrade"));
     }
 }

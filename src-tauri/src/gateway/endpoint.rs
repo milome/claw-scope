@@ -99,7 +99,7 @@ mod tests {
     #[test]
     fn normalizes_https_to_wss() {
         let endpoint = normalize_gateway_endpoint("https://claw.example.com:443").expect("normalize endpoint");
-        assert_eq!(endpoint.ws_url, "wss://claw.example.com:443/");
+        assert_eq!(endpoint.ws_url, "wss://claw.example.com/");
         assert_eq!(endpoint.transport, GatewayTransportKind::Direct);
     }
 

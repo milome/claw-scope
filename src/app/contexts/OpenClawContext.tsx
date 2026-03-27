@@ -91,11 +91,16 @@ export interface GatewayAgentFileGetResult {
   file: GatewayAgentFileEntry;
 }
 
-interface GatewayAgentsListResult {
+export interface GatewayAgentsListResult {
   defaultId: string;
   mainKey: string;
   scope: string;
   agents: GatewayAgentSummary[];
+}
+
+export interface GatewayAgentUpdatePayload {
+  name?: string | null;
+  avatar?: string | null;
 }
 
 interface GatewayConnectConfig {
@@ -116,11 +121,13 @@ interface OpenClawContextType {
   authMode: AuthMode;
   authSecret: string;
   connectedOrigin: string | null;
+  grantedScopes: string[];
   lastError: GatewayErrorSummary | null;
   setHasSkippedSetup: (skipped: boolean) => void;
   updateConfig: (url: string, mode: AuthMode, secret: string) => Promise<boolean>;
   testConnection: (url: string, mode: AuthMode, secret: string) => Promise<boolean>;
   disconnect: () => Promise<void>;
+  refreshAgents: () => Promise<void>;
   reopenSetupWizard: () => void;
   closeSetupWizard: () => void;
   showReminder: boolean;
@@ -133,7 +140,7 @@ const OpenClawContext = createContext<OpenClawContextType | undefined>(undefined
 
 const DEFAULT_GATEWAY_URL = 'http://127.0.0.1:18789';
 const DEFAULT_CONNECT_ROLE = 'operator';
-const DEFAULT_CONNECT_SCOPES = ['operator.read'];
+const DEFAULT_CONNECT_SCOPES = ['operator.admin'];
 const AGENT_GRADIENTS = [
   'from-sky-400 to-blue-600',
   'from-emerald-400 to-teal-600',
@@ -242,6 +249,10 @@ export async function gatewayAgentIdentityGet(agentId: string) {
   });
 }
 
+export async function gatewayAgentsList() {
+  return invokeGateway<GatewayAgentsListResult>('gateway_agents_list');
+}
+
 export async function gatewayAgentSoulGet(agentId: string) {
   return invokeGateway<GatewayAgentFileGetResult>('gateway_agent_soul_get', {
     agentId,
@@ -251,6 +262,27 @@ export async function gatewayAgentSoulGet(agentId: string) {
 export async function gatewayAgentWorkspaceIdentityGet(agentId: string) {
   return invokeGateway<GatewayAgentFileGetResult>('gateway_agent_workspace_identity_get', {
     agentId,
+  });
+}
+
+export async function gatewayAgentWorkspaceIdentitySet(agentId: string, content: string) {
+  return invokeGateway<void>('gateway_agent_workspace_identity_set', {
+    agentId,
+    content,
+  });
+}
+
+export async function gatewayAgentSoulSet(agentId: string, content: string) {
+  return invokeGateway<void>('gateway_agent_soul_set', {
+    agentId,
+    content,
+  });
+}
+
+export async function gatewayAgentUpdate(agentId: string, payload: GatewayAgentUpdatePayload) {
+  return invokeGateway<void>('gateway_agent_update', {
+    agentId,
+    ...payload,
   });
 }
 
@@ -347,6 +379,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
   const [authSecret, setAuthSecret] = useState(() => readStoredAuthSecret(localStorage));
   const [isConnected, setIsConnected] = useState(false);
   const [connectedOrigin, setConnectedOrigin] = useState<string | null>(null);
+  const [grantedScopes, setGrantedScopes] = useState<string[]>([]);
   const [lastError, setLastError] = useState<GatewayErrorSummary | null>(null);
   const [showReminder, setShowReminder] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -392,6 +425,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         if (!isConnectedPhase(snapshot.phase) || !origin) {
           setIsConnected(false);
           setConnectedOrigin(origin);
+          setGrantedScopes(snapshot.grantedScopes ?? []);
           setLastError(snapshot.lastError ?? null);
           setNodes([]);
           setAgents([]);
@@ -399,7 +433,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         }
 
         try {
-          const agentsList = await invokeGateway<GatewayAgentsListResult>('gateway_agents_list');
+          const agentsList = await gatewayAgentsList();
           if (cancelled) {
             return;
           }
@@ -407,6 +441,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
           const node = buildNode(origin);
           setIsConnected(true);
           setConnectedOrigin(origin);
+          setGrantedScopes(snapshot.grantedScopes ?? []);
           setLastError(null);
           setNodes([node]);
           setAgents(mapAgents(agentsList, node.id));
@@ -417,6 +452,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
 
           setIsConnected(false);
           setConnectedOrigin(origin);
+          setGrantedScopes(snapshot.grantedScopes ?? []);
           setLastError(toGatewayErrorSummary(error));
           setNodes([]);
           setAgents([]);
@@ -428,6 +464,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
 
         setIsConnected(false);
         setConnectedOrigin(null);
+        setGrantedScopes([]);
         setLastError(toGatewayErrorSummary(error));
         setNodes([]);
         setAgents([]);
@@ -469,9 +506,14 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     setAgents(mapAgents(agentsList, node.id));
   };
 
-  const applyDisconnectedState = (error: GatewayErrorSummary | null, origin: string | null = null) => {
+  const applyDisconnectedState = (
+    error: GatewayErrorSummary | null,
+    origin: string | null = null,
+    nextGrantedScopes: string[] = [],
+  ) => {
     setIsConnected(false);
     setConnectedOrigin(origin);
+    setGrantedScopes(nextGrantedScopes);
     setLastError(error);
     setNodes([]);
     setAgents([]);
@@ -487,12 +529,13 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
       const origin = resolveOrigin(snapshot.gatewayOrigin, url);
 
       if (!isConnectedPhase(snapshot.phase) || !origin) {
-        applyDisconnectedState(snapshot.lastError ?? null, origin);
+        applyDisconnectedState(snapshot.lastError ?? null, origin, snapshot.grantedScopes ?? []);
         return false;
       }
 
       try {
-        const agentsList = await invokeGateway<GatewayAgentsListResult>('gateway_agents_list');
+        const agentsList = await gatewayAgentsList();
+        setGrantedScopes(snapshot.grantedScopes ?? []);
         applyConnectedState(origin, agentsList);
 
         if (persistConfig) {
@@ -507,7 +550,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
 
         return true;
       } catch (error) {
-        applyDisconnectedState(toGatewayErrorSummary(error), origin);
+        applyDisconnectedState(toGatewayErrorSummary(error), origin, snapshot.grantedScopes ?? []);
         return false;
       }
     } catch (error) {
@@ -535,6 +578,26 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshAgents = async () => {
+    if (!isConnected) {
+      return;
+    }
+
+    const origin = connectedOrigin ?? resolveOrigin(null, gatewayUrl);
+    if (!origin) {
+      return;
+    }
+
+    try {
+      const agentsList = await gatewayAgentsList();
+      applyConnectedState(origin, agentsList);
+    } catch (error) {
+      const summary = toGatewayErrorSummary(error);
+      setLastError(summary);
+      throw error;
+    }
+  };
+
   return (
     <OpenClawContext.Provider
       value={{
@@ -546,11 +609,13 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         authMode,
         authSecret,
         connectedOrigin,
+        grantedScopes,
         lastError,
         setHasSkippedSetup,
         updateConfig,
         testConnection,
         disconnect,
+        refreshAgents,
         reopenSetupWizard,
         closeSetupWizard,
         showReminder,
