@@ -170,32 +170,6 @@ pub fn store_device_auth_token(
     Ok(entry)
 }
 
-pub fn clear_device_auth_token(
-    paths: &GatewayStorePaths,
-    device_id: &str,
-    gateway_origin: &str,
-    role: &str,
-    scopes: &[String],
-) -> Result<(), GatewayError> {
-    let Some(mut store) = read_json::<DeviceAuthStore>(&paths.device_auth_file)? else {
-        return Ok(());
-    };
-    if store.device_id != device_id {
-        return Ok(());
-    }
-    if store.version >= 2 {
-        store.tokens.remove(&device_auth_binding_key(
-            &normalize_gateway_origin(gateway_origin),
-            &normalize_role(role),
-            &normalize_scopes(scopes),
-        ));
-    } else {
-        let normalized_role = normalize_role(role);
-        store.tokens.retain(|_, entry| entry.role != normalized_role);
-    }
-    write_json(&paths.device_auth_file, &store)
-}
-
 pub fn normalize_role(role: &str) -> String {
     let trimmed = role.trim();
     if trimmed.is_empty() {

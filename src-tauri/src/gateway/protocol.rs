@@ -108,12 +108,14 @@ pub struct ResponseError {
     pub message: String,
     pub details: Option<Value>,
     pub retryable: Option<bool>,
+    #[allow(dead_code)]
     pub retry_after_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ResponseFrame {
     #[serde(rename = "type")]
+    #[allow(dead_code)]
     pub frame_type: String,
     pub id: String,
     pub ok: bool,
@@ -124,25 +126,34 @@ pub struct ResponseFrame {
 #[derive(Debug, Clone, Deserialize)]
 pub struct EventFrame {
     #[serde(rename = "type")]
+    #[allow(dead_code)]
     pub frame_type: String,
     pub event: String,
     pub payload: Option<Value>,
+    #[allow(dead_code)]
     pub seq: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HelloOk {
+    #[allow(dead_code)]
     pub r#type: String,
+    #[allow(dead_code)]
     pub protocol: u32,
+    #[allow(dead_code)]
     pub server: HelloServer,
     pub features: HelloFeatures,
+    #[allow(dead_code)]
     pub snapshot: Value,
+    #[allow(dead_code)]
     pub canvas_host_url: Option<String>,
     pub auth: Option<HelloAuth>,
+    #[allow(dead_code)]
     pub policy: HelloPolicy,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HelloServer {
@@ -153,6 +164,7 @@ pub struct HelloServer {
 #[derive(Debug, Clone, Deserialize)]
 pub struct HelloFeatures {
     pub methods: Vec<String>,
+    #[allow(dead_code)]
     pub events: Vec<String>,
 }
 
@@ -162,9 +174,11 @@ pub struct HelloAuth {
     pub device_token: String,
     pub role: String,
     pub scopes: Vec<String>,
+    #[allow(dead_code)]
     pub issued_at_ms: Option<i64>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HelloPolicy {

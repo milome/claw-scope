@@ -9,8 +9,7 @@ use sha2::{Digest, Sha256};
 use crate::gateway::{
     errors::GatewayError,
     store::{
-        load_stored_device_identity, resolve_store_paths, store_device_identity, GatewayStorePaths,
-        StoredDeviceIdentity,
+        load_stored_device_identity, store_device_identity, GatewayStorePaths, StoredDeviceIdentity,
     },
 };
 
@@ -22,11 +21,6 @@ pub struct GatewayDeviceIdentity {
 }
 
 impl GatewayDeviceIdentity {
-    pub fn load_or_create_default() -> Result<Self, GatewayError> {
-        let paths = resolve_store_paths();
-        Self::load_or_create(&paths)
-    }
-
     pub fn load_or_create(paths: &GatewayStorePaths) -> Result<Self, GatewayError> {
         if let Some(stored) = load_stored_device_identity(paths)? {
             if stored.version == 1 {
