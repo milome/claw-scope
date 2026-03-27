@@ -34,7 +34,6 @@ import {
   gatewayAgentIdentityGet,
   gatewayAgentSoulGet,
   gatewayAgentSoulSet,
-  gatewayAgentUpdate,
   gatewayAgentWorkspaceIdentityGet,
   gatewayAgentWorkspaceIdentitySet,
   isTauriRuntimeAvailable,
@@ -42,6 +41,7 @@ import {
   type GatewayAgentFileGetResult,
   type GatewayAgentIdentityResult,
 } from "../../contexts/OpenClawContext";
+import { applyIdentityMetaToDocument } from "./profileIdentityDocument";
 
 type AgentStatusKey = "active" | "standby" | "sleeping";
 type Translate = (key: string, ...args: (string | number)[]) => string;
@@ -1753,7 +1753,6 @@ export function ProfileView() {
     isConnected,
     connectedOrigin,
     grantedScopes,
-    refreshAgents,
   } = useOpenClaw();
 
   const MOCK_AGENTS_BACKUP: DisplayAgent[] = [
@@ -2027,7 +2026,7 @@ export function ProfileView() {
     }
   }, [activeSoulDocumentContent, isEditingSoulDoc]);
 
-  const reloadSelectedAgentDetails = async (agentId: string, refreshAgentList = false) => {
+  const reloadSelectedAgentDetails = async (agentId: string) => {
     const nextDetails = await loadAgentDetails(agentId);
 
     startTransition(() => {
@@ -2036,10 +2035,6 @@ export function ProfileView() {
         [agentId]: nextDetails,
       }));
     });
-
-    if (refreshAgentList) {
-      await refreshAgents();
-    }
 
     return nextDetails;
   };
@@ -2051,7 +2046,7 @@ export function ProfileView() {
 
     setIsEditingIdentityMeta(false);
     try {
-      await reloadSelectedAgentDetails(activeAgent.id, true);
+      await reloadSelectedAgentDetails(activeAgent.id);
     } catch (error) {
       toast.error(formatLoadError(error));
     }
@@ -2076,11 +2071,13 @@ export function ProfileView() {
 
     setIsSavingIdentityMeta(true);
     try {
-      await gatewayAgentUpdate(activeAgent.id, {
-        name: hasNameChange ? nextName : undefined,
-        avatar: hasAvatarChange ? nextAvatar : undefined,
+      const nextIdentityDocument = applyIdentityMetaToDocument(activeIdentityDocumentContent, {
+        name: nextName,
+        avatar: nextAvatar,
       });
-      await reloadSelectedAgentDetails(activeAgent.id, true);
+
+      await gatewayAgentWorkspaceIdentitySet(activeAgent.id, nextIdentityDocument);
+      await reloadSelectedAgentDetails(activeAgent.id);
       setIsEditingIdentityMeta(false);
       toast.success(t("profile.saveSuccess", t("profile.identityFields")));
     } catch (error) {
