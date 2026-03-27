@@ -98,11 +98,6 @@ export interface GatewayAgentsListResult {
   agents: GatewayAgentSummary[];
 }
 
-export interface GatewayAgentUpdatePayload {
-  name?: string | null;
-  avatar?: string | null;
-}
-
 interface GatewayConnectConfig {
   gatewayUrl: string;
   authMode: AuthMode;
@@ -265,6 +260,7 @@ export async function gatewayAgentWorkspaceIdentityGet(agentId: string) {
   });
 }
 
+// Identity-facing fields are file-backed to keep the UI aligned with IDENTITY.md.
 export async function gatewayAgentWorkspaceIdentitySet(agentId: string, content: string) {
   return invokeGateway<void>('gateway_agent_workspace_identity_set', {
     agentId,
@@ -276,13 +272,6 @@ export async function gatewayAgentSoulSet(agentId: string, content: string) {
   return invokeGateway<void>('gateway_agent_soul_set', {
     agentId,
     content,
-  });
-}
-
-export async function gatewayAgentUpdate(agentId: string, payload: GatewayAgentUpdatePayload) {
-  return invokeGateway<void>('gateway_agent_update', {
-    agentId,
-    ...payload,
   });
 }
 

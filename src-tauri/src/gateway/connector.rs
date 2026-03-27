@@ -239,31 +239,6 @@ pub async fn agent_soul_set(
     agent_file_set(state, agent_id, "SOUL.md", content).await
 }
 
-pub async fn agent_update(
-    state: GatewayAppState,
-    agent_id: &str,
-    name: Option<String>,
-    avatar: Option<String>,
-) -> Result<(), GatewayError> {
-    let mut params = Map::new();
-    params.insert("agentId".to_string(), Value::String(agent_id.to_string()));
-
-    if let Some(name) = name {
-        params.insert("name".to_string(), Value::String(name));
-    }
-
-    if let Some(avatar) = avatar {
-        params.insert("avatar".to_string(), Value::String(avatar));
-    }
-
-    if params.len() == 1 {
-        return Ok(());
-    }
-
-    request_json(state, "agents.update", Some(Value::Object(params))).await?;
-    Ok(())
-}
-
 async fn agent_file_get(
     state: GatewayAppState,
     agent_id: &str,
