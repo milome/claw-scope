@@ -33,7 +33,10 @@ import {
   gatewayExportMarkdownDocument,
   gatewayAgentIdentityGet,
   gatewayAgentSoulGet,
+  gatewayAgentSoulSet,
+  gatewayAgentUpdate,
   gatewayAgentWorkspaceIdentityGet,
+  gatewayAgentWorkspaceIdentitySet,
   isTauriRuntimeAvailable,
   useOpenClaw,
   type GatewayAgentFileGetResult,
@@ -51,15 +54,22 @@ type AgentDetailsState = {
   error: string | null;
 };
 
+type AgentEditableMetaDraft = {
+  name: string;
+  avatar: string;
+};
+
 type DisplayAgent = {
   id: string;
   name: string;
+  identityName: string | null;
   nodeId: string;
   node: string;
   avatarColor?: string;
   avatarIcon?: LucideIcon;
   avatarEmoji: string | null;
   avatarUrl: string | null;
+  avatarValue: string | null;
   statusKey: AgentStatusKey;
   status: string;
   version: string;
@@ -167,11 +177,58 @@ function extractDocumentTags(markdown?: string | null) {
   return Array.from(new Set(tags)).slice(0, 4);
 }
 
+function extractIdentityField(markdown: string | null | undefined, fieldName: string) {
+  if (!markdown) {
+    return null;
+  }
+
+  const pattern = new RegExp(`^(?:[-*+]\\s*)?${fieldName}\\s*:\\s*(.+)$`, "i");
+
+  for (const line of markdown.split(/\r?\n/)) {
+    const normalized = line.trim();
+    if (!normalized) {
+      continue;
+    }
+
+    const match = normalized.match(pattern);
+    if (!match) {
+      continue;
+    }
+
+    const value = stripMarkdown(match[1]);
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
 function parseIdentityMarkdown(markdown?: string | null) {
   return {
     text: markdown?.trim() || null,
     tags: extractDocumentTags(markdown),
+    name: extractIdentityField(markdown, "Name"),
+    avatar: extractIdentityField(markdown, "Avatar"),
+    emoji: extractIdentityField(markdown, "Emoji"),
   };
+}
+
+function resolveEditableAvatarValue(avatar?: string | null) {
+  if (!avatar) {
+    return null;
+  }
+
+  const normalized = avatar.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (/^[A-Za-z0-9]$/.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
 }
 
 function extractSoulText(markdown?: string | null) {
@@ -276,6 +333,35 @@ function formatLoadError(error: unknown) {
   }
 
   return "Failed to load agent details.";
+}
+
+async function loadAgentDetails(agentId: string): Promise<AgentDetailsState> {
+  const [identityResult, soulResult, workspaceIdentityResult] = await Promise.allSettled([
+    gatewayAgentIdentityGet(agentId),
+    gatewayAgentSoulGet(agentId),
+    gatewayAgentWorkspaceIdentityGet(agentId),
+  ]);
+
+  const firstError = [identityResult, soulResult, workspaceIdentityResult].find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+
+  return {
+    isLoaded: true,
+    identity: identityResult.status === "fulfilled" ? identityResult.value : null,
+    soul: soulResult.status === "fulfilled" ? soulResult.value : null,
+    workspaceIdentity:
+      workspaceIdentityResult.status === "fulfilled" ? workspaceIdentityResult.value : null,
+    error: firstError ? formatLoadError(firstError.reason) : null,
+  };
+}
+
+function resolveEditableDocumentContent(document: GatewayAgentFileGetResult | null | undefined) {
+  if (!document || document.file.missing) {
+    return "";
+  }
+
+  return document.file.content ?? "";
 }
 
 async function copyTextToClipboard(text: string) {
@@ -1591,21 +1677,97 @@ function AgentAvatar({
   );
 }
 
+function ProfileDetailField({
+  label,
+  value,
+  isEditing,
+  onChange,
+  placeholder,
+  monospace = false,
+}: {
+  label: string;
+  value: string;
+  isEditing: boolean;
+  onChange: (value: string) => void;
+  placeholder: string;
+  monospace?: boolean;
+}) {
+  return (
+    <label className="flex flex-col gap-2">
+      <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+        {label}
+      </span>
+      {isEditing ? (
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className={`h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-sky-400 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500 ${
+            monospace ? "font-mono" : ""
+          }`}
+        />
+      ) : (
+        <div
+          className={`min-h-11 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 transition-colors dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-200 ${
+            monospace ? "font-mono" : ""
+          }`}
+        >
+          {value ? (
+            <span className={monospace ? "block break-all whitespace-pre-wrap" : "block break-words whitespace-pre-wrap"}>
+              {value}
+            </span>
+          ) : (
+            <span className="text-slate-400 dark:text-slate-500">-</span>
+          )}
+        </div>
+      )}
+    </label>
+  );
+}
+
+function ProfileDocumentEditor({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-950/50">
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        spellCheck={false}
+        className="min-h-[320px] w-full resize-y rounded-2xl bg-transparent px-4 py-4 font-mono text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
+      />
+    </div>
+  );
+}
+
 export function ProfileView() {
   const navigate = useNavigate();
   const { t } = useI18n();
-  const { agents: realAgents, nodes: realNodes, isConnected, connectedOrigin } = useOpenClaw();
+  const {
+    agents: realAgents,
+    nodes: realNodes,
+    isConnected,
+    connectedOrigin,
+    grantedScopes,
+    refreshAgents,
+  } = useOpenClaw();
 
   const MOCK_AGENTS_BACKUP: DisplayAgent[] = [
     {
       id: "c-7f8a-99x",
       name: "ClawScope AI",
+      identityName: "ClawScope AI",
       nodeId: "node-local",
       node: "OpenClaw-Local",
       avatarColor: "from-sky-400 to-blue-600",
       avatarIcon: Cpu,
       avatarEmoji: null,
       avatarUrl: null,
+      avatarValue: null,
       statusKey: "active" as const,
       status: statusLabel("active", t),
       version: "v1.0.4-local",
@@ -1618,12 +1780,14 @@ export function ProfileView() {
     {
       id: "a-3m2b-88z",
       name: "CodeReviewer",
+      identityName: "CodeReviewer",
       nodeId: "node-local",
       node: "OpenClaw-Local",
       avatarColor: "from-emerald-400 to-teal-600",
       avatarIcon: Terminal,
       avatarEmoji: null,
       avatarUrl: null,
+      avatarValue: null,
       statusKey: "standby" as const,
       status: statusLabel("standby", t),
       version: "v2.1.0-remote",
@@ -1637,11 +1801,13 @@ export function ProfileView() {
       id: "u-9k1c-11y",
       nodeId: "node-west",
       name: "StoryCrafter",
+      identityName: "StoryCrafter",
       node: "OpenClaw-West",
       avatarColor: "from-fuchsia-400 to-purple-600",
       avatarIcon: Sparkles,
       avatarEmoji: null,
       avatarUrl: null,
+      avatarValue: null,
       statusKey: "sleeping" as const,
       status: statusLabel("sleeping", t),
       version: "v0.9.beta",
@@ -1656,6 +1822,18 @@ export function ProfileView() {
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [selectedAgentRevision, setSelectedAgentRevision] = useState(0);
   const [agentDetailsById, setAgentDetailsById] = useState<Record<string, AgentDetailsState>>({});
+  const [identityMetaDraft, setIdentityMetaDraft] = useState<AgentEditableMetaDraft>({
+    name: "",
+    avatar: "",
+  });
+  const [identityDocDraft, setIdentityDocDraft] = useState("");
+  const [soulDocDraft, setSoulDocDraft] = useState("");
+  const [isEditingIdentityMeta, setIsEditingIdentityMeta] = useState(false);
+  const [isEditingIdentityDoc, setIsEditingIdentityDoc] = useState(false);
+  const [isEditingSoulDoc, setIsEditingSoulDoc] = useState(false);
+  const [isSavingIdentityMeta, setIsSavingIdentityMeta] = useState(false);
+  const [isSavingIdentityDoc, setIsSavingIdentityDoc] = useState(false);
+  const [isSavingSoulDoc, setIsSavingSoulDoc] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const hasRealAgents = isConnected && realAgents.length > 0;
@@ -1693,35 +1871,21 @@ export function ProfileView() {
 
     let cancelled = false;
 
-    const loadAgentDetails = async () => {
-      const [identityResult, soulResult, workspaceIdentityResult] = await Promise.allSettled([
-        gatewayAgentIdentityGet(selectedAgentId),
-        gatewayAgentSoulGet(selectedAgentId),
-        gatewayAgentWorkspaceIdentityGet(selectedAgentId),
-      ]);
-
+    const loadSelectedAgentDetails = async () => {
+      const nextDetails = await loadAgentDetails(selectedAgentId);
       if (cancelled) {
         return;
       }
 
-      const firstError = [identityResult, soulResult, workspaceIdentityResult].find(
-        (result): result is PromiseRejectedResult => result.status === "rejected",
-      );
-
-      setAgentDetailsById((previous) => ({
-        ...previous,
-        [selectedAgentId]: {
-          isLoaded: true,
-          identity: identityResult.status === "fulfilled" ? identityResult.value : null,
-          soul: soulResult.status === "fulfilled" ? soulResult.value : null,
-          workspaceIdentity:
-            workspaceIdentityResult.status === "fulfilled" ? workspaceIdentityResult.value : null,
-          error: firstError ? formatLoadError(firstError.reason) : null,
-        },
-      }));
+      startTransition(() => {
+        setAgentDetailsById((previous) => ({
+          ...previous,
+          [selectedAgentId]: nextDetails,
+        }));
+      });
     };
 
-    void loadAgentDetails();
+    void loadSelectedAgentDetails();
 
     return () => {
       cancelled = true;
@@ -1737,20 +1901,32 @@ export function ProfileView() {
           : details?.workspaceIdentity?.file.content;
         const soulMarkdown = details?.soul?.file.missing ? null : details?.soul?.file.content;
         const parsedIdentity = parseIdentityMarkdown(identityMarkdown);
+        const resolvedAgentName =
+          parsedIdentity.name ||
+          agent.name ||
+          details?.identity?.name?.trim() ||
+          backup?.name ||
+          agent.id;
+        const resolvedAvatarValue = parsedIdentity.avatar || details?.identity?.avatar?.trim() || null;
+        const editableAvatarValue =
+          parsedIdentity.avatar || resolveEditableAvatarValue(details?.identity?.avatar) || null;
 
         return {
           ...agent,
+          name: resolvedAgentName,
+          identityName: parsedIdentity.name || resolvedAgentName,
           node: realNodes.find((node) => node.id === agent.nodeId)?.name || backup?.node || agent.nodeId || "Local",
           avatarColor: agent.avatarColor || backup?.avatarColor || "from-slate-400 to-slate-600",
           avatarIcon: backup?.avatarIcon || Cpu,
-          avatarEmoji: details?.identity?.emoji?.trim() || null,
-          avatarUrl: resolveGatewayAvatarUrl(details?.identity?.avatar, connectedOrigin),
+          avatarEmoji: parsedIdentity.emoji || details?.identity?.emoji?.trim() || null,
+          avatarUrl: resolveGatewayAvatarUrl(resolvedAvatarValue, connectedOrigin),
+          avatarValue: editableAvatarValue,
           statusKey: agent.status,
           status: statusLabel(agent.status, t),
           version: details?.identity?.agentId ? `agent:${details.identity.agentId}` : "OpenClaw Agent",
           identity:
             parsedIdentity.text ||
-            details?.identity?.name?.trim() ||
+            resolvedAgentName ||
             backup?.identity ||
             "No identity set.",
           tags: parsedIdentity.tags,
@@ -1766,6 +1942,8 @@ export function ProfileView() {
       })
     : MOCK_AGENTS_BACKUP.map((agent) => ({
         ...agent,
+        identityName: agent.name,
+        avatarValue: null,
         status: statusLabel(agent.statusKey, t),
       }));
 
@@ -1804,6 +1982,177 @@ export function ProfileView() {
           suggestedFileName: `${activeAgent?.id || "agent"}-SOUL.md`,
           isFallback: true,
         };
+  const activeIdentityMetaName = activeAgent?.identityName || activeAgent?.name || "";
+  const activeIdentityMetaAvatar = activeAgent?.avatarValue || "";
+  const activeIdentityDocumentContent = resolveEditableDocumentContent(
+    activeAgentDetails?.workspaceIdentity,
+  );
+  const activeSoulDocumentContent = resolveEditableDocumentContent(activeAgentDetails?.soul);
+  const hasAdminScope = grantedScopes.includes("operator.admin");
+  const canEditActiveAgent =
+    hasRealAgents &&
+    hasAdminScope &&
+    Boolean(activeAgent?.id) &&
+    Boolean(activeAgentDetails?.isLoaded);
+  const isIdentityMetaDirty =
+    identityMetaDraft.name !== activeIdentityMetaName ||
+    identityMetaDraft.avatar !== activeIdentityMetaAvatar;
+  const isIdentityDocDirty = identityDocDraft !== activeIdentityDocumentContent;
+  const isSoulDocDirty = soulDocDraft !== activeSoulDocumentContent;
+
+  useEffect(() => {
+    setIsEditingIdentityMeta(false);
+    setIsEditingIdentityDoc(false);
+    setIsEditingSoulDoc(false);
+  }, [activeAgent?.id]);
+
+  useEffect(() => {
+    if (!isEditingIdentityMeta) {
+      setIdentityMetaDraft({
+        name: activeIdentityMetaName,
+        avatar: activeIdentityMetaAvatar,
+      });
+    }
+  }, [activeIdentityMetaAvatar, activeIdentityMetaName, isEditingIdentityMeta]);
+
+  useEffect(() => {
+    if (!isEditingIdentityDoc) {
+      setIdentityDocDraft(activeIdentityDocumentContent);
+    }
+  }, [activeIdentityDocumentContent, isEditingIdentityDoc]);
+
+  useEffect(() => {
+    if (!isEditingSoulDoc) {
+      setSoulDocDraft(activeSoulDocumentContent);
+    }
+  }, [activeSoulDocumentContent, isEditingSoulDoc]);
+
+  const reloadSelectedAgentDetails = async (agentId: string, refreshAgentList = false) => {
+    const nextDetails = await loadAgentDetails(agentId);
+
+    startTransition(() => {
+      setAgentDetailsById((previous) => ({
+        ...previous,
+        [agentId]: nextDetails,
+      }));
+    });
+
+    if (refreshAgentList) {
+      await refreshAgents();
+    }
+
+    return nextDetails;
+  };
+
+  const handleIdentityMetaReload = async () => {
+    if (!activeAgent) {
+      return;
+    }
+
+    setIsEditingIdentityMeta(false);
+    try {
+      await reloadSelectedAgentDetails(activeAgent.id, true);
+    } catch (error) {
+      toast.error(formatLoadError(error));
+    }
+  };
+
+  const handleIdentityMetaSave = async () => {
+    if (!activeAgent) {
+      return;
+    }
+
+    const nextName = identityMetaDraft.name.trim();
+    const nextAvatar = identityMetaDraft.avatar.trim();
+    const currentName = activeIdentityMetaName.trim();
+    const currentAvatar = activeIdentityMetaAvatar.trim();
+    const hasNameChange = nextName !== currentName;
+    const hasAvatarChange = nextAvatar !== currentAvatar;
+
+    if (!hasNameChange && !hasAvatarChange) {
+      setIsEditingIdentityMeta(false);
+      return;
+    }
+
+    setIsSavingIdentityMeta(true);
+    try {
+      await gatewayAgentUpdate(activeAgent.id, {
+        name: hasNameChange ? nextName : undefined,
+        avatar: hasAvatarChange ? nextAvatar : undefined,
+      });
+      await reloadSelectedAgentDetails(activeAgent.id, true);
+      setIsEditingIdentityMeta(false);
+      toast.success(t("profile.saveSuccess", t("profile.identityFields")));
+    } catch (error) {
+      toast.error(`${t("profile.saveFailed", t("profile.identityFields"))}: ${formatLoadError(error)}`);
+    } finally {
+      setIsSavingIdentityMeta(false);
+    }
+  };
+
+  const handleIdentityDocumentReload = async () => {
+    if (!activeAgent) {
+      return;
+    }
+
+    setIsEditingIdentityDoc(false);
+    try {
+      await reloadSelectedAgentDetails(activeAgent.id);
+    } catch (error) {
+      toast.error(formatLoadError(error));
+    }
+  };
+
+  const handleIdentityDocumentSave = async () => {
+    if (!activeAgent || !isIdentityDocDirty) {
+      setIsEditingIdentityDoc(false);
+      return;
+    }
+
+    setIsSavingIdentityDoc(true);
+    try {
+      await gatewayAgentWorkspaceIdentitySet(activeAgent.id, identityDocDraft);
+      await reloadSelectedAgentDetails(activeAgent.id);
+      setIsEditingIdentityDoc(false);
+      toast.success(t("profile.saveSuccess", t("profile.identity")));
+    } catch (error) {
+      toast.error(`${t("profile.saveFailed", t("profile.identity"))}: ${formatLoadError(error)}`);
+    } finally {
+      setIsSavingIdentityDoc(false);
+    }
+  };
+
+  const handleSoulDocumentReload = async () => {
+    if (!activeAgent) {
+      return;
+    }
+
+    setIsEditingSoulDoc(false);
+    try {
+      await reloadSelectedAgentDetails(activeAgent.id);
+    } catch (error) {
+      toast.error(formatLoadError(error));
+    }
+  };
+
+  const handleSoulDocumentSave = async () => {
+    if (!activeAgent || !isSoulDocDirty) {
+      setIsEditingSoulDoc(false);
+      return;
+    }
+
+    setIsSavingSoulDoc(true);
+    try {
+      await gatewayAgentSoulSet(activeAgent.id, soulDocDraft);
+      await reloadSelectedAgentDetails(activeAgent.id);
+      setIsEditingSoulDoc(false);
+      toast.success(t("profile.saveSuccess", t("profile.soul")));
+    } catch (error) {
+      toast.error(`${t("profile.saveFailed", t("profile.soul"))}: ${formatLoadError(error)}`);
+    } finally {
+      setIsSavingSoulDoc(false);
+    }
+  };
 
   // Group agents by Node
   const groupedAgents = displayAgents.reduce((acc, agent) => {
@@ -2010,20 +2359,189 @@ export function ProfileView() {
                 {/* Info Right */}
                 <div className="flex-1 p-6 md:p-10 relative flex flex-col justify-between">
                   <div>
+                    {hasRealAgents && !hasAdminScope ? (
+                      <div className="md:mx-7 mb-6 rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-4 shadow-sm transition-colors dark:border-amber-900/50 dark:bg-amber-950/30">
+                        <div className="flex items-start gap-3">
+                          <Activity className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                              {t("profile.readOnlyNotice")}
+                            </p>
+                            <p className="text-xs text-amber-700 dark:text-amber-300/90">
+                              {t("profile.readOnlyScopes", grantedScopes.join(", ") || "operator.read")}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {hasRealAgents ? (
+                      <div className="md:mx-7 mb-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-950/40">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                            <IdCard className="h-5 w-5 text-sky-500" />
+                            <div>
+                              <h3 className="text-sm font-bold tracking-widest uppercase">
+                                {t("profile.identityFields")}
+                              </h3>
+                              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                {activeAgent.id}
+                              </p>
+                            </div>
+                          </div>
+                          {isIdentityMetaDirty ? (
+                            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
+                              {t("profile.unsaved")}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-4 grid gap-4 md:grid-cols-2">
+                          <ProfileDetailField
+                            label={t("profile.identityName")}
+                            value={identityMetaDraft.name}
+                            isEditing={isEditingIdentityMeta}
+                            onChange={(value) =>
+                              setIdentityMetaDraft((previous) => ({ ...previous, name: value }))
+                            }
+                            placeholder={activeAgent.id}
+                          />
+                          <ProfileDetailField
+                            label={t("profile.identityAvatar")}
+                            value={identityMetaDraft.avatar}
+                            isEditing={isEditingIdentityMeta}
+                            onChange={(value) =>
+                              setIdentityMetaDraft((previous) => ({ ...previous, avatar: value }))
+                            }
+                            placeholder="https://example.com/avatar.png"
+                            monospace
+                          />
+                        </div>
+                        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleIdentityMetaReload()}
+                            disabled={!canEditActiveAgent || isSavingIdentityMeta}
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-sky-300 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
+                          >
+                            {t("profile.reload")}
+                          </button>
+                          {isEditingIdentityMeta ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIdentityMetaDraft({
+                                    name: activeIdentityMetaName,
+                                    avatar: activeIdentityMetaAvatar,
+                                  });
+                                  setIsEditingIdentityMeta(false);
+                                }}
+                                disabled={isSavingIdentityMeta}
+                                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100"
+                              >
+                                {t("profile.cancel")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleIdentityMetaSave()}
+                                disabled={isSavingIdentityMeta}
+                                className="inline-flex items-center gap-2 rounded-full bg-sky-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {isSavingIdentityMeta ? (
+                                  <Activity className="h-3.5 w-3.5 animate-spin" />
+                                ) : null}
+                                {isSavingIdentityMeta ? t("profile.saving") : t("profile.save")}
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setIsEditingIdentityMeta(true)}
+                              disabled={!canEditActiveAgent}
+                              className="rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
+                            >
+                              {t("profile.edit")}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+
                     {/* Identity */}
                     <div className="mb-6 md:mb-7">
-                      <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 mb-3">
-                        <Fingerprint className="w-5 h-5 text-sky-500" />
-                        <h3 className="font-bold text-sm tracking-widest uppercase">{t("profile.identity")}</h3>
+                      <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                          <Fingerprint className="w-5 h-5 text-sky-500" />
+                          <h3 className="font-bold text-sm tracking-widest uppercase">{t("profile.identity")}</h3>
+                          {isIdentityDocDirty ? (
+                            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
+                              {t("profile.unsaved")}
+                            </span>
+                          ) : null}
+                        </div>
+                        {hasRealAgents ? (
+                          <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                            <button
+                              type="button"
+                              onClick={() => void handleIdentityDocumentReload()}
+                              disabled={!canEditActiveAgent || isSavingIdentityDoc}
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-sky-300 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
+                            >
+                              {t("profile.reload")}
+                            </button>
+                            {isEditingIdentityDoc ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIdentityDocDraft(activeIdentityDocumentContent);
+                                    setIsEditingIdentityDoc(false);
+                                  }}
+                                  disabled={isSavingIdentityDoc}
+                                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100"
+                                >
+                                  {t("profile.cancel")}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleIdentityDocumentSave()}
+                                  disabled={isSavingIdentityDoc}
+                                  className="inline-flex items-center gap-2 rounded-full bg-sky-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {isSavingIdentityDoc ? (
+                                    <Activity className="h-3.5 w-3.5 animate-spin" />
+                                  ) : null}
+                                  {isSavingIdentityDoc ? t("profile.saving") : t("profile.save")}
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setIsEditingIdentityDoc(true)}
+                                disabled={!canEditActiveAgent}
+                                className="rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
+                              >
+                                {t("profile.edit")}
+                              </button>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="md:px-7 transition-colors">
-                        <AgentDocument
-                          key={`${activeAgent.id}:identity`}
-                          content={activeAgent.identity || "No identity set."}
-                          tone="identity"
-                          storageKey={`${activeAgent.id}:identity`}
-                          source={activeIdentitySource}
-                        />
+                        {isEditingIdentityDoc ? (
+                          <ProfileDocumentEditor
+                            value={identityDocDraft}
+                            onChange={setIdentityDocDraft}
+                          />
+                        ) : (
+                          <AgentDocument
+                            key={`${activeAgent.id}:identity`}
+                            content={activeAgent.identity || "No identity set."}
+                            tone="identity"
+                            storageKey={`${activeAgent.id}:identity`}
+                            source={activeIdentitySource}
+                          />
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2 mt-4 md:px-7">
                         {activeAgent.tags?.map(tag => (
@@ -2036,20 +2554,81 @@ export function ProfileView() {
 
                     {/* Soul */}
                     <div className="mb-4">
-                      <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 mb-3">
-                        <Sparkles className="w-5 h-5 text-violet-500" />
-                        <h3 className="font-bold text-sm tracking-widest uppercase">{t("profile.soul")}</h3>
+                      <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                          <Sparkles className="w-5 h-5 text-violet-500" />
+                          <h3 className="font-bold text-sm tracking-widest uppercase">{t("profile.soul")}</h3>
+                          {isSoulDocDirty ? (
+                            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
+                              {t("profile.unsaved")}
+                            </span>
+                          ) : null}
+                        </div>
+                        {hasRealAgents ? (
+                          <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                            <button
+                              type="button"
+                              onClick={() => void handleSoulDocumentReload()}
+                              disabled={!canEditActiveAgent || isSavingSoulDoc}
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-sky-300 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
+                            >
+                              {t("profile.reload")}
+                            </button>
+                            {isEditingSoulDoc ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSoulDocDraft(activeSoulDocumentContent);
+                                    setIsEditingSoulDoc(false);
+                                  }}
+                                  disabled={isSavingSoulDoc}
+                                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100"
+                                >
+                                  {t("profile.cancel")}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleSoulDocumentSave()}
+                                  disabled={isSavingSoulDoc}
+                                  className="inline-flex items-center gap-2 rounded-full bg-violet-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {isSavingSoulDoc ? (
+                                    <Activity className="h-3.5 w-3.5 animate-spin" />
+                                  ) : null}
+                                  {isSavingSoulDoc ? t("profile.saving") : t("profile.save")}
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setIsEditingSoulDoc(true)}
+                                disabled={!canEditActiveAgent}
+                                className="rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-violet-600 dark:hover:bg-violet-500"
+                              >
+                                {t("profile.edit")}
+                              </button>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="md:mx-7 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-xl p-4 md:p-5 relative hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                           <div className="absolute top-0 left-0 rtl:left-auto rtl:right-0 w-1 h-full bg-violet-400 rounded-l-xl rtl:rounded-l-none rtl:rounded-r-xl"></div>
                           <div className="transition-colors">
-                            <AgentDocument
-                              key={`${activeAgent.id}:soul`}
-                              content={activeAgent.soulQuote || "No soul quote available."}
-                              tone="soul"
-                              storageKey={`${activeAgent.id}:soul`}
-                              source={activeSoulSource}
-                            />
+                            {isEditingSoulDoc ? (
+                              <ProfileDocumentEditor
+                                value={soulDocDraft}
+                                onChange={setSoulDocDraft}
+                              />
+                            ) : (
+                              <AgentDocument
+                                key={`${activeAgent.id}:soul`}
+                                content={activeAgent.soulQuote || "No soul quote available."}
+                                tone="soul"
+                                storageKey={`${activeAgent.id}:soul`}
+                                source={activeSoulSource}
+                              />
+                            )}
                           </div>
                       </div>
                     </div>
