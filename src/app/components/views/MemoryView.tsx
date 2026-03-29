@@ -65,6 +65,19 @@ type DiagnosticsSummary = {
   primaryIssue: string | null;
 };
 
+function sourceTone(source: string) {
+  if (source.includes("session")) {
+    return "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800/70 dark:bg-violet-950/30 dark:text-violet-300";
+  }
+  if (source.includes("memory") || source.includes("root")) {
+    return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300";
+  }
+  if (source.includes("daily") || source.includes("timeline")) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/30 dark:text-emerald-300";
+  }
+  return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
+}
+
 export function MemoryView() {
   const { t } = useI18n();
   const { agents, grantedScopes, isConnected } = useOpenClaw();
@@ -698,7 +711,7 @@ export function MemoryView() {
                  )}
                </div>
                <div className="max-w-3xl mx-auto -mx-4 md:mx-auto px-2 md:px-0">
-                  {filteredFootprintGroups.length === 0 ? (
+                {filteredFootprintGroups.length === 0 ? (
                     <div className="flex flex-col items-center justify-center p-12 mt-8 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl mx-4 shadow-sm">
                       <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
                         <Footprints className="w-8 h-8 text-slate-400 dark:text-slate-500" />
@@ -706,8 +719,8 @@ export function MemoryView() {
                       <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">No footprint found</h3>
                       <p className="text-sm text-slate-500 dark:text-slate-400">There are no memory footprints for the current selection.</p>
                     </div>
-                  ) : (
-                    <div className="relative border-l-[2px] rtl:border-l-0 rtl:border-r-[2px] border-slate-200 dark:border-slate-800 ml-4 rtl:ml-0 rtl:mr-4 md:ml-8 rtl:md:mr-8 space-y-8 md:space-y-10 pb-8 pt-2">
+                ) : (
+                  <div className="relative border-l-[2px] rtl:border-l-0 rtl:border-r-[2px] border-slate-200 dark:border-slate-800 ml-4 rtl:ml-0 rtl:mr-4 md:ml-8 rtl:md:mr-8 space-y-8 md:space-y-10 pb-8 pt-2">
                       {filteredFootprintGroups.map((group) => (
                         <div key={group.id} className="relative pl-6 rtl:pl-0 rtl:pr-6 md:pl-10 rtl:md:pr-10">
                           <div className="absolute -left-[15px] rtl:left-auto rtl:-right-[15px] md:-left-[17px] rtl:md:-right-[17px] top-0 w-7 h-7 md:w-8 md:h-8 bg-white dark:bg-slate-800 border-[2px] border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center shadow-sm z-10">
@@ -753,6 +766,24 @@ export function MemoryView() {
                       ))}
                     </div>
                   )}
+               </div>
+               <div className="mx-auto mt-4 max-w-3xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                 <div className="flex items-center justify-between gap-3">
+                   <div>
+                     <div className="text-sm font-semibold">Daily detail card</div>
+                     <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selectedTimelineEntryName || "Select a footprint result"}</div>
+                   </div>
+                   <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
+                     read only
+                   </span>
+                 </div>
+                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                   {_timelineEntryLoading
+                     ? "Loading daily detail..."
+                     : _timelineEntryError
+                       ? _timelineEntryError
+                       : _timelineEntryContent || "No daily detail content loaded."}
+                 </div>
                </div>
             </motion.div>
           )}
@@ -810,10 +841,20 @@ export function MemoryView() {
                         {group} · {count}
                       </span>
                     ))}
-              </div>
-              <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-                Search open routing is intentionally deferred to M3. In M2 this section only proves the real gateway-backed query path, diagnostics payload, and result grouping skeleton.
-              </div>
+                  </div>
+                  <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
+                    Search open routing is intentionally deferred to M3. In M2 this section only proves the real gateway-backed query path, diagnostics payload, and result grouping skeleton.
+                  </div>
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {(searchResult?.results ?? []).slice(0, 8).map((entry) => (
+                      <span
+                        key={`source-${entry.id}`}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium ${sourceTone(entry.sourceKind)}`}
+                      >
+                        {entry.sourceKind}
+                      </span>
+                    ))}
+                  </div>
               {diagnosticsSummary && (
                 <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
                   <div className="font-medium">Search bar / drawer shared diagnostics</div>
@@ -952,6 +993,17 @@ export function MemoryView() {
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
                           <div className="font-medium">Primary issue</div>
                           <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.primaryIssue ?? "No blocking issue reported"}</div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {diagnosticsSummary.primaryIssue ? (
+                              <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 dark:border-rose-800/70 dark:bg-rose-950/30 dark:text-rose-300">
+                                Primary Issue
+                              </span>
+                            ) : (
+                              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/30 dark:text-emerald-300">
+                                Healthy
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="grid gap-3 md:grid-cols-3">
                           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
@@ -970,7 +1022,12 @@ export function MemoryView() {
                         <div className="space-y-2">
                           {diagnosticsSummary.bySource.map((source) => (
                             <div key={source.source} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
-                              <div className="font-medium">{source.source}</div>
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="font-medium">{source.source}</div>
+                                <span className={`rounded-full border px-3 py-1 text-xs font-medium ${sourceTone(source.source)}`}>
+                                  {source.source}
+                                </span>
+                              </div>
                               <div className="mt-1 text-slate-500 dark:text-slate-400">indexed {source.indexedFiles} / total {source.totalFiles} / chunks {source.chunks}</div>
                             </div>
                           ))}
