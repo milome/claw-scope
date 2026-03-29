@@ -6,6 +6,7 @@ import {
   gatewayAgentMemoryGet,
   gatewayAgentFileRead,
   gatewayAgentMemorySearch,
+  gatewayAgentMemoryStatus,
   gatewayAgentMemoryTimelineAccessResolve,
   gatewayAgentMemoryTimelineEntryRead,
   gatewayAgentMemoryTimelineGet,
@@ -13,6 +14,7 @@ import {
   gatewayAgentMemoryTimelineRemoteProbe,
   type GatewayAgentMemoryResult,
   type GatewayAgentMemorySearchResult,
+  type GatewayAgentMemoryStatusResult,
   type GatewayAgentMemoryTimelineAccessResult,
   type GatewayAgentMemoryTimelineResult,
   useOpenClaw,
@@ -53,6 +55,16 @@ type SearchDetailState = {
   error: string | null;
 } | null;
 
+type DiagnosticsSummary = {
+  provider: string;
+  model: string;
+  indexedFiles: number;
+  totalFiles: number;
+  chunks: number;
+  bySource: { source: string; indexedFiles: number; totalFiles: number; chunks: number }[];
+  primaryIssue: string | null;
+};
+
 export function MemoryView() {
   const { t } = useI18n();
   const { agents, grantedScopes, isConnected } = useOpenClaw();
@@ -65,6 +77,8 @@ export function MemoryView() {
   const [timelineResult, setTimelineResult] = useState<GatewayAgentMemoryTimelineResult | null>(null);
   const [_timelineLoading, setTimelineLoading] = useState(false);
   const [_timelineError, setTimelineError] = useState<string | null>(null);
+  const [memoryStatus, setMemoryStatus] = useState<GatewayAgentMemoryStatusResult | null>(null);
+  const [memoryStatusError, setMemoryStatusError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchRunning] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -155,8 +169,24 @@ export function MemoryView() {
       }
     };
 
+    const loadStatus = async () => {
+      try {
+        const result = await gatewayAgentMemoryStatus(selectedAgentId);
+        if (cancelled) {
+          return;
+        }
+        setMemoryStatus(result);
+        setMemoryStatusError(null);
+      } catch (error) {
+        if (!cancelled) {
+          setMemoryStatusError(error instanceof Error ? error.message : String(error));
+        }
+      }
+    };
+
     void loadMemory();
     void loadTimeline();
+    void loadStatus();
 
     return () => {
       cancelled = true;
@@ -250,6 +280,40 @@ export function MemoryView() {
       count: counts[group],
     }));
   }, [searchResult]);
+
+  const diagnosticsSummary = useMemo<DiagnosticsSummary | null>(() => {
+    if (!memoryStatus) {
+      return null;
+    }
+
+    const bySource = [...memoryStatus.bySource]
+      .map((item) => ({
+        source: item.source,
+        indexedFiles: item.indexedFiles ?? 0,
+        totalFiles: item.totalFiles ?? 0,
+        chunks: item.chunks ?? 0,
+      }))
+      .sort((left, right) => right.indexedFiles - left.indexedFiles || right.chunks - left.chunks);
+
+    let primaryIssue: string | null = null;
+    if (memoryStatus.embeddingsError) {
+      primaryIssue = memoryStatus.embeddingsError;
+    } else if (memoryStatus.embeddingsAvailable === false) {
+      primaryIssue = "Embeddings unavailable";
+    } else if ((memoryStatus.indexedFiles ?? 0) === 0) {
+      primaryIssue = "No indexed files";
+    }
+
+    return {
+      provider: memoryStatus.provider ?? "unknown",
+      model: memoryStatus.model ?? "unknown",
+      indexedFiles: memoryStatus.indexedFiles ?? 0,
+      totalFiles: memoryStatus.totalFiles ?? 0,
+      chunks: memoryStatus.chunks ?? 0,
+      bySource,
+      primaryIssue,
+    };
+  }, [memoryStatus]);
 
   const getAgentBadge = (agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
@@ -730,6 +794,14 @@ export function MemoryView() {
                       <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{searchResult.diagnostics.storePath}</div>
                     </div>
                   )}
+                  {diagnosticsSummary && (
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
+                      <div className="font-medium">Shared diagnostics summary</div>
+                      <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.provider} / {diagnosticsSummary.model}</div>
+                      <div className="mt-1 text-slate-500 dark:text-slate-400">indexed {diagnosticsSummary.indexedFiles} / total {diagnosticsSummary.totalFiles} / chunks {diagnosticsSummary.chunks}</div>
+                      <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.primaryIssue ?? "No primary issue detected"}</div>
+                    </div>
+                  )}
                 </section>
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                   <div className="mb-4 flex flex-wrap gap-2">
@@ -739,10 +811,17 @@ export function MemoryView() {
                       </span>
                     ))}
               </div>
-                  <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-                    Search open routing is intentionally deferred to M3. In M2 this section only proves the real gateway-backed query path, diagnostics payload, and result grouping skeleton.
-                  </div>
-                  {searchError ? (
+              <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
+                Search open routing is intentionally deferred to M3. In M2 this section only proves the real gateway-backed query path, diagnostics payload, and result grouping skeleton.
+              </div>
+              {diagnosticsSummary && (
+                <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
+                  <div className="font-medium">Search bar / drawer shared diagnostics</div>
+                  <div className="mt-1 text-slate-500 dark:text-slate-400">Primary issue: {diagnosticsSummary.primaryIssue ?? "none"}</div>
+                  <div className="mt-1 text-slate-500 dark:text-slate-400">Top source: {diagnosticsSummary.bySource[0]?.source ?? "n/a"}</div>
+                </div>
+              )}
+              {searchError ? (
                     <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
                       {searchError}
                     </div>
@@ -803,6 +882,11 @@ export function MemoryView() {
                       </div>
                     </div>
                   )}
+                  {memoryStatusError && (
+                    <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
+                      {memoryStatusError}
+                    </div>
+                  )}
                 </section>
               </div>
             </motion.div>
@@ -858,6 +942,43 @@ export function MemoryView() {
                     ) : (
                       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
                         No path inventory can be shown because diagnostics are unavailable.
+                      </div>
+                    )}
+                  </section>
+                  <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-2">
+                    <div className="mb-4 text-sm font-semibold">Diagnostics drawer fields</div>
+                    {diagnosticsSummary ? (
+                      <div className="space-y-3">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
+                          <div className="font-medium">Primary issue</div>
+                          <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.primaryIssue ?? "No blocking issue reported"}</div>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-3">
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
+                            <div className="font-medium">Indexed files</div>
+                            <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.indexedFiles}</div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
+                            <div className="font-medium">Total files</div>
+                            <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.totalFiles}</div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
+                            <div className="font-medium">Chunks</div>
+                            <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.chunks}</div>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {diagnosticsSummary.bySource.map((source) => (
+                            <div key={source.source} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
+                              <div className="font-medium">{source.source}</div>
+                              <div className="mt-1 text-slate-500 dark:text-slate-400">indexed {source.indexedFiles} / total {source.totalFiles} / chunks {source.chunks}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
+                        Diagnostics drawer cannot render because memory status data is unavailable.
                       </div>
                     )}
                   </section>
