@@ -91,6 +91,185 @@ export interface GatewayAgentFileGetResult {
   file: GatewayAgentFileEntry;
 }
 
+export interface GatewayMemorySharedAgentSummary {
+  id: string;
+  name: string;
+}
+
+export interface GatewayAgentMemoryDiagnostics {
+  memorySearchEnabled: boolean;
+  backend: string;
+  provider?: string | null;
+  embeddingModel?: string | null;
+  builtinStorePath: string;
+  sources: string[];
+  extraPaths: string[];
+  sessionMemoryEnabled: boolean;
+  qmdActive: boolean;
+  qmdHome?: string | null;
+  qmdPaths: string[];
+  qmdSessionsEnabled: boolean;
+}
+
+export interface GatewayAgentMemoryResult {
+  agentId: string;
+  workspace: string;
+  documents: GatewayAgentFileEntry[];
+  sharedAgents: GatewayMemorySharedAgentSummary[];
+  diagnostics?: GatewayAgentMemoryDiagnostics | null;
+}
+
+export type GatewayAgentMemorySearchSourceKind =
+  | 'root_memory'
+  | 'daily_memory'
+  | 'workspace_markdown'
+  | 'extra_path'
+  | 'session_transcript'
+  | 'unknown';
+
+export type GatewayAgentMemorySearchOpenTarget =
+  | 'documents'
+  | 'footprints'
+  | 'detail_sheet';
+
+export interface GatewayAgentMemorySearchDiagnostics {
+  available: boolean;
+  provider?: string | null;
+  sources: string[];
+  sessionMemoryEnabled: boolean;
+  storeDriver: string;
+  storePath: string;
+  backend: string;
+  advice?: string | null;
+}
+
+export interface GatewayAgentMemoryStatusSource {
+  source: string;
+  indexedFiles?: number | null;
+  totalFiles?: number | null;
+  chunks?: number | null;
+}
+
+export interface GatewayAgentMemoryStatusResult {
+  agentId: string;
+  provider?: string | null;
+  requestedProvider?: string | null;
+  model?: string | null;
+  embeddingsAvailable?: boolean | null;
+  embeddingsError?: string | null;
+  indexedFiles?: number | null;
+  totalFiles?: number | null;
+  chunks?: number | null;
+  bySource: GatewayAgentMemoryStatusSource[];
+}
+
+export interface GatewayAgentMemorySearchEntry {
+  id: string;
+  path: string;
+  snippet: string;
+  score?: number | null;
+  lineStart?: number | null;
+  lineEnd?: number | null;
+  sourceKind: GatewayAgentMemorySearchSourceKind;
+  openTarget: GatewayAgentMemorySearchOpenTarget;
+  canonicalDocumentName?: string | null;
+  timelineEntryName?: string | null;
+}
+
+export interface GatewayAgentMemorySearchResult {
+  agentId: string;
+  query: string;
+  executedAtMs: number;
+  diagnostics: GatewayAgentMemorySearchDiagnostics;
+  results: GatewayAgentMemorySearchEntry[];
+}
+
+export interface GatewayAgentMemoryTimelineDiagnostics {
+  gatewayVisibleFilesCount: number;
+  gatewayVisibleRootDocsCount: number;
+  gatewayVisibleDailyCount: number;
+  gatewayOnlyReturnedRootDocs: boolean;
+  localScanDirectory?: string | null;
+  localScanFilesCount: number;
+  localScanSkippedCount: number;
+}
+
+export interface GatewayAgentMemoryTimelineProbeSummary {
+  startDate: string;
+  endDate: string;
+  attemptedDays: number;
+  hitDays: number;
+  missDays: number;
+  skippedDays: number;
+  timeoutDays: number;
+  errorDays: number;
+  retryDays: number;
+  retryRecoveredDays: number;
+  days: GatewayAgentMemoryTimelineProbeDayResult[];
+  status: GatewayAgentMemoryTimelineProbeStatus;
+  cached: boolean;
+  lastErrorCategory?: string | null;
+  lastErrorCode?: string | null;
+  lastErrorMessage?: string | null;
+}
+
+export type GatewayAgentMemoryTimelineProbeDayStatus =
+  | 'hit'
+  | 'miss'
+  | 'timeout'
+  | 'error';
+
+export interface GatewayAgentMemoryTimelineProbeDayResult {
+  date: string;
+  name: string;
+  status: GatewayAgentMemoryTimelineProbeDayStatus;
+  retried: boolean;
+  recoveredAfterRetry: boolean;
+  errorCategory?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+}
+
+export type GatewayAgentMemoryTimelineProbeStatus =
+  | 'complete'
+  | 'empty'
+  | 'partial'
+  | 'timeout'
+  | 'error';
+
+export type GatewayAgentMemoryTimelineSource =
+  | 'local_workspace'
+  | 'remote_probe'
+  | 'unavailable';
+
+export type GatewayAgentMemoryTimelineAccessReason =
+  | 'workspace_local_and_readable'
+  | 'workspace_remote_or_not_readable'
+  | 'workspace_missing'
+  | 'gateway_not_connected';
+
+export interface GatewayAgentMemoryTimelineAccessResult {
+  agentId: string;
+  workspace: string;
+  mode: GatewayAgentMemoryTimelineSource;
+  reason: GatewayAgentMemoryTimelineAccessReason;
+}
+
+export interface GatewayAgentMemoryTimelineResult {
+  agentId: string;
+  workspace: string;
+  source: GatewayAgentMemoryTimelineSource;
+  entries: GatewayAgentFileEntry[];
+  diagnostics: GatewayAgentMemoryTimelineDiagnostics;
+  probe?: GatewayAgentMemoryTimelineProbeSummary | null;
+}
+
+export interface GatewayAgentSettingsResult {
+  agentId: string;
+  workspace?: string | null;
+  model?: string | null;
+}
+
 export interface GatewayAgentsListResult {
   defaultId: string;
   mainKey: string;
@@ -254,8 +433,132 @@ export async function gatewayAgentSoulGet(agentId: string) {
   });
 }
 
+export async function gatewayAgentFileRead(agentId: string, name: string) {
+  return invokeGateway<GatewayAgentFileGetResult>('gateway_agent_file_read', {
+    agentId,
+    name,
+  });
+}
+
+export async function gatewayAgentMemoryGet(agentId: string) {
+  return invokeGateway<GatewayAgentMemoryResult>('gateway_agent_memory_get', {
+    agentId,
+  });
+}
+
+export async function gatewayAgentMemorySearch(
+  agentId: string,
+  query: string,
+  maxResults?: number,
+  sourceFilter?: 'all' | 'memory' | 'sessions',
+) {
+  return invokeGateway<GatewayAgentMemorySearchResult>('gateway_agent_memory_search', {
+    agentId,
+    query,
+    maxResults,
+    sourceFilter,
+  });
+}
+
+export async function gatewayAgentMemoryStatus(agentId: string) {
+  return invokeGateway<GatewayAgentMemoryStatusResult>('gateway_agent_memory_status', {
+    agentId,
+  });
+}
+
+export async function openExternalUrl(url: string) {
+  return invokeGateway<void>('open_external_url', { url });
+}
+
+export async function gatewayAgentMemoryTimelineGet(agentId: string) {
+  return invokeGateway<GatewayAgentMemoryTimelineResult>(
+    'gateway_agent_memory_timeline_get',
+    {
+      agentId,
+    },
+  );
+}
+
+export async function gatewayAgentMemoryTimelineAccessResolve(agentId: string) {
+  return invokeGateway<GatewayAgentMemoryTimelineAccessResult>(
+    'gateway_agent_memory_timeline_access_resolve',
+    {
+      agentId,
+    },
+  );
+}
+
+export async function gatewayAgentMemoryTimelineLocalScan(agentId: string) {
+  return invokeGateway<GatewayAgentMemoryTimelineResult>(
+    'gateway_agent_memory_timeline_local_scan',
+    {
+      agentId,
+    },
+  );
+}
+
+export async function gatewayAgentMemoryTimelineRemoteProbe(
+  agentId: string,
+  startDate: string,
+  endDate: string,
+) {
+  return invokeGateway<GatewayAgentMemoryTimelineResult>(
+    'gateway_agent_memory_timeline_remote_probe',
+    {
+      agentId,
+      startDate,
+      endDate,
+    },
+  );
+}
+
+export async function gatewayAgentMemoryTimelineRemoteProbeDates(
+  agentId: string,
+  dates: string[],
+) {
+  return invokeGateway<GatewayAgentMemoryTimelineResult>(
+    'gateway_agent_memory_timeline_remote_probe_dates',
+    {
+      agentId,
+      dates,
+    },
+  );
+}
+
+export async function gatewayAgentMemoryTimelineEntryGet(
+  agentId: string,
+  name: string,
+) {
+  return invokeGateway<GatewayAgentFileGetResult>(
+    'gateway_agent_memory_timeline_entry_get',
+    {
+      agentId,
+      name,
+    },
+  );
+}
+
+export async function gatewayAgentMemoryTimelineEntryRead(
+  agentId: string,
+  name: string,
+) {
+  return invokeGateway<GatewayAgentFileGetResult>(
+    'gateway_agent_memory_timeline_entry_read',
+    {
+      agentId,
+      name,
+    },
+  );
+}
+
 export async function gatewayAgentWorkspaceIdentityGet(agentId: string) {
   return invokeGateway<GatewayAgentFileGetResult>('gateway_agent_workspace_identity_get', {
+    agentId,
+  });
+}
+
+export async function gatewayAgentSettingsGet(agentId: string) {
+  return invokeGateway<GatewayAgentSettingsResult>('gateway_agent_settings_get', {
     agentId,
   });
 }
@@ -271,6 +574,18 @@ export async function gatewayAgentWorkspaceIdentitySet(agentId: string, content:
 export async function gatewayAgentSoulSet(agentId: string, content: string) {
   return invokeGateway<void>('gateway_agent_soul_set', {
     agentId,
+    content,
+  });
+}
+
+export async function gatewayAgentMemorySet(
+  agentId: string,
+  name: string,
+  content: string,
+) {
+  return invokeGateway<void>('gateway_agent_memory_set', {
+    agentId,
+    name,
     content,
   });
 }

@@ -1,6 +1,7 @@
 import {
   Fragment,
   startTransition,
+  useMemo,
   useState,
   useRef,
   useEffect,
@@ -19,7 +20,8 @@ import {
   ArrowRight,
   Activity,
   Terminal,
-  Plus,
+  ArrowLeftRight,
+  ChevronLeft,
   ChevronRight,
   ChevronUp,
   ChevronDown,
@@ -51,6 +53,7 @@ import {
   type GatewayAgentIdentityResult,
 } from "../../contexts/OpenClawContext";
 import { applyIdentityMetaToDocument } from "./profileIdentityDocument";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 
 type AgentStatusKey = "active" | "standby" | "sleeping";
 type Translate = (key: string, ...args: (string | number)[]) => string;
@@ -131,10 +134,33 @@ type AgentDocumentSourceMeta = {
   isFallback: boolean;
 };
 
+type HorizontalOverflowState = {
+  left: boolean;
+  right: boolean;
+};
+
 const PROFILE_DOC_STATE_STORAGE_PREFIX = "clawscope:profile-doc-state:";
 const EXPAND_ALL_OVERSCAN_PX = 160;
 const EXPAND_ALL_FALLBACK_VISIBLE_COUNT = 3;
 const EXPAND_ALL_BATCH_SIZE = 3;
+
+function resolveHorizontalOverflowState(
+  element: HTMLElement | null,
+): HorizontalOverflowState {
+  if (!element) {
+    return { left: false, right: false };
+  }
+
+  const hasOverflow = element.scrollWidth - element.clientWidth > 4;
+  if (!hasOverflow) {
+    return { left: false, right: false };
+  }
+
+  return {
+    left: element.scrollLeft > 4,
+    right: element.scrollLeft + element.clientWidth < element.scrollWidth - 4,
+  };
+}
 
 function statusLabel(status: AgentStatusKey, t: Translate) {
   switch (status) {
@@ -957,7 +983,7 @@ function AgentDocumentBlocks({
   const { t } = useI18n();
 
   return (
-    <div className="space-y-3">
+    <div className="max-w-[78ch] space-y-4">
       {blocks.map((block, blockIndex) => {
         const key = `${sectionKey}-${block.type}-${blockIndex}`;
 
@@ -973,7 +999,7 @@ function AgentDocumentBlocks({
           return (
             <p
               key={key}
-              className="break-words text-[15px] leading-7 text-slate-700 dark:text-slate-300"
+              className="break-words text-[15px] leading-8 text-slate-700 dark:text-slate-300"
             >
               {parseInlineMarkdown(block.text, key, searchContext)}
             </p>
@@ -1017,11 +1043,11 @@ function AgentDocumentBlocks({
 
         if (block.type === "list") {
           return (
-            <div key={key} className="space-y-3">
+            <div key={key} className="space-y-3.5">
               {block.items.map((item, itemIndex) => (
                 <div
                   key={`${key}-item-${itemIndex}`}
-                  className="relative flex items-start gap-3 rounded-xl px-3 py-2.5"
+                  className="relative flex items-start gap-3 rounded-xl px-3.5 py-3"
                   style={{
                     marginInlineStart: `${item.depth * 24}px`,
                     background:
@@ -1564,10 +1590,10 @@ function AgentDocument({
 
   return (
     <div
-      className={`space-y-3 text-[14px] md:text-[15px] leading-7 ${baseTextClass}`}
+      className={`space-y-4 text-[14px] md:text-[15px] leading-8 ${baseTextClass}`}
     >
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-3 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-900/60">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3.5 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-900/60">
           <div className="relative min-w-[220px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -1679,7 +1705,7 @@ function AgentDocument({
           ) : null}
         </div>
         {isSourcePanelOpen ? (
-          <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-4 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-900/60">
+          <div className="space-y-3.5 rounded-2xl border border-slate-200/80 bg-white/80 px-5 py-4.5 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-900/60">
             {source?.fileName || source?.filePath || source?.workspacePath ? (
               <>
                 {source.fileName ? (
@@ -1790,7 +1816,7 @@ function AgentDocument({
                   </button>
                   {isOpen ? (
                     <div
-                      className="border-t border-slate-200/80 px-4 py-4 dark:border-slate-700/70"
+                      className="border-t border-slate-200/80 px-5 py-5 dark:border-slate-700/70"
                       style={sectionContentStyle}
                     >
                       <AgentDocumentBlocks
@@ -1806,12 +1832,14 @@ function AgentDocument({
             })}
           </>
         ) : (
-          <AgentDocumentBlocks
-            blocks={blocks}
-            tone={tone}
-            sectionKey={`${tone}-root`}
-            searchContext={searchContext}
-          />
+          <div className="rounded-2xl border border-slate-200/80 bg-white/70 px-5 py-5 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-900/55">
+            <AgentDocumentBlocks
+              blocks={blocks}
+              tone={tone}
+              sectionKey={`${tone}-root`}
+              searchContext={searchContext}
+            />
+          </div>
         )}
       </div>
     </div>
@@ -1868,7 +1896,7 @@ function ProfileDetailField({
   monospace?: boolean;
 }) {
   return (
-    <label className="flex flex-col gap-2">
+    <label className="flex flex-col gap-2.5">
       <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
         {label}
       </span>
@@ -1877,13 +1905,13 @@ function ProfileDetailField({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          className={`h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-sky-400 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500 ${
+          className={`h-12 rounded-2xl border border-slate-200/90 bg-white px-4 text-sm text-slate-700 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-sky-300 focus:shadow-[0_0_0_4px_rgba(186,230,253,0.55)] dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500 dark:focus:shadow-[0_0_0_4px_rgba(14,165,233,0.18)] ${
             monospace ? "font-mono" : ""
           }`}
         />
       ) : (
         <div
-          className={`min-h-11 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 transition-colors dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-200 ${
+          className={`min-h-12 overflow-hidden rounded-2xl border border-slate-200/90 bg-white px-4 py-3.5 text-sm leading-7 text-slate-700 shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-200 ${
             monospace ? "font-mono" : ""
           }`}
         >
@@ -1906,6 +1934,256 @@ function ProfileDetailField({
   );
 }
 
+function ProfileSectionHeader({
+  icon: Icon,
+  title,
+  tone,
+  meta,
+  isDirty = false,
+  dirtyLabel,
+}: {
+  icon: LucideIcon;
+  title: string;
+  tone: "sky" | "violet";
+  meta?: string;
+  isDirty?: boolean;
+  dirtyLabel: string;
+}) {
+  const toneClasses =
+    tone === "violet"
+      ? {
+          badge:
+            "border-violet-100 bg-violet-50 text-violet-500 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300",
+          title: "text-slate-900 dark:text-slate-100",
+          meta: "text-slate-400 dark:text-slate-500",
+        }
+      : {
+          badge:
+            "border-sky-100 bg-sky-50 text-sky-500 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300",
+          title: "text-slate-900 dark:text-slate-100",
+          meta: "text-slate-500 dark:text-slate-400",
+        };
+
+  return (
+    <div className="flex items-start gap-3">
+      <span
+        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${toneClasses.badge}`}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3
+            className={`text-[13px] font-bold uppercase tracking-[0.22em] ${toneClasses.title}`}
+          >
+            {title}
+          </h3>
+          {isDirty ? (
+            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
+              {dirtyLabel}
+            </span>
+          ) : null}
+        </div>
+        {meta ? (
+          <p className={`mt-1 text-xs ${toneClasses.meta}`}>{meta}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ProfileSectionCard({
+  tone,
+  className = "",
+  children,
+}: {
+  tone: "sky" | "violet";
+  className?: string;
+  children: ReactNode;
+}) {
+  const toneClasses =
+    tone === "violet"
+      ? "border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.05)] before:bg-violet-400/85 after:bg-violet-400/95 dark:border-slate-800 dark:bg-slate-950/80 dark:before:bg-violet-300/80 dark:after:bg-violet-300/85"
+      : "border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.05)] before:bg-sky-400/85 after:bg-sky-400/95 dark:border-slate-800 dark:bg-slate-950/80 dark:before:bg-sky-300/80 dark:after:bg-sky-300/85";
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-[26px] border p-4 transition-colors before:pointer-events-none before:absolute before:inset-x-6 before:top-0 before:h-0.5 before:rounded-full after:pointer-events-none after:absolute after:inset-y-5 after:left-0 after:w-1 after:rounded-r-full rtl:after:left-auto rtl:after:right-0 rtl:after:rounded-l-full rtl:after:rounded-r-none md:p-5 ${toneClasses} ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ProfileActionButton({
+  variant,
+  disabled = false,
+  onClick,
+  children,
+}: {
+  variant: "secondary" | "primary";
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  const className =
+    variant === "primary"
+      ? "inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+      : "rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-sky-200 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={className}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ProfileSectionActions({
+  visible,
+  isEditing,
+  isSaving,
+  reloadDisabled,
+  editDisabled,
+  onReload,
+  onEdit,
+  onCancel,
+  onSave,
+  reloadLabel,
+  editLabel,
+  cancelLabel,
+  saveLabel,
+  savingLabel,
+}: {
+  visible: boolean;
+  isEditing: boolean;
+  isSaving: boolean;
+  reloadDisabled: boolean;
+  editDisabled: boolean;
+  onReload: () => void;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+  reloadLabel: string;
+  editLabel: string;
+  cancelLabel: string;
+  saveLabel: string;
+  savingLabel: string;
+}) {
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 md:justify-end">
+      <ProfileActionButton
+        variant="secondary"
+        onClick={onReload}
+        disabled={reloadDisabled}
+      >
+        {reloadLabel}
+      </ProfileActionButton>
+      {isEditing ? (
+        <>
+          <ProfileActionButton
+            variant="secondary"
+            onClick={onCancel}
+            disabled={isSaving}
+          >
+            {cancelLabel}
+          </ProfileActionButton>
+          <ProfileActionButton
+            variant="primary"
+            onClick={onSave}
+            disabled={isSaving}
+          >
+            {isSaving ? <Activity className="h-3.5 w-3.5 animate-spin" /> : null}
+            {isSaving ? savingLabel : saveLabel}
+          </ProfileActionButton>
+        </>
+      ) : (
+        <ProfileActionButton
+          variant="primary"
+          onClick={onEdit}
+          disabled={editDisabled}
+        >
+          {editLabel}
+        </ProfileActionButton>
+      )}
+    </div>
+  );
+}
+
+function ProfileStatCard({
+  tone,
+  label,
+  value,
+  unit,
+  labelIcon: LabelIcon,
+  metricIcon: MetricIcon,
+}: {
+  tone: "sky" | "violet" | "emerald";
+  label: string;
+  value: string;
+  unit?: string;
+  labelIcon: LucideIcon;
+  metricIcon: LucideIcon;
+}) {
+  const toneClasses =
+    tone === "violet"
+      ? {
+          card: "border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.05)] before:bg-violet-400/85 hover:border-violet-200 dark:border-slate-800 dark:bg-slate-950/80 dark:before:bg-violet-300/75 dark:hover:border-violet-800",
+          labelIcon: "text-violet-500 dark:text-violet-400",
+          metricBadge:
+            "bg-violet-50 text-violet-500 shadow-sm dark:bg-violet-900/30 dark:text-violet-400",
+        }
+      : tone === "emerald"
+        ? {
+            card: "border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.05)] before:bg-emerald-400/85 hover:border-emerald-200 dark:border-slate-800 dark:bg-slate-950/80 dark:before:bg-emerald-300/75 dark:hover:border-emerald-800",
+            labelIcon: "text-emerald-500 dark:text-emerald-400",
+            metricBadge:
+              "bg-emerald-50 text-emerald-500 shadow-sm dark:bg-emerald-900/30 dark:text-emerald-400",
+          }
+        : {
+            card: "border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.05)] before:bg-sky-400/85 hover:border-sky-200 dark:border-slate-800 dark:bg-slate-950/80 dark:before:bg-sky-300/75 dark:hover:border-sky-800",
+            labelIcon: "text-sky-500 dark:text-sky-400",
+            metricBadge:
+              "bg-sky-50 text-sky-500 shadow-sm dark:bg-sky-900/30 dark:text-sky-400",
+          };
+
+  return (
+    <div
+      className={`relative min-w-[200px] snap-center flex-1 overflow-hidden rounded-[24px] border p-4 transition-colors before:pointer-events-none before:absolute before:inset-x-5 before:top-0 before:h-0.5 before:rounded-full md:min-w-0 md:p-5 ${toneClasses.card}`}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 md:text-sm">
+            <LabelIcon className={`h-3.5 w-3.5 ${toneClasses.labelIcon}`} />
+            {label}
+          </div>
+          <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 md:text-3xl">
+            {value}{" "}
+            {unit ? (
+              <span className="text-xs font-normal text-slate-400 dark:text-slate-500 md:text-sm">
+                {unit}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <div
+          className={`flex h-10 w-10 items-center justify-center rounded-full md:h-12 md:w-12 ${toneClasses.metricBadge}`}
+        >
+          <MetricIcon className="h-4 w-4 md:h-5 md:w-5" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProfileDocumentEditor({
   value,
   onChange,
@@ -1914,12 +2192,12 @@ function ProfileDocumentEditor({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-950/50">
+    <div className="rounded-[24px] border border-slate-200/90 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-950/50">
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
         spellCheck={false}
-        className="min-h-[320px] w-full resize-y rounded-2xl bg-transparent px-4 py-4 font-mono text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
+        className="min-h-[320px] w-full resize-y rounded-[24px] bg-transparent px-4 py-4 font-mono text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
       />
     </div>
   );
@@ -2018,6 +2296,12 @@ export function ProfileView() {
   const [isSavingIdentityDoc, setIsSavingIdentityDoc] = useState(false);
   const [isSavingSoulDoc, setIsSavingSoulDoc] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const desktopNodeTabsRef = useRef<HTMLDivElement>(null);
+  const mobileNodeTabsRef = useRef<HTMLDivElement>(null);
+  const [desktopNodeTabsOverflow, setDesktopNodeTabsOverflow] =
+    useState<HorizontalOverflowState>({ left: false, right: false });
+  const [mobileNodeTabsOverflow, setMobileNodeTabsOverflow] =
+    useState<HorizontalOverflowState>({ left: false, right: false });
 
   const hasRealAgents = isConnected && realAgents.length > 0;
 
@@ -2378,17 +2662,101 @@ export function ProfileView() {
     }
   };
 
-  // Group agents by Node
-  const groupedAgents = displayAgents.reduce(
-    (acc, agent) => {
-      if (!acc[agent.node]) acc[agent.node] = [];
-      acc[agent.node].push(agent);
-      return acc;
-    },
-    {} as Record<string, (typeof displayAgents)[number][]>,
+  const groupedAgents = useMemo(
+    () =>
+      displayAgents.reduce(
+        (acc, agent) => {
+          if (!acc[agent.node]) acc[agent.node] = [];
+          acc[agent.node].push(agent);
+          return acc;
+        },
+        {} as Record<string, (typeof displayAgents)[number][]>,
+      ),
+    [displayAgents],
   );
+  const nodeEntries = useMemo(() => Object.entries(groupedAgents), [groupedAgents]);
+  const nodeNames = useMemo(
+    () => nodeEntries.map(([nodeName]) => nodeName),
+    [nodeEntries],
+  );
+  const nodeCount = nodeNames.length;
+  const showNodeTabsHint = nodeCount > 1;
+  const [selectedNodeName, setSelectedNodeName] = useState("");
 
-  const nodeCount = Object.keys(groupedAgents).length;
+  useEffect(() => {
+    if (nodeNames.length === 0) {
+      if (selectedNodeName !== "") {
+        setSelectedNodeName("");
+      }
+      return;
+    }
+
+    if (!selectedNodeName || !groupedAgents[selectedNodeName]) {
+      setSelectedNodeName(nodeNames[0]);
+    }
+  }, [groupedAgents, nodeNames, selectedNodeName]);
+
+  useEffect(() => {
+    if (activeAgent?.node && activeAgent.node !== selectedNodeName) {
+      setSelectedNodeName(activeAgent.node);
+    }
+  }, [activeAgent?.node, selectedNodeName]);
+
+  const handleNodeTabChange = (nodeName: string) => {
+    setSelectedNodeName(nodeName);
+    const nodeAgents = groupedAgents[nodeName] ?? [];
+
+    if (
+      nodeAgents.length > 0 &&
+      !nodeAgents.some((agent) => agent.id === selectedAgentId)
+    ) {
+      setSelectedAgentId(nodeAgents[0].id);
+    }
+  };
+
+  const activeNodeAgents = selectedNodeName
+    ? groupedAgents[selectedNodeName] ?? []
+    : [];
+
+  useEffect(() => {
+    const element = desktopNodeTabsRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateOverflow = () => {
+      setDesktopNodeTabsOverflow(resolveHorizontalOverflowState(element));
+    };
+
+    updateOverflow();
+    element.addEventListener("scroll", updateOverflow, { passive: true });
+    window.addEventListener("resize", updateOverflow);
+
+    return () => {
+      element.removeEventListener("scroll", updateOverflow);
+      window.removeEventListener("resize", updateOverflow);
+    };
+  }, [nodeEntries.length, selectedNodeName]);
+
+  useEffect(() => {
+    const element = mobileNodeTabsRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateOverflow = () => {
+      setMobileNodeTabsOverflow(resolveHorizontalOverflowState(element));
+    };
+
+    updateOverflow();
+    element.addEventListener("scroll", updateOverflow, { passive: true });
+    window.addEventListener("resize", updateOverflow);
+
+    return () => {
+      element.removeEventListener("scroll", updateOverflow);
+      window.removeEventListener("resize", updateOverflow);
+    };
+  }, [nodeEntries.length, selectedNodeName]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -2446,61 +2814,129 @@ export function ProfileView() {
               <Blocks className="w-4 h-4 text-sky-500" />
               {t("profile.agents")}
             </div>
-            <button className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded text-slate-500 dark:text-slate-400 transition-colors">
-              <Plus className="w-4 h-4" />
-            </button>
           </div>
 
           {/* Desktop List */}
-          <div className="hidden md:flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-b-2xl shadow-sm overflow-y-auto overflow-x-hidden p-3 space-y-4 flex-1 rtl:text-right hide-scrollbar">
-            {Object.entries(groupedAgents).map(([nodeName, agents]) => (
-              <div key={nodeName} className="flex flex-col">
-                <div className="flex items-center gap-1.5 px-2 py-1 mb-2 text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg shadow-sm border border-slate-100 dark:border-slate-700/50">
-                  <Network className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{nodeName}</span>
-                  <span className="ml-auto bg-slate-200 dark:bg-slate-700 text-[10px] px-1.5 py-0.5 rounded-md text-slate-600 dark:text-slate-300">
-                    {agents.length}
+          <div className="hidden md:flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-b-2xl shadow-sm overflow-hidden flex-1 rtl:text-right">
+            <div className="border-b border-slate-200 dark:border-slate-800 px-3 py-3">
+              <div className="mb-2 flex items-center justify-between gap-3 px-1">
+                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                  <Network className="w-3.5 h-3.5" />
+                  {t("profile.nodes")}
+                </div>
+                {showNodeTabsHint ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
+                    <ArrowLeftRight className="h-3 w-3" />
+                    {t("profile.nodeTabsHint")}
                   </span>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  {agents.map((agent) => {
-                    const isSelected = selectedAgentId === agent.id;
-                    return (
-                      <button
-                        key={agent.id}
-                        onClick={() => setSelectedAgentId(agent.id)}
-                        className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left rtl:text-right transition-all ${isSelected ? "bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800/50 shadow-sm" : "hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent"}`}
-                      >
-                        <AgentAvatar
-                          agent={agent}
-                          containerClassName={`w-10 h-10 rounded-lg ${isSelected ? "scale-105" : "opacity-80"}`}
-                          iconClassName="w-5 h-5 text-white"
-                          emojiClassName="text-lg"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div
-                            className={`text-[13px] font-bold truncate ${isSelected ? "text-sky-900 dark:text-sky-300" : "text-slate-700 dark:text-slate-300"}`}
-                          >
-                            {agent.name}
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <div
-                              className={`w-1.5 h-1.5 rounded-full ${resolveStatusDotClass(agent.statusKey)}`}
-                            />
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate">
-                              {formatAgentShortId(agent.id)}
-                            </span>
-                          </div>
-                        </div>
-                        {isSelected && (
-                          <ChevronRight className="w-4 h-4 text-sky-500 shrink-0 rtl:rotate-180" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                ) : null}
               </div>
-            ))}
+              <Tabs value={selectedNodeName} onValueChange={handleNodeTabChange}>
+                <div className="relative">
+                  <div
+                    ref={desktopNodeTabsRef}
+                    className="overflow-x-auto hide-scrollbar"
+                  >
+                    <TabsList className="h-auto min-w-max flex-nowrap justify-start gap-1 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-1.5">
+                      {nodeEntries.map(([nodeName, agents]) => {
+                        const isSelectedNode = selectedNodeName === nodeName;
+
+                        return (
+                          <TabsTrigger
+                            key={nodeName}
+                            value={nodeName}
+                            className={`h-auto flex-none gap-2 px-3 py-2 text-xs font-semibold transition-all ${
+                              isSelectedNode
+                                ? "relative border-sky-200 bg-white text-sky-700 shadow-sm after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:origin-center after:rounded-full after:bg-sky-500 after:opacity-100 after:scale-x-100 after:transition-transform after:duration-200 after:ease-out dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200 dark:after:bg-sky-300"
+                                : "relative bg-slate-100/70 text-slate-500 after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:origin-center after:rounded-full after:bg-sky-500/70 after:opacity-0 after:scale-x-60 after:transition-transform after:duration-200 after:ease-out hover:bg-slate-100 hover:text-slate-700 dark:bg-slate-950/30 dark:text-slate-500 dark:after:bg-sky-300/70 dark:hover:bg-slate-900/70 dark:hover:text-slate-300"
+                            }`}
+                          >
+                            <span className="truncate max-w-[120px]">
+                              {nodeName}
+                            </span>
+                            <span
+                              className={`rounded-full px-1.5 py-0.5 text-[10px] ${
+                                isSelectedNode
+                                  ? "bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-200"
+                                  : "bg-slate-300/70 text-slate-500 dark:bg-slate-800/90 dark:text-slate-400"
+                              }`}
+                            >
+                              {agents.length}
+                            </span>
+                          </TabsTrigger>
+                        );
+                      })}
+                    </TabsList>
+                  </div>
+                  {desktopNodeTabsOverflow.left ? (
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-start bg-gradient-to-r from-white via-white/90 to-transparent pl-1 dark:from-slate-900 dark:via-slate-900/90">
+                      <ChevronLeft className="h-4 w-4 text-slate-400" />
+                    </div>
+                  ) : null}
+                  {desktopNodeTabsOverflow.right ? (
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-end bg-gradient-to-l from-white via-white/90 to-transparent pr-1 dark:from-slate-900 dark:via-slate-900/90">
+                      <ChevronRight className="h-4 w-4 text-slate-400" />
+                    </div>
+                  ) : null}
+                </div>
+              </Tabs>
+            </div>
+
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 hide-scrollbar">
+              <div className="flex flex-col gap-1.5">
+                {activeNodeAgents.map((agent) => {
+                  const isSelected = selectedAgentId === agent.id;
+                  return (
+                    <button
+                      key={agent.id}
+                      onClick={() => setSelectedAgentId(agent.id)}
+                      className={`relative w-full flex items-center gap-3 p-2.5 rounded-xl text-left rtl:text-right transition-all ${
+                        isSelected
+                          ? "border border-sky-200 bg-white text-sky-700 shadow-sm before:pointer-events-none before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-sky-500 dark:border-sky-800/50 dark:bg-sky-950/20 dark:text-sky-200 dark:before:bg-sky-300 rtl:before:left-auto rtl:before:right-0"
+                          : "border border-transparent bg-slate-100/60 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:bg-slate-950/20 dark:text-slate-500 dark:hover:bg-slate-900/60 dark:hover:text-slate-300"
+                      }`}
+                    >
+                      <AgentAvatar
+                        agent={agent}
+                        containerClassName={`w-10 h-10 rounded-lg transition-all ${
+                          isSelected ? "scale-105" : "opacity-75 scale-[0.98]"
+                        }`}
+                        iconClassName="w-5 h-5 text-white"
+                        emojiClassName="text-lg"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className={`text-[13px] font-bold truncate ${
+                            isSelected
+                              ? "text-sky-900 dark:text-sky-300"
+                              : "text-slate-600 dark:text-slate-400"
+                          }`}
+                        >
+                          {agent.name}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <div
+                            className={`w-1.5 h-1.5 rounded-full ${resolveStatusDotClass(agent.statusKey)}`}
+                          />
+                          <span
+                            className={`text-[11px] font-mono truncate ${
+                              isSelected
+                                ? "text-sky-500 dark:text-sky-300"
+                                : "text-slate-400 dark:text-slate-500"
+                            }`}
+                          >
+                            {formatAgentShortId(agent.id)}
+                          </span>
+                        </div>
+                      </div>
+                      {isSelected && (
+                        <ChevronRight className="w-4 h-4 text-sky-500 shrink-0 rtl:rotate-180" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {/* Mobile Horizontal Scroll */}
@@ -2509,60 +2945,123 @@ export function ProfileView() {
               <Blocks className="w-3.5 h-3.5 text-sky-500" />{" "}
               {t("profile.agents")}
             </span>
-            <button className="text-slate-500 hover:text-sky-500">
-              <Plus className="w-4 h-4" />
-            </button>
+          </div>
+          <div className="md:hidden">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                <Network className="w-3.5 h-3.5" />
+                {t("profile.nodes")}
+              </div>
+              {showNodeTabsHint ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
+                  <ArrowLeftRight className="h-3 w-3" />
+                  {t("profile.nodeTabsHint")}
+                </span>
+              ) : null}
+            </div>
+            <Tabs value={selectedNodeName} onValueChange={handleNodeTabChange}>
+              <div className="relative">
+                <div
+                  ref={mobileNodeTabsRef}
+                  className="overflow-x-auto hide-scrollbar"
+                >
+                  <TabsList className="h-auto min-w-max flex-nowrap justify-start gap-1 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5">
+                    {nodeEntries.map(([nodeName, agents]) => {
+                      const isSelectedNode = selectedNodeName === nodeName;
+
+                      return (
+                        <TabsTrigger
+                          key={nodeName}
+                          value={nodeName}
+                          className={`h-auto flex-none gap-2 px-3 py-2 text-xs font-semibold transition-all ${
+                            isSelectedNode
+                              ? "relative border-sky-200 bg-white text-sky-700 shadow-sm after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:origin-center after:rounded-full after:bg-sky-500 after:opacity-100 after:scale-x-100 after:transition-transform after:duration-200 after:ease-out dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200 dark:after:bg-sky-300"
+                              : "relative bg-slate-100/70 text-slate-500 after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:origin-center after:rounded-full after:bg-sky-500/70 after:opacity-0 after:scale-x-60 after:transition-transform after:duration-200 after:ease-out hover:bg-slate-100 hover:text-slate-700 dark:bg-slate-950/30 dark:text-slate-500 dark:after:bg-sky-300/70 dark:hover:bg-slate-900/70 dark:hover:text-slate-300"
+                          }`}
+                        >
+                          <span className="truncate max-w-[110px]">
+                            {nodeName}
+                          </span>
+                          <span
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] ${
+                              isSelectedNode
+                                ? "bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-200"
+                                : "bg-slate-300/70 text-slate-500 dark:bg-slate-800/90 dark:text-slate-400"
+                            }`}
+                          >
+                            {agents.length}
+                          </span>
+                        </TabsTrigger>
+                      );
+                    })}
+                  </TabsList>
+                </div>
+                {mobileNodeTabsOverflow.left ? (
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex w-8 items-center justify-start bg-gradient-to-r from-white via-white/90 to-transparent pl-1 dark:from-slate-900 dark:via-slate-900/90">
+                    <ChevronLeft className="h-4 w-4 text-slate-400" />
+                  </div>
+                ) : null}
+                {mobileNodeTabsOverflow.right ? (
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex w-8 items-center justify-end bg-gradient-to-l from-white via-white/90 to-transparent pr-1 dark:from-slate-900 dark:via-slate-900/90">
+                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                  </div>
+                ) : null}
+              </div>
+            </Tabs>
           </div>
           <div
             ref={scrollRef}
             className="md:hidden flex overflow-x-auto snap-x snap-mandatory hide-scrollbar gap-4 pb-2 -mx-4 px-4 scroll-smooth items-center"
           >
-            {Object.entries(groupedAgents).map(([nodeName, agents]) => (
-              <div
-                key={nodeName}
-                className="flex gap-2 items-center bg-slate-50 dark:bg-slate-800/30 p-1.5 rounded-full border border-slate-100 dark:border-slate-800 shadow-sm shrink-0"
-              >
-                <div className="flex flex-col items-center justify-center px-1.5">
-                  <Network className="w-3.5 h-3.5 text-slate-400 mb-0.5" />
-                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider [writing-mode:vertical-rl] rotate-180">
-                    {nodeName.replace("OpenClaw-", "")}
-                  </span>
-                </div>
-                {agents.map((agent) => {
-                  const isSelected = selectedAgentId === agent.id;
-                  return (
-                    <button
-                      key={agent.id}
-                      data-active={isSelected}
-                      onClick={() => setSelectedAgentId(agent.id)}
-                      className={`snap-center shrink-0 flex items-center gap-2 p-1.5 pr-4 rtl:pr-1.5 rtl:pl-4 rounded-full transition-all border ${isSelected ? "bg-white dark:bg-slate-900 border-sky-200 dark:border-sky-700 shadow-sm" : "bg-transparent border-transparent hover:bg-white/50 dark:hover:bg-slate-900/50"}`}
+            {activeNodeAgents.map((agent) => {
+              const isSelected = selectedAgentId === agent.id;
+              return (
+                <button
+                  key={agent.id}
+                  data-active={isSelected}
+                  onClick={() => setSelectedAgentId(agent.id)}
+                  className={`relative snap-center shrink-0 flex items-center gap-2 p-1.5 pr-4 rtl:pr-1.5 rtl:pl-4 rounded-full transition-all border ${
+                    isSelected
+                      ? "bg-white border-sky-200 text-sky-700 shadow-sm after:pointer-events-none after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:origin-center after:rounded-full after:bg-sky-500 after:opacity-100 after:scale-x-100 after:transition-transform after:duration-200 after:ease-out dark:bg-sky-950/30 dark:border-sky-700 dark:text-sky-200 dark:after:bg-sky-300"
+                      : "bg-slate-100/70 border-slate-100 text-slate-500 after:pointer-events-none after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:origin-center after:rounded-full after:bg-sky-500/70 after:opacity-0 after:scale-x-60 after:transition-transform after:duration-200 after:ease-out hover:bg-slate-100 hover:text-slate-700 dark:bg-slate-950/20 dark:border-slate-800 dark:text-slate-500 dark:after:bg-sky-300/70 dark:hover:bg-slate-900/60 dark:hover:text-slate-300"
+                  }`}
+                >
+                  <AgentAvatar
+                    agent={agent}
+                    containerClassName={`w-9 h-9 rounded-full transition-all ${
+                      isSelected ? "scale-100" : "opacity-70 scale-95"
+                    }`}
+                    iconClassName="w-4 h-4 text-white"
+                    emojiClassName="text-base"
+                  />
+                  <div className="flex flex-col items-start">
+                    <div
+                      className={`text-[12px] font-bold ${
+                        isSelected
+                          ? "text-sky-900 dark:text-sky-300"
+                          : "text-slate-600 dark:text-slate-400"
+                      }`}
                     >
-                      <AgentAvatar
-                        agent={agent}
-                        containerClassName={`w-9 h-9 rounded-full ${isSelected ? "scale-100" : "opacity-70 scale-95"}`}
-                        iconClassName="w-4 h-4 text-white"
-                        emojiClassName="text-base"
+                      {agent.name}
+                    </div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <div
+                        className={`w-1.5 h-1.5 rounded-full ${resolveStatusDotClass(agent.statusKey)}`}
                       />
-                      <div className="flex flex-col items-start">
-                        <div
-                          className={`text-[12px] font-bold ${isSelected ? "text-sky-900 dark:text-sky-300" : "text-slate-600 dark:text-slate-400"}`}
-                        >
-                          {agent.name}
-                        </div>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <div
-                            className={`w-1.5 h-1.5 rounded-full ${resolveStatusDotClass(agent.statusKey)}`}
-                          />
-                          <span className="text-[10px] text-slate-400 font-mono truncate">
-                            {formatAgentShortId(agent.id)}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
+                      <span
+                        className={`text-[10px] font-mono truncate ${
+                          isSelected
+                            ? "text-sky-500 dark:text-sky-300"
+                            : "text-slate-400 dark:text-slate-500"
+                        }`}
+                      >
+                        {formatAgentShortId(agent.id)}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </motion.div>
 
@@ -2578,9 +3077,9 @@ export function ProfileView() {
               className="flex flex-col gap-4 md:gap-6"
             >
               {/* Card Body */}
-              <div className="w-full bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl shadow-lg overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row relative shrink-0 transition-colors">
+              <div className="relative flex shrink-0 w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_22px_52px_rgba(15,23,42,0.08)] transition-colors before:pointer-events-none before:absolute before:inset-x-8 before:top-0 before:h-0.5 before:rounded-full before:bg-gradient-to-r before:from-sky-400 before:via-cyan-400 before:to-violet-400 dark:border-slate-800 dark:bg-slate-900 dark:before:from-sky-300 dark:before:via-cyan-300 dark:before:to-violet-300 md:flex-row md:rounded-3xl">
                 {/* Visual Identity Left */}
-                <div className="w-full md:w-[320px] md:sticky md:top-0 md:self-start bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 md:p-8 flex flex-col relative overflow-hidden text-white shrink-0 items-center md:items-start text-center rtl:md:text-right rtl:md:items-end md:text-left">
+                <div className="relative w-full shrink-0 overflow-hidden border-b border-slate-700/80 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 text-center text-white md:sticky md:top-0 md:w-[320px] md:self-start md:border-b-0 md:border-r md:border-slate-800/80 md:p-8 md:text-left rtl:md:text-right items-center md:items-start rtl:md:items-end after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-white/10 md:after:bottom-auto md:after:inset-y-8 md:after:left-auto md:after:right-0 md:after:h-auto md:after:w-px md:after:bg-gradient-to-b md:after:from-sky-400/35 md:after:via-white/12 md:after:to-violet-400/20 rtl:md:after:left-0 rtl:md:after:right-auto flex flex-col">
                   <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:20px_20px]" />
 
                   <div className="relative z-10 flex flex-col items-center gap-5 md:items-start rtl:md:items-end w-full">
@@ -2595,12 +3094,12 @@ export function ProfileView() {
                       <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-2 md:mb-1">
                         {activeAgent.name}
                       </h2>
-                      <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 text-slate-300 md:text-slate-400 text-xs md:text-sm font-mono mb-6 md:mb-4">
-                        <div className="bg-slate-800/80 md:bg-slate-800/50 px-3 py-1.5 md:px-2 md:py-1 rounded-full md:rounded border border-slate-700 flex items-center gap-1.5 text-cyan-400">
+                      <div className="mb-6 flex flex-wrap items-center justify-center gap-2 text-xs font-mono text-slate-300 md:mb-4 md:justify-start md:text-sm md:text-slate-400">
+                        <div className="flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-sky-200 md:rounded md:px-2 md:py-1">
                           <Network className="w-3.5 h-3.5" /> {activeAgent.node}
                         </div>
-                        <div className="bg-slate-800/80 md:bg-slate-800/50 px-3 py-1.5 md:px-2 md:py-1 rounded-full md:rounded border border-slate-700 flex items-center gap-1.5">
-                          <Hash className="w-3.5 h-3.5 text-sky-400 md:text-slate-400" />{" "}
+                        <div className="flex items-center gap-1.5 rounded-full border border-slate-600 bg-slate-800/70 px-3 py-1.5 text-slate-200 md:rounded md:px-2 md:py-1">
+                          <Hash className="w-3.5 h-3.5 text-sky-300" />{" "}
                           {activeAgent.id}
                         </div>
                       </div>
@@ -2629,7 +3128,7 @@ export function ProfileView() {
                 </div>
 
                 {/* Info Right */}
-                <div className="flex-1 p-6 md:p-10 relative flex flex-col justify-between">
+                <div className="relative flex flex-1 flex-col justify-between bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.86))] p-6 md:p-10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,1),rgba(2,6,23,0.92))]">
                   <div>
                     {hasRealAgents && !hasAdminScope ? (
                       <div className="md:mx-7 mb-6 rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-4 shadow-sm transition-colors dark:border-amber-900/50 dark:bg-amber-950/30">
@@ -2651,25 +3150,15 @@ export function ProfileView() {
                     ) : null}
 
                     {hasRealAgents ? (
-                      <div className="md:mx-7 mb-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-950/40">
-                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-                            <IdCard className="h-5 w-5 text-sky-500" />
-                            <div>
-                              <h3 className="text-sm font-bold tracking-widest uppercase">
-                                {t("profile.identityFields")}
-                              </h3>
-                              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                                {activeAgent.id}
-                              </p>
-                            </div>
-                          </div>
-                          {isIdentityMetaDirty ? (
-                            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
-                              {t("profile.unsaved")}
-                            </span>
-                          ) : null}
-                        </div>
+                      <ProfileSectionCard tone="sky" className="md:mx-7 mb-6">
+                        <ProfileSectionHeader
+                          icon={IdCard}
+                          title={t("profile.identityFields")}
+                          tone="sky"
+                          meta={activeAgent.id}
+                          isDirty={isIdentityMetaDirty}
+                          dirtyLabel={t("profile.unsaved")}
+                        />
                         <div className="mt-4 grid gap-4 md:grid-cols-2">
                           <ProfileDetailField
                             label={t("profile.identityName")}
@@ -2697,229 +3186,140 @@ export function ProfileView() {
                             monospace
                           />
                         </div>
-                        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void handleIdentityMetaReload()}
-                            disabled={
+                        <div className="mt-4">
+                          <ProfileSectionActions
+                            visible={hasRealAgents}
+                            isEditing={isEditingIdentityMeta}
+                            isSaving={isSavingIdentityMeta}
+                            reloadDisabled={
                               !canEditActiveAgent || isSavingIdentityMeta
                             }
-                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-sky-300 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
-                          >
-                            {t("profile.reload")}
-                          </button>
-                          {isEditingIdentityMeta ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setIdentityMetaDraft({
-                                    name: activeIdentityMetaName,
-                                    avatar: activeIdentityMetaAvatar,
-                                  });
-                                  setIsEditingIdentityMeta(false);
-                                }}
-                                disabled={isSavingIdentityMeta}
-                                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100"
-                              >
-                                {t("profile.cancel")}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void handleIdentityMetaSave()}
-                                disabled={isSavingIdentityMeta}
-                                className="inline-flex items-center gap-2 rounded-full bg-sky-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {isSavingIdentityMeta ? (
-                                  <Activity className="h-3.5 w-3.5 animate-spin" />
-                                ) : null}
-                                {isSavingIdentityMeta
-                                  ? t("profile.saving")
-                                  : t("profile.save")}
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setIsEditingIdentityMeta(true)}
-                              disabled={!canEditActiveAgent}
-                              className="rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
-                            >
-                              {t("profile.edit")}
-                            </button>
-                          )}
+                            editDisabled={!canEditActiveAgent}
+                            onReload={() => void handleIdentityMetaReload()}
+                            onEdit={() => setIsEditingIdentityMeta(true)}
+                            onCancel={() => {
+                              setIdentityMetaDraft({
+                                name: activeIdentityMetaName,
+                                avatar: activeIdentityMetaAvatar,
+                              });
+                              setIsEditingIdentityMeta(false);
+                            }}
+                            onSave={() => void handleIdentityMetaSave()}
+                            reloadLabel={t("profile.reload")}
+                            editLabel={t("profile.edit")}
+                            cancelLabel={t("profile.cancel")}
+                            saveLabel={t("profile.save")}
+                            savingLabel={t("profile.saving")}
+                          />
                         </div>
-                      </div>
+                      </ProfileSectionCard>
                     ) : null}
 
-                    {/* Identity */}
-                    <div className="mb-6 md:mb-7">
-                      <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                          <Fingerprint className="w-5 h-5 text-sky-500" />
-                          <h3 className="font-bold text-sm tracking-widest uppercase">
-                            {t("profile.identity")}
-                          </h3>
-                          {isIdentityDocDirty ? (
-                            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
-                              {t("profile.unsaved")}
-                            </span>
-                          ) : null}
-                        </div>
-                        {hasRealAgents ? (
-                          <div className="flex flex-wrap items-center gap-2 md:justify-end">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void handleIdentityDocumentReload()
-                              }
-                              disabled={
-                                !canEditActiveAgent || isSavingIdentityDoc
-                              }
-                              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-sky-300 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
-                            >
-                              {t("profile.reload")}
-                            </button>
-                            {isEditingIdentityDoc ? (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setIdentityDocDraft(
-                                      activeIdentityDocumentContent,
-                                    );
-                                    setIsEditingIdentityDoc(false);
-                                  }}
-                                  disabled={isSavingIdentityDoc}
-                                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100"
-                                >
-                                  {t("profile.cancel")}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void handleIdentityDocumentSave()
-                                  }
-                                  disabled={isSavingIdentityDoc}
-                                  className="inline-flex items-center gap-2 rounded-full bg-sky-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {isSavingIdentityDoc ? (
-                                    <Activity className="h-3.5 w-3.5 animate-spin" />
-                                  ) : null}
-                                  {isSavingIdentityDoc
-                                    ? t("profile.saving")
-                                    : t("profile.save")}
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setIsEditingIdentityDoc(true)}
-                                disabled={!canEditActiveAgent}
-                                className="rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
-                              >
-                                {t("profile.edit")}
-                              </button>
-                            )}
+                    <div className="md:mx-5 mb-4 rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(248,250,252,0.82),rgba(255,255,255,0.92))] px-3 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.88)] dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.3),rgba(2,6,23,0.24))]">
+                      <div className="mb-5 px-2">
+                        <div className="flex items-center gap-3">
+                          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-slate-700" />
+                          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-300">
+                            <FileText className="h-3.5 w-3.5 text-sky-500 dark:text-sky-300" />
+                            {t("profile.documentLayer")}
                           </div>
-                        ) : null}
-                      </div>
-                      <div className="md:px-7 transition-colors">
-                        {isEditingIdentityDoc ? (
-                          <ProfileDocumentEditor
-                            value={identityDocDraft}
-                            onChange={setIdentityDocDraft}
-                          />
-                        ) : (
-                          <AgentDocument
-                            key={`${activeAgent.id}:identity`}
-                            content={activeAgent.identity || "No identity set."}
-                            tone="identity"
-                            storageKey={`${activeAgent.id}:identity`}
-                            source={activeIdentitySource}
-                          />
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-4 md:px-7">
-                        {activeAgent.tags?.map((tag) => (
-                          <span
-                            key={tag}
-                            className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 text-xs rounded-lg border border-slate-200 dark:border-slate-700/50 font-medium transition-colors"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="w-full md:w-[calc(100%-56px)] md:mx-7 h-px bg-slate-100 dark:bg-slate-800 mb-6 md:mb-7 transition-colors"></div>
-
-                    {/* Soul */}
-                    <div className="mb-4">
-                      <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                          <Sparkles className="w-5 h-5 text-violet-500" />
-                          <h3 className="font-bold text-sm tracking-widest uppercase">
-                            {t("profile.soul")}
-                          </h3>
-                          {isSoulDocDirty ? (
-                            <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
-                              {t("profile.unsaved")}
-                            </span>
-                          ) : null}
+                          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-slate-700" />
                         </div>
-                        {hasRealAgents ? (
-                          <div className="flex flex-wrap items-center gap-2 md:justify-end">
-                            <button
-                              type="button"
-                              onClick={() => void handleSoulDocumentReload()}
-                              disabled={!canEditActiveAgent || isSavingSoulDoc}
-                              className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-sky-300 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
-                            >
-                              {t("profile.reload")}
-                            </button>
-                            {isEditingSoulDoc ? (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSoulDocDraft(activeSoulDocumentContent);
-                                    setIsEditingSoulDoc(false);
-                                  }}
-                                  disabled={isSavingSoulDoc}
-                                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100"
-                                >
-                                  {t("profile.cancel")}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void handleSoulDocumentSave()}
-                                  disabled={isSavingSoulDoc}
-                                  className="inline-flex items-center gap-2 rounded-full bg-violet-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {isSavingSoulDoc ? (
-                                    <Activity className="h-3.5 w-3.5 animate-spin" />
-                                  ) : null}
-                                  {isSavingSoulDoc
-                                    ? t("profile.saving")
-                                    : t("profile.save")}
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setIsEditingSoulDoc(true)}
-                                disabled={!canEditActiveAgent}
-                                className="rounded-full bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:bg-violet-600 dark:hover:bg-violet-500"
-                              >
-                                {t("profile.edit")}
-                              </button>
-                            )}
-                          </div>
-                        ) : null}
+                        <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">
+                          {t("profile.documentLayerDesc")}
+                        </p>
                       </div>
-                      <div className="md:mx-7 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-xl p-4 md:p-5 relative hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                        <div className="absolute top-0 left-0 rtl:left-auto rtl:right-0 w-1 h-full bg-violet-400 rounded-l-xl rtl:rounded-l-none rtl:rounded-r-xl"></div>
+
+                      {/* Identity */}
+                      <ProfileSectionCard tone="sky" className="mb-6">
+                        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <ProfileSectionHeader
+                            icon={Fingerprint}
+                            title={t("profile.identity")}
+                            tone="sky"
+                            isDirty={isIdentityDocDirty}
+                            dirtyLabel={t("profile.unsaved")}
+                          />
+                          <ProfileSectionActions
+                            visible={hasRealAgents}
+                            isEditing={isEditingIdentityDoc}
+                            isSaving={isSavingIdentityDoc}
+                            reloadDisabled={
+                              !canEditActiveAgent || isSavingIdentityDoc
+                            }
+                            editDisabled={!canEditActiveAgent}
+                            onReload={() => void handleIdentityDocumentReload()}
+                            onEdit={() => setIsEditingIdentityDoc(true)}
+                            onCancel={() => {
+                              setIdentityDocDraft(activeIdentityDocumentContent);
+                              setIsEditingIdentityDoc(false);
+                            }}
+                            onSave={() => void handleIdentityDocumentSave()}
+                            reloadLabel={t("profile.reload")}
+                            editLabel={t("profile.edit")}
+                            cancelLabel={t("profile.cancel")}
+                            saveLabel={t("profile.save")}
+                            savingLabel={t("profile.saving")}
+                          />
+                        </div>
+                        <div className="transition-colors">
+                          {isEditingIdentityDoc ? (
+                            <ProfileDocumentEditor
+                              value={identityDocDraft}
+                              onChange={setIdentityDocDraft}
+                            />
+                          ) : (
+                            <AgentDocument
+                              key={`${activeAgent.id}:identity`}
+                              content={activeAgent.identity || "No identity set."}
+                              tone="identity"
+                              storageKey={`${activeAgent.id}:identity`}
+                              source={activeIdentitySource}
+                            />
+                          )}
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {activeAgent.tags?.map((tag) => (
+                            <span
+                              key={tag}
+                              className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 text-xs rounded-lg border border-slate-200 dark:border-slate-700/50 font-medium transition-colors"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </ProfileSectionCard>
+
+                      {/* Soul */}
+                      <ProfileSectionCard tone="violet">
+                        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <ProfileSectionHeader
+                            icon={Sparkles}
+                            title={t("profile.soul")}
+                            tone="violet"
+                            isDirty={isSoulDocDirty}
+                            dirtyLabel={t("profile.unsaved")}
+                          />
+                          <ProfileSectionActions
+                            visible={hasRealAgents}
+                            isEditing={isEditingSoulDoc}
+                            isSaving={isSavingSoulDoc}
+                            reloadDisabled={!canEditActiveAgent || isSavingSoulDoc}
+                            editDisabled={!canEditActiveAgent}
+                            onReload={() => void handleSoulDocumentReload()}
+                            onEdit={() => setIsEditingSoulDoc(true)}
+                            onCancel={() => {
+                              setSoulDocDraft(activeSoulDocumentContent);
+                              setIsEditingSoulDoc(false);
+                            }}
+                            onSave={() => void handleSoulDocumentSave()}
+                            reloadLabel={t("profile.reload")}
+                            editLabel={t("profile.edit")}
+                            cancelLabel={t("profile.cancel")}
+                            saveLabel={t("profile.save")}
+                            savingLabel={t("profile.saving")}
+                          />
+                        </div>
                         <div className="transition-colors">
                           {isEditingSoulDoc ? (
                             <ProfileDocumentEditor
@@ -2939,7 +3339,7 @@ export function ProfileView() {
                             />
                           )}
                         </div>
-                      </div>
+                      </ProfileSectionCard>
                     </div>
 
                     {activeAgentError ? (
@@ -2972,54 +3372,29 @@ export function ProfileView() {
 
               {/* Stats */}
               <div className="flex md:grid md:grid-cols-3 gap-3 md:gap-4 shrink-0 overflow-x-auto snap-x hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
-                <div className="min-w-[200px] md:min-w-0 snap-center bg-white dark:bg-slate-900 p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between hover:border-sky-200 dark:hover:border-sky-800 transition-colors flex-1">
-                  <div>
-                    <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400 font-medium mb-1 flex items-center gap-1.5">
-                      <Database className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" />{" "}
-                      {t("profile.stat.memory")}
-                    </div>
-                    <div className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-100">
-                      {activeAgent.stats.memory.toLocaleString()}{" "}
-                      <span className="text-xs md:text-sm text-slate-400 dark:text-slate-500 font-normal">
-                        {t("profile.unit.item")}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-sky-50 dark:bg-sky-900/30 flex items-center justify-center">
-                    <Activity className="w-4 h-4 md:w-5 md:h-5 text-sky-500 dark:text-sky-400" />
-                  </div>
-                </div>
-                <div className="min-w-[200px] md:min-w-0 snap-center bg-white dark:bg-slate-900 p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between hover:border-violet-200 dark:hover:border-violet-800 transition-colors flex-1">
-                  <div>
-                    <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400 font-medium mb-1 flex items-center gap-1.5">
-                      <IdCard className="w-3.5 h-3.5 text-violet-500 dark:text-violet-400" />{" "}
-                      {t("profile.stat.pref")}
-                    </div>
-                    <div className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-100">
-                      {activeAgent.stats.prefs}{" "}
-                      <span className="text-xs md:text-sm text-slate-400 dark:text-slate-500 font-normal">
-                        {t("profile.unit.piece")}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center">
-                    <User className="w-4 h-4 md:w-5 md:h-5 text-violet-500 dark:text-violet-400" />
-                  </div>
-                </div>
-                <div className="min-w-[200px] md:min-w-0 snap-center bg-white dark:bg-slate-900 p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between hover:border-emerald-200 dark:hover:border-emerald-800 transition-colors flex-1">
-                  <div>
-                    <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400 font-medium mb-1 flex items-center gap-1.5">
-                      <Terminal className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />{" "}
-                      {t("profile.stat.health")}
-                    </div>
-                    <div className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-100">
-                      {activeAgent.stats.health}%
-                    </div>
-                  </div>
-                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-emerald-500 dark:text-emerald-400" />
-                  </div>
-                </div>
+                <ProfileStatCard
+                  tone="sky"
+                  label={t("profile.stat.memory")}
+                  value={activeAgent.stats.memory.toLocaleString()}
+                  unit={t("profile.unit.item")}
+                  labelIcon={Database}
+                  metricIcon={Activity}
+                />
+                <ProfileStatCard
+                  tone="violet"
+                  label={t("profile.stat.pref")}
+                  value={String(activeAgent.stats.prefs)}
+                  unit={t("profile.unit.piece")}
+                  labelIcon={IdCard}
+                  metricIcon={User}
+                />
+                <ProfileStatCard
+                  tone="emerald"
+                  label={t("profile.stat.health")}
+                  value={`${activeAgent.stats.health}%`}
+                  labelIcon={Terminal}
+                  metricIcon={Sparkles}
+                />
               </div>
             </motion.div>
           </AnimatePresence>

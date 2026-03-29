@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { OpenClawConfigModule } from "../setup/OpenClawConfigModule";
 import { GeneralConfigModule } from "../setup/GeneralConfigModule";
-import { Settings, SlidersHorizontal, Zap } from "lucide-react";
+import { AgentSettingsModule } from "../setup/AgentSettingsModule";
+import { Settings, SlidersHorizontal, Wrench, Zap } from "lucide-react";
 import { useI18n } from "../../contexts/I18nContext";
 
 export function ConfigView() {
   const { t } = useI18n();
-  const [activeTab, setActiveTab] = useState<"general" | "connection">(
-    "general",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "general" | "connection" | "agent"
+  >("general");
 
   return (
     <div className="max-w-[1200px] mx-auto h-full flex flex-col animate-in fade-in duration-500 pb-4 md:pb-8 text-slate-900 dark:text-slate-100 transition-colors">
@@ -47,12 +48,24 @@ export function ConfigView() {
             <div className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-sky-500 rounded-t-full" />
           )}
         </button>
+        <button
+          onClick={() => setActiveTab("agent")}
+          className={`pb-3 text-sm font-medium transition-colors relative flex items-center gap-2 ${activeTab === "agent" ? "text-sky-600 dark:text-sky-400" : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"}`}
+        >
+          <Wrench className="w-4 h-4" />
+          {t("config.tab.agent")}
+          {activeTab === "agent" && (
+            <div className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-sky-500 rounded-t-full" />
+          )}
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto hide-scrollbar">
         {activeTab === "general" && <GeneralConfigModule />}
 
         {activeTab === "connection" && <OpenClawConfigModule />}
+
+        {activeTab === "agent" && <AgentSettingsModule />}
       </div>
     </div>
   );

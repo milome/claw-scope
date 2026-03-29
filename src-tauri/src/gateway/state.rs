@@ -14,7 +14,7 @@ use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use crate::gateway::{
     endpoint::GatewayEndpoint,
     errors::GatewayError,
-    types::GatewayStatusSnapshot,
+    types::{GatewayAgentMemoryTimelineResult, GatewayStatusSnapshot},
 };
 
 pub type GatewaySocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -114,6 +114,13 @@ impl Clone for GatewayActiveConnection {
 struct GatewayStateInner {
     snapshot: Mutex<GatewayStatusSnapshot>,
     session: AsyncMutex<Option<GatewayActiveConnection>>,
+    timeline_probe_cache: Mutex<HashMap<String, CachedTimelineProbeResult>>,
+}
+
+#[derive(Clone)]
+struct CachedTimelineProbeResult {
+    result: GatewayAgentMemoryTimelineResult,
+    expires_at_ms: u64,
 }
 
 #[derive(Clone)]
@@ -127,6 +134,7 @@ impl Default for GatewayAppState {
             inner: Arc::new(GatewayStateInner {
                 snapshot: Mutex::new(GatewayStatusSnapshot::idle()),
                 session: AsyncMutex::new(None),
+                timeline_probe_cache: Mutex::new(HashMap::new()),
             }),
         }
     }
@@ -175,5 +183,142 @@ impl GatewayAppState {
             *guard = None;
         }
         should_clear
+    }
+
+    pub fn load_timeline_probe_cache(
+        &self,
+        cache_key: &str,
+        now_ms: u64,
+    ) -> Option<GatewayAgentMemoryTimelineResult> {
+        let mut guard = self
+            .inner
+            .timeline_probe_cache
+            .lock()
+            .expect("timeline probe cache lock poisoned");
+        let cached = guard.get(cache_key).cloned();
+        match cached {
+            Some(entry) if entry.expires_at_ms > now_ms => Some(entry.result),
+            Some(_) => {
+                guard.remove(cache_key);
+                None
+            }
+            None => None,
+        }
+    }
+
+    pub fn store_timeline_probe_cache(
+        &self,
+        cache_key: String,
+        result: GatewayAgentMemoryTimelineResult,
+        expires_at_ms: u64,
+    ) {
+        self.inner
+            .timeline_probe_cache
+            .lock()
+            .expect("timeline probe cache lock poisoned")
+            .insert(
+                cache_key,
+                CachedTimelineProbeResult {
+                    result,
+                    expires_at_ms,
+                },
+            );
+    }
+
+    pub fn clear_timeline_probe_cache(&self) {
+        self.inner
+            .timeline_probe_cache
+            .lock()
+            .expect("timeline probe cache lock poisoned")
+            .clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gateway::types::{
+        GatewayAgentFileEntry, GatewayAgentMemoryTimelineDiagnostics,
+        GatewayAgentMemoryTimelineProbeStatus, GatewayAgentMemoryTimelineProbeSummary,
+        GatewayAgentMemoryTimelineResult, GatewayAgentMemoryTimelineSource,
+    };
+
+    fn sample_timeline_result() -> GatewayAgentMemoryTimelineResult {
+        GatewayAgentMemoryTimelineResult {
+            agent_id: "main".to_string(),
+            workspace: "~/.openclaw/workspace-main".to_string(),
+            source: GatewayAgentMemoryTimelineSource::RemoteProbe,
+            entries: vec![GatewayAgentFileEntry {
+                name: "memory/2026-03-28.md".to_string(),
+                path: "~/.openclaw/workspace-main/memory/2026-03-28.md".to_string(),
+                missing: false,
+                size: Some(128),
+                updated_at_ms: None,
+                content: None,
+            }],
+            diagnostics: GatewayAgentMemoryTimelineDiagnostics {
+                gateway_visible_files_count: 0,
+                gateway_visible_root_docs_count: 0,
+                gateway_visible_daily_count: 0,
+                gateway_only_returned_root_docs: false,
+                local_scan_directory: None,
+                local_scan_files_count: 0,
+                local_scan_skipped_count: 0,
+            },
+            probe: Some(GatewayAgentMemoryTimelineProbeSummary {
+                start_date: "2026-03-22".to_string(),
+                end_date: "2026-03-28".to_string(),
+                attempted_days: 7,
+                hit_days: 1,
+                miss_days: 6,
+                skipped_days: 0,
+                timeout_days: 0,
+                error_days: 0,
+                retry_days: 0,
+                retry_recovered_days: 0,
+                days: Vec::new(),
+                status: GatewayAgentMemoryTimelineProbeStatus::Complete,
+                cached: false,
+                last_error_category: None,
+                last_error_code: None,
+                last_error_message: None,
+            }),
+        }
+    }
+
+    #[test]
+    fn timeline_probe_cache_returns_fresh_entries_only() {
+        let state = GatewayAppState::default();
+        let cache_key = "gateway|main|workspace|2026-03-22|2026-03-28";
+
+        state.store_timeline_probe_cache(
+            cache_key.to_string(),
+            sample_timeline_result(),
+            1_500,
+        );
+
+        assert!(state
+            .load_timeline_probe_cache(cache_key, 1_000)
+            .is_some());
+        assert!(state
+            .load_timeline_probe_cache(cache_key, 2_000)
+            .is_none());
+    }
+
+    #[test]
+    fn clearing_timeline_probe_cache_drops_cached_entries() {
+        let state = GatewayAppState::default();
+        let cache_key = "gateway|main|workspace|2026-03-22|2026-03-28";
+
+        state.store_timeline_probe_cache(
+            cache_key.to_string(),
+            sample_timeline_result(),
+            5_000,
+        );
+        state.clear_timeline_probe_cache();
+
+        assert!(state
+            .load_timeline_probe_cache(cache_key, 1_000)
+            .is_none());
     }
 }
