@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useI18n } from "../../contexts/I18nContext";
 import {
   gatewayAgentMemoryGet,
+  gatewayAgentFileRead,
   gatewayAgentMemorySearch,
   gatewayAgentMemoryTimelineAccessResolve,
   gatewayAgentMemoryTimelineEntryRead,
@@ -42,6 +43,16 @@ import {
 
 type MemorySection = "overview" | "documents" | "footprints" | "search" | "knowledge";
 
+type SearchDetailState = {
+  title: string;
+  path: string;
+  sourceKind: string;
+  snippet: string;
+  content: string;
+  loading: boolean;
+  error: string | null;
+} | null;
+
 export function MemoryView() {
   const { t } = useI18n();
   const { agents, grantedScopes, isConnected } = useOpenClaw();
@@ -58,6 +69,7 @@ export function MemoryView() {
   const [searchRunning] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchResult, setSearchResult] = useState<GatewayAgentMemorySearchResult | null>(null);
+  const [searchDetail, setSearchDetail] = useState<SearchDetailState>(null);
   const [selectedDocumentName, setSelectedDocumentName] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [timelineFocus] = useState<MemoryTimelineFocusFilter>("all");
@@ -291,6 +303,56 @@ export function MemoryView() {
       setTimelineError(error instanceof Error ? error.message : String(error));
     } finally {
       setTimelineLoading(false);
+    }
+  };
+
+  const handleOpenSearchEntry = async (entry: NonNullable<GatewayAgentMemorySearchResult>["results"][number]) => {
+    if (entry.openTarget === "documents") {
+      setSelectedDocumentName(entry.canonicalDocumentName ?? entry.path.split("/").pop() ?? "");
+      setActiveSection("documents");
+      return;
+    }
+
+    if (entry.openTarget === "footprints") {
+      setSelectedTimelineEntryName(entry.timelineEntryName ?? entry.path.split("/").slice(-2).join("/"));
+      setActiveSection("footprints");
+      return;
+    }
+
+    setSearchDetail({
+      title: entry.path.split("/").pop() ?? entry.path,
+      path: entry.path,
+      sourceKind: entry.sourceKind,
+      snippet: entry.snippet,
+      content: "",
+      loading: true,
+      error: null,
+    });
+
+    try {
+      const normalizedName = entry.path.includes("/sessions/")
+        ? entry.path.split("/sessions/")[1]
+        : entry.path.split("/").slice(-2).join("/");
+      const result = await gatewayAgentFileRead(selectedAgentId, normalizedName);
+      setSearchDetail({
+        title: entry.path.split("/").pop() ?? entry.path,
+        path: entry.path,
+        sourceKind: entry.sourceKind,
+        snippet: entry.snippet,
+        content: result.file.content ?? "",
+        loading: false,
+        error: null,
+      });
+    } catch (error) {
+      setSearchDetail({
+        title: entry.path.split("/").pop() ?? entry.path,
+        path: entry.path,
+        sourceKind: entry.sourceKind,
+        snippet: entry.snippet,
+        content: "",
+        loading: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   };
 
@@ -695,6 +757,13 @@ export function MemoryView() {
                           <div className="mt-3 break-all text-sm font-semibold">{entry.path}</div>
                           <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">{entry.snippet}</p>
                           <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">Open routing for real navigation is deferred to M3. Current target: {entry.openTarget}.</div>
+                          <button
+                            onClick={() => void handleOpenSearchEntry(entry)}
+                            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800 dark:bg-sky-600 dark:hover:bg-sky-500"
+                          >
+                            Open result
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
                         </article>
                       ))}
                       {searchResult.results.length === 0 && (
@@ -706,6 +775,32 @@ export function MemoryView() {
                   ) : (
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
                       Run a real gateway-backed search to populate this section.
+                    </div>
+                  )}
+                  {searchDetail && (
+                    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold">Read-only detail</div>
+                          <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{searchDetail.path}</div>
+                        </div>
+                        <button
+                          onClick={() => setSearchDetail(null)}
+                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <div className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        {searchDetail.sourceKind} · read only source file
+                      </div>
+                      <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                        {searchDetail.loading
+                          ? "Loading source content..."
+                          : searchDetail.error
+                            ? searchDetail.error
+                            : searchDetail.content || searchDetail.snippet}
+                      </div>
                     </div>
                   )}
                 </section>
