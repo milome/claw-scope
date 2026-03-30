@@ -72,6 +72,11 @@ type DiagnosticsSummary = {
   primaryIssue: string | null;
 };
 
+type DiagnosticsDrawerState = {
+  open: boolean;
+  source: "search" | "knowledge";
+};
+
 function sourceTone(source: string) {
   if (source.includes("session")) {
     return "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800/70 dark:bg-violet-950/30 dark:text-violet-300";
@@ -87,6 +92,16 @@ function sourceTone(source: string) {
 
 function normalizeRootMemoryDocumentName(name: string) {
   return name.toLowerCase() === "memory.md" ? "memory.md" : name;
+}
+
+function diagnosticsTone(summary: DiagnosticsSummary | null) {
+  if (!summary) {
+    return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
+  }
+  if (summary.primaryIssue) {
+    return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/70 dark:bg-rose-950/30 dark:text-rose-300";
+  }
+  return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/30 dark:text-emerald-300";
 }
 
 function resolveTimelineModeLabel(
@@ -126,6 +141,7 @@ export function MemoryView() {
   const [timelineProbeState, setTimelineProbeState] = useState<"idle" | "probing" | "done" | "error">("idle");
   const [memoryStatus, setMemoryStatus] = useState<GatewayAgentMemoryStatusResult | null>(null);
   const [memoryStatusError, setMemoryStatusError] = useState<string | null>(null);
+  const [diagnosticsDrawer, setDiagnosticsDrawer] = useState<DiagnosticsDrawerState>({ open: false, source: "search" });
   const [searchQuery, setSearchQuery] = useState("");
   const [searchRunning] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -751,6 +767,55 @@ export function MemoryView() {
 
       <div className={`rounded-xl md:rounded-lg overflow-hidden flex-1 flex flex-col relative transition-colors duration-500 min-h-[400px] ${activeSection === 'documents' || activeSection === 'footprints' || activeSection === 'search' || activeSection === 'knowledge' ? 'bg-transparent md:bg-white md:dark:bg-slate-900 border-none md:border md:border-slate-200 md:dark:border-slate-800 md:shadow-sm' : 'hidden'}`}>
         <AnimatePresence mode="wait">
+          {diagnosticsDrawer.open && diagnosticsSummary && (
+            <div className="absolute inset-y-0 right-0 z-20 w-full max-w-md border-l border-slate-200 bg-white/95 p-4 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Diagnostics drawer</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Opened from {diagnosticsDrawer.source}</div>
+                </div>
+                <button
+                  onClick={() => setDiagnosticsDrawer((current) => ({ ...current, open: false }))}
+                  className="rounded-lg border border-slate-200 px-3 py-1 text-xs hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                <div className={`rounded-xl border p-3 text-sm ${diagnosticsTone(diagnosticsSummary)}`}>
+                  <div className="font-medium">Primary issue</div>
+                  <div className="mt-1">{diagnosticsSummary.primaryIssue ?? "No blocking issue reported"}</div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
+                    <div className="font-medium">Indexed</div>
+                    <div className="mt-1">{diagnosticsSummary.indexedFiles}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
+                    <div className="font-medium">Total</div>
+                    <div className="mt-1">{diagnosticsSummary.totalFiles}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
+                    <div className="font-medium">Chunks</div>
+                    <div className="mt-1">{diagnosticsSummary.chunks}</div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {diagnosticsSummary.bySource.map((source) => (
+                    <div key={`drawer-${source.source}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-medium">{source.source}</div>
+                        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${sourceTone(source.source)}`}>
+                          {source.source}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-slate-500 dark:text-slate-400">indexed {source.indexedFiles} / total {source.totalFiles} / chunks {source.chunks}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           
           {activeSection === 'documents' && (
             <motion.div 
@@ -1138,6 +1203,21 @@ export function MemoryView() {
               <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                   <div className="text-sm font-semibold">Semantic search</div>
+                  <div className={`mt-3 rounded-xl border p-3 text-xs ${diagnosticsTone(diagnosticsSummary)}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-semibold">Diagnostics bar</div>
+                        <div className="mt-1">{diagnosticsSummary ? `${diagnosticsSummary.provider} / ${diagnosticsSummary.model}` : "Diagnostics unavailable"}</div>
+                        <div className="mt-1">{diagnosticsSummary?.primaryIssue ?? "Search indexing healthy"}</div>
+                      </div>
+                      <button
+                        onClick={() => setDiagnosticsDrawer({ open: true, source: "search" })}
+                        className="rounded-lg border border-current/20 px-3 py-1 text-xs font-medium"
+                      >
+                        Open diagnostics
+                      </button>
+                    </div>
+                  </div>
                   <div className="mt-4 flex gap-2">
                   <input
                     value={searchQuery}
@@ -1159,21 +1239,6 @@ export function MemoryView() {
                       {searchError}
                     </div>
                   )}
-                  {searchResult?.diagnostics && (
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="font-medium">Diagnostics snapshot</div>
-                      <div className="mt-1 text-slate-500 dark:text-slate-400">{searchResult.diagnostics.backend} / {searchResult.diagnostics.storeDriver}</div>
-                      <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{searchResult.diagnostics.storePath}</div>
-                    </div>
-                  )}
-                  {diagnosticsSummary && (
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="font-medium">Shared diagnostics summary</div>
-                      <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.provider} / {diagnosticsSummary.model}</div>
-                      <div className="mt-1 text-slate-500 dark:text-slate-400">indexed {diagnosticsSummary.indexedFiles} / total {diagnosticsSummary.totalFiles} / chunks {diagnosticsSummary.chunks}</div>
-                      <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.primaryIssue ?? "No primary issue detected"}</div>
-                    </div>
-                  )}
                 </section>
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                   <div className="mb-4 flex flex-wrap gap-2">
@@ -1184,7 +1249,7 @@ export function MemoryView() {
                     ))}
                   </div>
                   <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-                    Search open routing is intentionally deferred to M3. In M2 this section only proves the real gateway-backed query path, diagnostics payload, and result grouping skeleton.
+                    Search open routing is complete. The compact diagnostics bar above and the diagnostics drawer both read from the same summary model, while Knowledge reuses that same summary downstream.
                   </div>
                   <div className="mb-4 flex flex-wrap gap-2">
                     {(searchResult?.results ?? []).slice(0, 8).map((entry) => (
@@ -1196,19 +1261,24 @@ export function MemoryView() {
                       </span>
                     ))}
                   </div>
-              {diagnosticsSummary && (
-                <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-                  <div className="font-medium">Search bar / drawer shared diagnostics</div>
-                  <div className="mt-1 text-slate-500 dark:text-slate-400">Primary issue: {diagnosticsSummary.primaryIssue ?? "none"}</div>
-                  <div className="mt-1 text-slate-500 dark:text-slate-400">Top source: {diagnosticsSummary.bySource[0]?.source ?? "n/a"}</div>
-                </div>
-              )}
-              {searchError ? (
+                  {diagnosticsSummary && (
+                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
+                      <div className="font-medium">Shared diagnostics summary</div>
+                      <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.provider} / {diagnosticsSummary.model}</div>
+                      <div className="mt-1 text-slate-500 dark:text-slate-400">Top source: {diagnosticsSummary.bySource[0]?.source ?? "n/a"}</div>
+                    </div>
+                  )}
+                  {diagnosticsSummary && memoryStatusError && (
+                    <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
+                      {memoryStatusError}
+                    </div>
+                  )}
+                  {searchError ? (
                     <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
                       {searchError}
                     </div>
-                  ) : searchResult ? (
-                    <div className="space-y-3">
+                    ) : searchResult ? (
+                      <div className="space-y-3">
                       {searchResult.results.map((entry) => (
                         <article key={entry.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
                           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -1238,7 +1308,12 @@ export function MemoryView() {
                       Run a real gateway-backed search to populate this section.
                     </div>
                   )}
-                 {searchDetail && (
+                  {!diagnosticsSummary && memoryStatusError && (
+                    <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
+                      {memoryStatusError}
+                    </div>
+                  )}
+                  {searchDetail && (
                     <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                       <div className="flex items-center justify-between gap-3">
                         <div>
@@ -1269,11 +1344,6 @@ export function MemoryView() {
                       {searchOpenHint}
                     </div>
                   )}
-                  {memoryStatusError && (
-                    <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
-                      {memoryStatusError}
-                    </div>
-                  )}
                 </section>
               </div>
             </motion.div>
@@ -1288,6 +1358,20 @@ export function MemoryView() {
                 <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
                   <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                     <div className="mb-4 text-sm font-semibold">External knowledge inputs</div>
+                    <div className={`mb-4 rounded-xl border p-3 text-xs ${diagnosticsTone(diagnosticsSummary)}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-semibold">Knowledge diagnostics summary</div>
+                          <div className="mt-1">{diagnosticsSummary ? `${diagnosticsSummary.provider} / ${diagnosticsSummary.model}` : "Diagnostics unavailable"}</div>
+                        </div>
+                        <button
+                          onClick={() => setDiagnosticsDrawer({ open: true, source: "knowledge" })}
+                          className="rounded-lg border border-current/20 px-3 py-1 text-xs font-medium"
+                        >
+                          Open diagnostics
+                        </button>
+                      </div>
+                    </div>
                     {memoryResult?.diagnostics ? (
                       <div className="space-y-3 text-sm">
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
