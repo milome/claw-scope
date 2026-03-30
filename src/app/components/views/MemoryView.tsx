@@ -104,6 +104,11 @@ function diagnosticsTone(summary: DiagnosticsSummary | null) {
   return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/30 dark:text-emerald-300";
 }
 
+function resultSubtitle(path: string, openTarget: string) {
+  const fileName = path.split("/").pop() ?? path;
+  return `${openTarget} · ${fileName}`;
+}
+
 function resolveTimelineModeLabel(
   access: GatewayAgentMemoryTimelineAccessResult | null,
   result: GatewayAgentMemoryTimelineResult | null,
@@ -782,7 +787,7 @@ export function MemoryView() {
                 </button>
               </div>
               <div className="mt-4 space-y-3">
-                <div className={`rounded-xl border p-3 text-sm ${diagnosticsTone(diagnosticsSummary)}`}>
+                <div className={`rounded-xl border p-3 text-sm shadow-sm ${diagnosticsTone(diagnosticsSummary)}`}>
                   <div className="font-medium">Primary issue</div>
                   <div className="mt-1">{diagnosticsSummary.primaryIssue ?? "No blocking issue reported"}</div>
                 </div>
@@ -823,11 +828,11 @@ export function MemoryView() {
               className="absolute inset-0 flex flex-col"
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2 }}
             >
-              <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
-                <div>
-                  <div className="text-sm font-semibold">Documents</div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Real root memory documents with live reload and save.</div>
-                </div>
+                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+                  <div>
+                    <div className="text-sm font-semibold">Documents</div>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Real root memory documents with live reload and save.</div>
+                  </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleReloadDocuments}
@@ -846,7 +851,7 @@ export function MemoryView() {
                 </div>
               </div>
               {documentSearchHint && (
-                <div className="border-b border-sky-200 bg-sky-50 px-4 py-2 text-xs text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
+                <div className="border-b border-sky-200 bg-gradient-to-r from-sky-50 to-cyan-50 px-4 py-2 text-xs text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
                   {documentSearchHint}
                 </div>
               )}
@@ -1203,7 +1208,7 @@ export function MemoryView() {
               <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                   <div className="text-sm font-semibold">Semantic search</div>
-                  <div className={`mt-3 rounded-xl border p-3 text-xs ${diagnosticsTone(diagnosticsSummary)}`}>
+                  <div className={`mt-3 rounded-xl border p-3 text-xs shadow-sm ${diagnosticsTone(diagnosticsSummary)}`}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="font-semibold">Diagnostics bar</div>
@@ -1212,7 +1217,7 @@ export function MemoryView() {
                       </div>
                       <button
                         onClick={() => setDiagnosticsDrawer({ open: true, source: "search" })}
-                        className="rounded-lg border border-current/20 px-3 py-1 text-xs font-medium"
+                        className="rounded-lg border border-current/20 bg-white/70 px-3 py-1 text-xs font-medium backdrop-blur dark:bg-slate-900/60"
                       >
                         Open diagnostics
                       </button>
@@ -1248,7 +1253,7 @@ export function MemoryView() {
                       </span>
                     ))}
                   </div>
-                  <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
+                  <div className="mb-4 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/60 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
                     Search open routing is complete. The compact diagnostics bar above and the diagnostics drawer both read from the same summary model, while Knowledge reuses that same summary downstream.
                   </div>
                   <div className="mb-4 flex flex-wrap gap-2">
@@ -1285,6 +1290,7 @@ export function MemoryView() {
                             <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 font-medium text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">{entry.sourceKind}</span>
                             <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">{entry.openTarget}</span>
                           </div>
+                          <div className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">{resultSubtitle(entry.path, entry.openTarget)}</div>
                           <div className="mt-3 break-all text-sm font-semibold">{entry.path}</div>
                           <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">{entry.snippet}</p>
                           <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">Open routing for real navigation is deferred to M3. Current target: {entry.openTarget}.</div>
