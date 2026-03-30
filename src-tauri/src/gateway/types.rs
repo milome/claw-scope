@@ -227,6 +227,7 @@ pub struct GatewayAgentMemoryRuntimeStatusSourceCount {
 pub struct GatewayAgentMemoryRuntimeStatusCore {
     pub backend: String,
     pub files: u64,
+    pub total_files: Option<u64>,
     pub chunks: u64,
     pub dirty: bool,
     pub workspace_dir: Option<String>,
@@ -247,6 +248,7 @@ pub struct GatewayAgentMemoryRuntimeStatusResult {
     pub embedding_error: Option<String>,
     pub vector_ok: bool,
     pub status: GatewayAgentMemoryRuntimeStatusCore,
+    pub raw_payload: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -172,6 +172,7 @@ export interface GatewayAgentMemoryRuntimeStatusSourceCount {
 export interface GatewayAgentMemoryRuntimeStatusCore {
   backend: string;
   files: number;
+  totalFiles?: number | null;
   chunks: number;
   dirty: boolean;
   workspaceDir?: string | null;
@@ -190,6 +191,7 @@ export interface GatewayAgentMemoryRuntimeStatusResult {
   embeddingError?: string | null;
   vectorOk: boolean;
   status: GatewayAgentMemoryRuntimeStatusCore;
+  rawPayload: string;
 }
 
 export interface GatewayAgentMemorySearchEntry {

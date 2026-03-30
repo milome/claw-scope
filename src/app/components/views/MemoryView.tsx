@@ -9,6 +9,7 @@ import {
   gatewayAgentFileRead,
   gatewayAgentMemorySet,
   gatewayAgentMemorySearch,
+  gatewayAgentMemoryRuntimeStatus,
   gatewayAgentMemoryStatus,
   gatewayAgentMemoryTimelineAccessResolve,
   gatewayAgentMemoryTimelineEntryRead,
@@ -16,6 +17,7 @@ import {
   gatewayAgentMemoryTimelineLocalScan,
   gatewayAgentMemoryTimelineRemoteProbe,
   type GatewayAgentMemoryResult,
+  type GatewayAgentMemoryRuntimeStatusResult,
   type GatewayAgentMemorySearchResult,
   type GatewayAgentMemoryStatusResult,
   type GatewayAgentMemoryTimelineAccessResult,
@@ -71,6 +73,20 @@ type HealthProbeSummary = {
   embeddingsError: string | null;
   rawPayload: string;
   primaryIssue: string | null;
+};
+
+type RuntimeStatusSummary = {
+  available: boolean;
+  agentId: string;
+  provider: string;
+  model: string | null;
+  embeddingOk: boolean;
+  embeddingError: string | null;
+  indexedFiles: number;
+  totalFiles: number | null;
+  chunks: number;
+  bySource: { source: string; files: number; chunks: number }[];
+  rawPayload: string;
 };
 
 type DiagnosticsDrawerState = {
@@ -207,6 +223,7 @@ export function MemoryView() {
   const [timelineProbeState, setTimelineProbeState] = useState<"idle" | "probing" | "done" | "error">("idle");
   const [memoryStatus, setMemoryStatus] = useState<GatewayAgentMemoryStatusResult | null>(null);
   const [memoryStatusError, setMemoryStatusError] = useState<string | null>(null);
+  const [memoryRuntimeStatus, setMemoryRuntimeStatus] = useState<GatewayAgentMemoryRuntimeStatusResult | null>(null);
   const [diagnosticsDrawer, setDiagnosticsDrawer] = useState<DiagnosticsDrawerState>({ open: false, source: "search" });
   const [searchQuery, setSearchQuery] = useState("");
   const [searchRunning] = useState(false);
@@ -230,6 +247,16 @@ export function MemoryView() {
   const [_timelineEntryContent, setTimelineEntryContent] = useState("");
   const [_timelineEntryLoading, setTimelineEntryLoading] = useState(false);
   const [_timelineEntryError, setTimelineEntryError] = useState<string | null>(null);
+
+  const isLocalGatewaySession = useMemo(() => {
+    if (!connectedOrigin) {
+      return false;
+    }
+
+    return /^(ws|http):\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(
+      connectedOrigin,
+    );
+  }, [connectedOrigin]);
 
   useEffect(() => {
     const nextAgentId = resolveSelectedMemoryAgentId(
@@ -323,14 +350,36 @@ export function MemoryView() {
       }
     };
 
+    const loadRuntimeStatus = async () => {
+      if (!isLocalGatewaySession) {
+        if (!cancelled) {
+          setMemoryRuntimeStatus(null);
+        }
+        return;
+      }
+
+      try {
+        const result = await gatewayAgentMemoryRuntimeStatus(selectedAgentId);
+        if (cancelled) {
+          return;
+        }
+        setMemoryRuntimeStatus(result);
+      } catch (error) {
+        if (!cancelled) {
+          setMemoryRuntimeStatus(null);
+        }
+      }
+    };
+
     void loadMemory();
     void loadTimeline();
     void loadStatus();
+    void loadRuntimeStatus();
 
     return () => {
       cancelled = true;
     };
-  }, [selectedAgentId, isConnected]);
+  }, [selectedAgentId, isConnected, isLocalGatewaySession]);
 
   useEffect(() => {
     if (!selectedAgentId || !selectedTimelineEntryName) {
@@ -437,15 +486,6 @@ export function MemoryView() {
     [footprintGroups],
   );
   const activeAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
-  const isLocalGatewaySession = useMemo(() => {
-    if (!connectedOrigin) {
-      return false;
-    }
-
-    return /^(ws|http):\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(
-      connectedOrigin,
-    );
-  }, [connectedOrigin]);
   const externalSources = useMemo(
     () => resolveExternalMemorySources(memoryResult?.diagnostics),
     [memoryResult?.diagnostics],
@@ -509,6 +549,29 @@ export function MemoryView() {
       primaryIssue,
     };
   }, [memoryStatus]);
+  const runtimeStatusSummary = useMemo<RuntimeStatusSummary | null>(() => {
+    if (!memoryRuntimeStatus) {
+      return null;
+    }
+
+    return {
+      available: true,
+      agentId: memoryRuntimeStatus.agentId,
+      provider: memoryRuntimeStatus.status.provider,
+      model: memoryRuntimeStatus.status.model ?? null,
+      embeddingOk: memoryRuntimeStatus.embeddingOk,
+      embeddingError: memoryRuntimeStatus.embeddingError ?? null,
+      indexedFiles: memoryRuntimeStatus.status.files,
+      totalFiles: memoryRuntimeStatus.status.totalFiles ?? null,
+      chunks: memoryRuntimeStatus.status.chunks,
+      bySource: memoryRuntimeStatus.status.sourceCounts.map((item) => ({
+        source: item.source,
+        files: item.files,
+        chunks: item.chunks,
+      })),
+      rawPayload: memoryRuntimeStatus.rawPayload,
+    };
+  }, [memoryRuntimeStatus]);
   const providerHint = (healthProbeSummary?.provider ?? "").toLowerCase();
   const isOllamaProvider = providerHint.includes("ollama");
   const isHostedProvider =
@@ -926,11 +989,27 @@ export function MemoryView() {
                     </>
                   )}
                   <DiagnosticsCard title={t("memory.diag.runtimeStatus")}>
-                    <div className="text-slate-500 dark:text-slate-400">
-                      {isLocalGatewaySession
-                        ? t("memory.diag.runtimePlaceholder")
-                        : t("memory.diag.runtimeRemoteUnavailable")}
-                    </div>
+                    {runtimeStatusSummary ? (
+                      <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
+                        <div>
+                          indexed: {runtimeStatusSummary.indexedFiles}
+                          {runtimeStatusSummary.totalFiles != null
+                            ? `/${runtimeStatusSummary.totalFiles}`
+                            : ""} files · {runtimeStatusSummary.chunks} chunks
+                        </div>
+                        {runtimeStatusSummary.bySource.map((item) => (
+                          <div key={item.source}>
+                            {item.source}: {item.files} files · {item.chunks} chunks
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-slate-500 dark:text-slate-400">
+                        {isLocalGatewaySession
+                          ? t("memory.diag.runtimePlaceholder")
+                          : t("memory.diag.runtimeRemoteUnavailable")}
+                      </div>
+                    )}
                   </DiagnosticsCard>
                   <DiagnosticsCard title={t("memory.diag.knowledge")}>
                     {memoryResult?.diagnostics ? (
@@ -1355,10 +1434,24 @@ export function MemoryView() {
                       </button>
                     </div>
                   </div>
-                  <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-                    <div className="font-semibold">Runtime status</div>
-                    <div className="mt-1 text-slate-500 dark:text-slate-400">Runtime-level indexed files / chunks / by-source totals are not available from current LAN Gateway sources. This area is intentionally left informational until a dedicated local runtime bridge exists.</div>
-                  </div>
+                  <DiagnosticsCard title={t("memory.diag.runtimeStatus")} className="mt-3 text-xs">
+                    {runtimeStatusSummary ? (
+                      <div className="space-y-1 text-slate-500 dark:text-slate-400">
+                        <div>
+                          indexed: {runtimeStatusSummary.indexedFiles}
+                          {runtimeStatusSummary.totalFiles != null
+                            ? `/${runtimeStatusSummary.totalFiles}`
+                            : ""} files · {runtimeStatusSummary.chunks} chunks
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-slate-500 dark:text-slate-400">
+                        {isLocalGatewaySession
+                          ? t("memory.diag.runtimePlaceholder")
+                          : t("memory.diag.runtimeRemoteUnavailable")}
+                      </div>
+                    )}
+                  </DiagnosticsCard>
                   <DiagnosticsCard title={t("memory.search.probeNote")} className="mt-3 text-xs">
                     <div className="text-slate-500 dark:text-slate-400">{t("memory.search.probeNote")}</div>
                   </DiagnosticsCard>
@@ -1560,11 +1653,22 @@ export function MemoryView() {
                       </DiagnosticsCard>
                     )}
                     <DiagnosticsCard title={t("memory.diag.runtimeStatus")} className="mb-4 text-xs">
-                      <div className="text-slate-500 dark:text-slate-400">
-                        {isLocalGatewaySession
-                          ? t("memory.diag.runtimePlaceholder")
-                          : t("memory.diag.runtimeRemoteUnavailable")}
-                      </div>
+                      {runtimeStatusSummary ? (
+                        <div className="space-y-1 text-slate-500 dark:text-slate-400">
+                          <div>
+                            indexed: {runtimeStatusSummary.indexedFiles}
+                            {runtimeStatusSummary.totalFiles != null
+                              ? `/${runtimeStatusSummary.totalFiles}`
+                              : ""} files · {runtimeStatusSummary.chunks} chunks
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-slate-500 dark:text-slate-400">
+                          {isLocalGatewaySession
+                            ? t("memory.diag.runtimePlaceholder")
+                            : t("memory.diag.runtimeRemoteUnavailable")}
+                        </div>
+                      )}
                     </DiagnosticsCard>
                     {memoryResult?.diagnostics ? (
                       <div className="space-y-3 text-sm">
@@ -1623,11 +1727,27 @@ export function MemoryView() {
                           <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">embeddings: {healthProbeSummary ? (healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")) : t("memory.diag.unknownShort")}</div>
                         </DiagnosticsCard>
                         <DiagnosticsCard title={t("memory.diag.runtimeStatus")}>
-                          <div className="text-slate-500 dark:text-slate-400">
-                            {isLocalGatewaySession
-                              ? t("memory.diag.runtimePlaceholder")
-                              : t("memory.diag.runtimeRemoteUnavailable")}
-                          </div>
+                          {runtimeStatusSummary ? (
+                            <div className="space-y-1 text-slate-500 dark:text-slate-400">
+                              <div>
+                                indexed: {runtimeStatusSummary.indexedFiles}
+                                {runtimeStatusSummary.totalFiles != null
+                                  ? `/${runtimeStatusSummary.totalFiles}`
+                                  : ""} files · {runtimeStatusSummary.chunks} chunks
+                              </div>
+                              {runtimeStatusSummary.bySource.map((item) => (
+                                <div key={item.source}>
+                                  {item.source}: {item.files} files · {item.chunks} chunks
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-slate-500 dark:text-slate-400">
+                              {isLocalGatewaySession
+                                ? t("memory.diag.runtimePlaceholder")
+                                : t("memory.diag.runtimeRemoteUnavailable")}
+                            </div>
+                          )}
                         </DiagnosticsCard>
                         <DiagnosticsCard title={t("memory.diag.knowledge")}>
                           {memoryResult?.diagnostics ? (

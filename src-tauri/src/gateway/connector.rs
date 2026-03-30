@@ -1,5 +1,6 @@
 use std::{
     fs,
+    process::Command,
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -462,54 +463,112 @@ pub async fn agent_memory_runtime_status(
     state: GatewayAppState,
     agent_id: &str,
 ) -> Result<GatewayAgentMemoryRuntimeStatusResult, GatewayError> {
-    // Local-only enhancement placeholder.
-    // This bridge is intended only for same-machine sessions where ClawScope can
-    // safely reuse local OpenClaw runtime state. It must not be treated as a
-    // LAN/remote gateway capability because remote sessions do not expose local
-    // runtime manager internals through the upstream Gateway contract.
-    let memory = agent_memory_get(state.clone(), agent_id).await?;
+    // Local-only enhancement.
+    // This bridge shells out to the local `openclaw` CLI and therefore only works
+    // for same-machine sessions. Remote/LAN gateway sessions must not rely on it.
+    let endpoint = state
+        .session()
+        .await
+        .map(|session| session.endpoint.transport)
+        .ok_or_else(|| GatewayError::Transport {
+            message: "gateway not connected".to_string(),
+        })?;
+    if endpoint != GatewayTransportKind::LocalLoopback {
+        return Err(GatewayError::NotImplemented {
+            feature: "local-only memory runtime status bridge for remote gateway sessions".to_string(),
+        });
+    }
+
+    let output = Command::new("openclaw")
+        .args(["memory", "status", "--json", "--deep", "--agent", agent_id])
+        .output()
+        .map_err(|error| GatewayError::Transport {
+            message: format!("failed to run local openclaw CLI: {error}"),
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(GatewayError::Transport {
+            message: if stderr.is_empty() {
+                format!("local openclaw CLI exited with status {}", output.status)
+            } else {
+                format!("local openclaw CLI failed: {stderr}")
+            },
+        });
+    }
+
+    let stdout = String::from_utf8(output.stdout).map_err(|error| GatewayError::Protocol {
+        message: format!("failed decoding local openclaw CLI output: {error}"),
+    })?;
+    let raw_payload = stdout.trim().to_string();
+    let payload: CliMemoryStatusPayload =
+        serde_json::from_str(raw_payload.as_str()).map_err(|error| GatewayError::Protocol {
+            message: format!("failed decoding local openclaw memory status json: {error}"),
+        })?;
+
+    let source_counts = payload
+        .by_source
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|entry| {
+            let source = entry.source?.trim().to_string();
+            if source.is_empty() {
+                return None;
+            }
+            Some(GatewayAgentMemoryRuntimeStatusSourceCount {
+                source,
+                files: entry.indexed_files.unwrap_or(0),
+                chunks: entry.chunks.unwrap_or(0),
+            })
+        })
+        .collect::<Vec<_>>();
+
     let config_value = request_json(state.clone(), "config.get", Some(Value::Object(Map::new()))).await?;
     let config = parse_gateway_config(config_value)?;
     let agents = agents_list(state.clone()).await?;
     let default_id = agents.default_id.clone();
-
+    let memory = agent_memory_get(state, agent_id).await?;
     let workspace_dir = if memory.workspace.trim().is_empty() {
         resolve_agent_workspace(&config, agent_id, &default_id)
     } else {
         Some(memory.workspace.clone())
     };
 
+    let normalized_provider = normalize_optional_string(payload.provider.clone());
+    let normalized_requested_provider = normalize_optional_string(payload.requested_provider.clone());
+    let normalized_model = normalize_optional_string(payload.model.clone());
+
     Ok(GatewayAgentMemoryRuntimeStatusResult {
         agent_id: agent_id.to_string(),
-        embedding_ok: false,
-        embedding_error: Some(
-            "runtime bridge placeholder: manager.status() is not wired yet".to_string(),
-        ),
-        vector_ok: false,
+        embedding_ok: payload
+            .embeddings
+            .as_deref()
+            .map(|value| value.eq_ignore_ascii_case("ready") || value.eq_ignore_ascii_case("available"))
+            .unwrap_or(false),
+        embedding_error: normalize_optional_string(payload.embeddings_error),
+        vector_ok: payload.indexed.as_ref().and_then(|item| item.chunks).unwrap_or(0) > 0,
         status: GatewayAgentMemoryRuntimeStatusCore {
             backend: memory
                 .diagnostics
                 .as_ref()
                 .map(|item| item.backend.clone())
                 .unwrap_or_else(|| "unknown".to_string()),
-            files: memory.documents.iter().filter(|doc| !doc.missing).count() as u64,
-            chunks: 0,
+            files: payload.indexed.as_ref().and_then(|item| item.indexed_files).unwrap_or(0),
+            total_files: payload.indexed.as_ref().and_then(|item| item.total_files),
+            chunks: payload.indexed.as_ref().and_then(|item| item.chunks).unwrap_or(0),
             dirty: false,
             workspace_dir,
             db_path: memory
                 .diagnostics
                 .as_ref()
                 .map(|item| item.builtin_store_path.clone()),
-            provider: memory
-                .diagnostics
-                .as_ref()
-                .and_then(|item| item.provider.clone())
+            provider: normalized_provider
+                .clone()
                 .unwrap_or_else(|| "unknown".to_string()),
-            model: None,
-            requested_provider: memory
-                .diagnostics
-                .as_ref()
-                .and_then(|item| item.provider.clone())
+            model: normalized_model,
+            requested_provider: normalized_requested_provider
+                .or_else(|| normalized_provider)
                 .unwrap_or_else(|| "unknown".to_string()),
             sources: memory
                 .diagnostics
@@ -521,12 +580,9 @@ pub async fn agent_memory_runtime_status(
                 .as_ref()
                 .map(|item| item.extra_paths.clone())
                 .unwrap_or_default(),
-            source_counts: vec![GatewayAgentMemoryRuntimeStatusSourceCount {
-                source: "documents".to_string(),
-                files: memory.documents.iter().filter(|doc| !doc.missing).count() as u64,
-                chunks: 0,
-            }],
+            source_counts,
         },
+        raw_payload,
     })
 }
 
@@ -845,13 +901,25 @@ struct GatewayMemoryStatusIndexed {
     chunks: Option<u64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GatewayMemoryStatusBySource {
     source: Option<String>,
     indexed_files: Option<u64>,
     total_files: Option<u64>,
     chunks: Option<u64>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CliMemoryStatusPayload {
+    provider: Option<String>,
+    requested_provider: Option<String>,
+    model: Option<String>,
+    embeddings: Option<String>,
+    embeddings_error: Option<String>,
+    indexed: Option<GatewayMemoryStatusIndexed>,
+    by_source: Option<Vec<GatewayMemoryStatusBySource>>,
 }
 
 #[derive(Debug, Deserialize)]
