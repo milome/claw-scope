@@ -163,6 +163,35 @@ export interface GatewayAgentMemoryStatusResult {
   bySource: GatewayAgentMemoryStatusSource[];
 }
 
+export interface GatewayAgentMemoryRuntimeStatusSourceCount {
+  source: string;
+  files: number;
+  chunks: number;
+}
+
+export interface GatewayAgentMemoryRuntimeStatusCore {
+  backend: string;
+  files: number;
+  chunks: number;
+  dirty: boolean;
+  workspaceDir?: string | null;
+  dbPath?: string | null;
+  provider: string;
+  model?: string | null;
+  requestedProvider: string;
+  sources: string[];
+  extraPaths: string[];
+  sourceCounts: GatewayAgentMemoryRuntimeStatusSourceCount[];
+}
+
+export interface GatewayAgentMemoryRuntimeStatusResult {
+  agentId: string;
+  embeddingOk: boolean;
+  embeddingError?: string | null;
+  vectorOk: boolean;
+  status: GatewayAgentMemoryRuntimeStatusCore;
+}
+
 export interface GatewayAgentMemorySearchEntry {
   id: string;
   path: string;
@@ -464,6 +493,15 @@ export async function gatewayAgentMemoryStatus(agentId: string) {
   return invokeGateway<GatewayAgentMemoryStatusResult>('gateway_agent_memory_status', {
     agentId,
   });
+}
+
+export async function gatewayAgentMemoryRuntimeStatus(agentId: string) {
+  return invokeGateway<GatewayAgentMemoryRuntimeStatusResult>(
+    'gateway_agent_memory_runtime_status',
+    {
+      agentId,
+    },
+  );
 }
 
 export async function openExternalUrl(url: string) {

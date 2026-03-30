@@ -214,6 +214,41 @@ pub struct GatewayAgentMemoryStatusResult {
     pub by_source: Vec<GatewayAgentMemoryStatusSource>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayAgentMemoryRuntimeStatusSourceCount {
+    pub source: String,
+    pub files: u64,
+    pub chunks: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayAgentMemoryRuntimeStatusCore {
+    pub backend: String,
+    pub files: u64,
+    pub chunks: u64,
+    pub dirty: bool,
+    pub workspace_dir: Option<String>,
+    pub db_path: Option<String>,
+    pub provider: String,
+    pub model: Option<String>,
+    pub requested_provider: String,
+    pub sources: Vec<String>,
+    pub extra_paths: Vec<String>,
+    pub source_counts: Vec<GatewayAgentMemoryRuntimeStatusSourceCount>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayAgentMemoryRuntimeStatusResult {
+    pub agent_id: String,
+    pub embedding_ok: bool,
+    pub embedding_error: Option<String>,
+    pub vector_ok: bool,
+    pub status: GatewayAgentMemoryRuntimeStatusCore,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GatewayAgentMemorySearchEntry {

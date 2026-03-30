@@ -22,6 +22,7 @@ pub fn run() {
             gateway::commands::gateway_agent_memory_get,
             gateway::commands::gateway_agent_memory_search,
             gateway::commands::gateway_agent_memory_status,
+            gateway::commands::gateway_agent_memory_runtime_status,
             gateway::commands::gateway_agent_memory_timeline_get,
             gateway::commands::gateway_agent_memory_timeline_access_resolve,
             gateway::commands::gateway_agent_memory_timeline_local_scan,

@@ -34,7 +34,9 @@ use crate::gateway::{
     types::{
         GatewayAgentFileEntry, GatewayAgentFileGetResult, GatewayAgentIdentityResult,
         GatewayAgentMemoryDiagnostics, GatewayAgentMemoryResult,
-        GatewayAgentMemoryStatusResult, GatewayAgentMemoryStatusSource,
+        GatewayAgentMemoryRuntimeStatusCore, GatewayAgentMemoryRuntimeStatusResult,
+        GatewayAgentMemoryRuntimeStatusSourceCount, GatewayAgentMemoryStatusResult,
+        GatewayAgentMemoryStatusSource,
         GatewayAgentMemorySearchDiagnostics, GatewayAgentMemorySearchEntry,
         GatewayAgentMemorySearchOpenTarget, GatewayAgentMemorySearchResult,
         GatewayAgentMemorySearchSourceKind,
@@ -453,6 +455,78 @@ pub async fn agent_memory_status(
         total_files: indexed.as_ref().and_then(|value| value.total_files),
         chunks: indexed.as_ref().and_then(|value| value.chunks),
         by_source,
+    })
+}
+
+pub async fn agent_memory_runtime_status(
+    state: GatewayAppState,
+    agent_id: &str,
+) -> Result<GatewayAgentMemoryRuntimeStatusResult, GatewayError> {
+    // Local-only enhancement placeholder.
+    // This bridge is intended only for same-machine sessions where ClawScope can
+    // safely reuse local OpenClaw runtime state. It must not be treated as a
+    // LAN/remote gateway capability because remote sessions do not expose local
+    // runtime manager internals through the upstream Gateway contract.
+    let memory = agent_memory_get(state.clone(), agent_id).await?;
+    let config_value = request_json(state.clone(), "config.get", Some(Value::Object(Map::new()))).await?;
+    let config = parse_gateway_config(config_value)?;
+    let agents = agents_list(state.clone()).await?;
+    let default_id = agents.default_id.clone();
+
+    let workspace_dir = if memory.workspace.trim().is_empty() {
+        resolve_agent_workspace(&config, agent_id, &default_id)
+    } else {
+        Some(memory.workspace.clone())
+    };
+
+    Ok(GatewayAgentMemoryRuntimeStatusResult {
+        agent_id: agent_id.to_string(),
+        embedding_ok: false,
+        embedding_error: Some(
+            "runtime bridge placeholder: manager.status() is not wired yet".to_string(),
+        ),
+        vector_ok: false,
+        status: GatewayAgentMemoryRuntimeStatusCore {
+            backend: memory
+                .diagnostics
+                .as_ref()
+                .map(|item| item.backend.clone())
+                .unwrap_or_else(|| "unknown".to_string()),
+            files: memory.documents.iter().filter(|doc| !doc.missing).count() as u64,
+            chunks: 0,
+            dirty: false,
+            workspace_dir,
+            db_path: memory
+                .diagnostics
+                .as_ref()
+                .map(|item| item.builtin_store_path.clone()),
+            provider: memory
+                .diagnostics
+                .as_ref()
+                .and_then(|item| item.provider.clone())
+                .unwrap_or_else(|| "unknown".to_string()),
+            model: None,
+            requested_provider: memory
+                .diagnostics
+                .as_ref()
+                .and_then(|item| item.provider.clone())
+                .unwrap_or_else(|| "unknown".to_string()),
+            sources: memory
+                .diagnostics
+                .as_ref()
+                .map(|item| item.sources.clone())
+                .unwrap_or_default(),
+            extra_paths: memory
+                .diagnostics
+                .as_ref()
+                .map(|item| item.extra_paths.clone())
+                .unwrap_or_default(),
+            source_counts: vec![GatewayAgentMemoryRuntimeStatusSourceCount {
+                source: "documents".to_string(),
+                files: memory.documents.iter().filter(|doc| !doc.missing).count() as u64,
+                chunks: 0,
+            }],
+        },
     })
 }
 

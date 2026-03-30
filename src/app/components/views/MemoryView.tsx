@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Footprints, ChevronRight, Calendar, Clock, Network, Cpu, BrainCircuit, FileDigit, Database, ChevronDown, BookOpen, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { toast } from "sonner";
 import { useI18n } from "../../contexts/I18nContext";
+import type { ReactNode } from "react";
 import {
   gatewayAgentMemoryGet,
   gatewayAgentFileRead,
@@ -62,13 +64,12 @@ type SearchDetailState = {
   error: string | null;
 } | null;
 
-type DiagnosticsSummary = {
+type HealthProbeSummary = {
   provider: string;
   model: string;
-  indexedFiles: number;
-  totalFiles: number;
-  chunks: number;
-  bySource: { source: string; indexedFiles: number; totalFiles: number; chunks: number }[];
+  embeddingsReady: boolean | null;
+  embeddingsError: string | null;
+  rawPayload: string;
   primaryIssue: string | null;
 };
 
@@ -94,7 +95,7 @@ function normalizeRootMemoryDocumentName(name: string) {
   return name.toLowerCase() === "memory.md" ? "memory.md" : name;
 }
 
-function diagnosticsTone(summary: DiagnosticsSummary | null) {
+function diagnosticsTone(summary: HealthProbeSummary | null) {
   if (!summary) {
     return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
   }
@@ -104,33 +105,93 @@ function diagnosticsTone(summary: DiagnosticsSummary | null) {
   return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/30 dark:text-emerald-300";
 }
 
+function DiagnosticsCard({
+  title,
+  children,
+  className = "",
+}: {
+  title: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60 ${className}`.trim()}
+    >
+      <div className="font-medium">{title}</div>
+      <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
+async function copyTextToClipboard(text: string) {
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall through to fallback path.
+  }
+
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "absolute";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return copied;
+  } catch {
+    return false;
+  }
+}
+
 function resultSubtitle(path: string, openTarget: string) {
   const fileName = path.split("/").pop() ?? path;
   return `${openTarget} · ${fileName}`;
 }
 
+function resultRouteLabel(
+  openTarget: string,
+  t: (key: string, ...args: (string | number)[]) => string,
+) {
+  switch (openTarget) {
+    case "documents":
+      return t("memory.search.route.documents");
+    case "footprints":
+      return t("memory.search.route.footprints");
+    default:
+      return t("memory.search.route.detail");
+  }
+}
+
 function resolveTimelineModeLabel(
   access: GatewayAgentMemoryTimelineAccessResult | null,
   result: GatewayAgentMemoryTimelineResult | null,
+  t: (key: string, ...args: (string | number)[]) => string,
 ) {
   if (access?.mode === "local_workspace") {
-    return "Local workspace mode";
+    return t("memory.timeline.mode.local");
   }
 
   if (access?.mode === "remote_probe" || result?.source === "remote_probe") {
-    return "Remote probe mode";
+    return t("memory.timeline.mode.remote");
   }
 
   if (access?.mode === "unavailable" || result?.source === "unavailable") {
-    return "Unavailable mode";
+    return t("memory.timeline.mode.unavailable");
   }
 
-  return "Mode unresolved";
+  return t("memory.timeline.mode.unknown");
 }
 
 export function MemoryView() {
   const { t } = useI18n();
-  const { agents, grantedScopes, isConnected } = useOpenClaw();
+  const { agents, grantedScopes, isConnected, connectedOrigin } = useOpenClaw();
   const [activeSection, setActiveSection] = useState<MemorySection>("overview");
   const [selectedAgentId, setSelectedAgentId] = useState(agents[0]?.id ?? "");
   const [memoryResult, setMemoryResult] = useState<GatewayAgentMemoryResult | null>(null);
@@ -153,6 +214,7 @@ export function MemoryView() {
   const [searchResult, setSearchResult] = useState<GatewayAgentMemorySearchResult | null>(null);
   const [searchDetail, setSearchDetail] = useState<SearchDetailState>(null);
   const [searchOpenHint, setSearchOpenHint] = useState<string | null>(null);
+  const [copiedCommandGuide, setCopiedCommandGuide] = useState(false);
   const [selectedDocumentName, setSelectedDocumentName] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [documentQuery, setDocumentQuery] = useState("");
@@ -248,6 +310,9 @@ export function MemoryView() {
         const result = await gatewayAgentMemoryStatus(selectedAgentId);
         if (cancelled) {
           return;
+        }
+        if (selectedAgentId === "guigui-2") {
+          console.debug("[MemoryView] gatewayAgentMemoryStatus raw", result);
         }
         setMemoryStatus(result);
         setMemoryStatusError(null);
@@ -372,6 +437,15 @@ export function MemoryView() {
     [footprintGroups],
   );
   const activeAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
+  const isLocalGatewaySession = useMemo(() => {
+    if (!connectedOrigin) {
+      return false;
+    }
+
+    return /^(ws|http):\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(
+      connectedOrigin,
+    );
+  }, [connectedOrigin]);
   const externalSources = useMemo(
     () => resolveExternalMemorySources(memoryResult?.diagnostics),
     [memoryResult?.diagnostics],
@@ -414,39 +488,62 @@ export function MemoryView() {
     setSelectedTimelineDateLabel(match?.dateLabel ?? "");
   }, [filteredFootprintGroups, selectedTimelineEntryName]);
 
-  const diagnosticsSummary = useMemo<DiagnosticsSummary | null>(() => {
+  const healthProbeSummary = useMemo<HealthProbeSummary | null>(() => {
     if (!memoryStatus) {
       return null;
     }
-
-    const bySource = [...memoryStatus.bySource]
-      .map((item) => ({
-        source: item.source,
-        indexedFiles: item.indexedFiles ?? 0,
-        totalFiles: item.totalFiles ?? 0,
-        chunks: item.chunks ?? 0,
-      }))
-      .sort((left, right) => right.indexedFiles - left.indexedFiles || right.chunks - left.chunks);
 
     let primaryIssue: string | null = null;
     if (memoryStatus.embeddingsError) {
       primaryIssue = memoryStatus.embeddingsError;
     } else if (memoryStatus.embeddingsAvailable === false) {
       primaryIssue = "Embeddings unavailable";
-    } else if ((memoryStatus.indexedFiles ?? 0) === 0) {
-      primaryIssue = "No indexed files";
     }
 
     return {
-      provider: memoryStatus.provider ?? "unknown",
-      model: memoryStatus.model ?? "unknown",
-      indexedFiles: memoryStatus.indexedFiles ?? 0,
-      totalFiles: memoryStatus.totalFiles ?? 0,
-      chunks: memoryStatus.chunks ?? 0,
-      bySource,
+      provider: memoryStatus.provider ?? t("memory.diag.unknown"),
+      model: memoryStatus.model ?? t("memory.diag.unknown"),
+      embeddingsReady: memoryStatus.embeddingsAvailable ?? null,
+      embeddingsError: memoryStatus.embeddingsError ?? null,
+      rawPayload: JSON.stringify(memoryStatus, null, 2),
       primaryIssue,
     };
   }, [memoryStatus]);
+  const providerHint = (healthProbeSummary?.provider ?? "").toLowerCase();
+  const isOllamaProvider = providerHint.includes("ollama");
+  const isHostedProvider =
+    providerHint.includes("openai") ||
+    providerHint.includes("anthropic") ||
+    providerHint.includes("gemini") ||
+    providerHint.includes("azure");
+  const commandGuide = useMemo(() => {
+    if (isOllamaProvider) {
+      return [
+        "ollama serve",
+        "ollama pull nomic-embed-text",
+        'openclaw config set models.providers.ollama.baseUrl "http://127.0.0.1:11434"',
+        'openclaw config set models.providers.ollama.apiKey "ollama-local"',
+        'openclaw config set models.providers.ollama.api "ollama"',
+        'openclaw config set agents.defaults.memorySearch.provider "ollama"',
+        'openclaw memory index --agent guigui-2 --force',
+        'openclaw memory status --agent guigui-2 --deep --index',
+      ].join("\n");
+    }
+
+    return [
+      'openclaw memory index --agent <agent-id> --force',
+      'openclaw memory status --agent <agent-id> --deep --index',
+    ].join("\n");
+  }, [isOllamaProvider]);
+  const commandGuideDescription = useMemo(() => {
+    if (isOllamaProvider) {
+      return t("memory.search.commands.ollama");
+    }
+    if (isHostedProvider) {
+      return t("memory.search.commands.openai");
+    }
+    return t("memory.search.commands.generic");
+  }, [isHostedProvider, isOllamaProvider, t]);
 
   const getAgentBadge = (agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
@@ -476,6 +573,17 @@ export function MemoryView() {
     } finally {
       setMemoryLoading(false);
     }
+  };
+
+  const handleCopyCommandGuide = async () => {
+    const copied = await copyTextToClipboard(commandGuide);
+    if (!copied) {
+      toast.error(t("memory.search.commands.copyFailed"));
+      return;
+    }
+    setCopiedCommandGuide(true);
+    toast.success(t("memory.search.commands.copySuccess"));
+    window.setTimeout(() => setCopiedCommandGuide(false), 1500);
   };
 
   const handleProbeTimelineRange = async () => {
@@ -556,7 +664,7 @@ export function MemoryView() {
         resolveSelectedMemoryDocumentName(current, result.documents),
       );
       setDocumentSaveState("saved");
-      setDocumentSaveMessage(`Saved ${selectedDocument.name}`);
+      setDocumentSaveMessage(t("memory.documents.saved", selectedDocument.name));
       setMemoryError(null);
     } catch (error) {
       setDocumentSaveState("error");
@@ -584,9 +692,9 @@ export function MemoryView() {
       const derivedQuery = entry.snippet.trim().split(/\s+/).find((token) => token.length >= 3) ?? entry.snippet.slice(0, 24).trim();
       setDocumentQuery(derivedQuery);
       setDocumentSearchSource("search_result");
-      setDocumentSearchHint(`Opened from search: root_memory -> Documents (${entry.path})`);
+      setDocumentSearchHint(t("memory.search.hint.documents", entry.path));
       setTimelineSelectionHint(null);
-      setSearchOpenHint(`Documents route opened for ${entry.path}`);
+      setSearchOpenHint(t("memory.search.opened.documents", entry.path));
       setActiveSection("documents");
       return;
     }
@@ -597,14 +705,14 @@ export function MemoryView() {
         ?? entry.path.split("/").slice(-1)[0]?.replace(/\.md$/i, "")
         ?? "";
       setSelectedTimelineDateLabel(derivedDate);
-      setTimelineSelectionHint(`Opened from search: daily_memory -> Footprints (${derivedDate})`);
+      setTimelineSelectionHint(t("memory.search.hint.footprints", derivedDate));
       setDocumentSearchHint(null);
-      setSearchOpenHint(`Footprints route opened for ${entry.path}`);
+      setSearchOpenHint(t("memory.search.opened.footprints", entry.path));
       setActiveSection("footprints");
       return;
     }
 
-    setSearchOpenHint(`Read-only detail opened for ${entry.path}`);
+    setSearchOpenHint(t("memory.search.opened.detail", entry.path));
 
     setSearchDetail({
       title: entry.path.split("/").pop() ?? entry.path,
@@ -647,9 +755,9 @@ export function MemoryView() {
     <div className="max-w-[1400px] mx-auto h-full flex flex-col text-slate-900 dark:text-slate-100 transition-colors">
       <div className="mb-4 md:mb-5 shrink-0 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-[20px] md:text-[22px] font-bold tracking-tight text-slate-900 dark:text-slate-100 mb-1">Memory</h1>
+          <h1 className="text-[20px] md:text-[22px] font-bold tracking-tight text-slate-900 dark:text-slate-100 mb-1">{t("memory.title")}</h1>
           <p className="text-[13px] md:text-sm text-slate-500 dark:text-slate-400">
-            Real gateway-backed memory overview, documents, daily footprints, search, and knowledge diagnostics.
+            {t("memory.desc")}
           </p>
         </div>
         
@@ -670,11 +778,11 @@ export function MemoryView() {
 
       <div className="flex flex-wrap gap-2 mb-4 shrink-0 rounded-xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         {([
-          ["overview", "Overview", BookOpen],
-          ["documents", "Documents", FileText],
-          ["footprints", "Footprints", Calendar],
-          ["search", "Search", Search],
-          ["knowledge", "Knowledge", BrainCircuit],
+          ["overview", t("memory.tab.overview"), BookOpen],
+          ["documents", t("memory.tab.documents"), FileText],
+          ["footprints", t("memory.tab.footprints"), Calendar],
+          ["search", t("memory.tab.search"), Search],
+          ["knowledge", t("memory.tab.knowledge"), BrainCircuit],
         ] as const).map(([section, label, Icon]) => {
           const active = activeSection === section;
           return (
@@ -699,27 +807,27 @@ export function MemoryView() {
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
               <Network className="w-4 h-4 text-sky-500" />
-              Agent overview
+              {t("memory.overview.agent.title")}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Active agent</div>
-                <div className="mt-2 text-base font-semibold">{activeAgent?.name ?? "No agent selected"}</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.overview.agent.active")}</div>
+                <div className="mt-2 text-base font-semibold">{activeAgent?.name ?? t("memory.overview.agent.none")}</div>
                 <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{selectedAgentId || "-"}</div>
                   </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Workspace</div>
-                <div className="mt-2 break-all text-sm text-slate-700 dark:text-slate-200">{memoryResult?.workspace ?? "Workspace unavailable"}</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.overview.workspace")}</div>
+                <div className="mt-2 break-all text-sm text-slate-700 dark:text-slate-200">{memoryResult?.workspace ?? t("memory.overview.workspaceUnavailable")}</div>
                   </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Shared workspace memory</div>
-                <div className="mt-2 text-sm font-medium">{hasSharedMemory ? "Shared across agents" : "Standalone workspace"}</div>
-                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{memoryResult?.sharedAgents.map((agent) => agent.name).join(", ") || "No shared agents reported"}</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.overview.shared")}</div>
+                <div className="mt-2 text-sm font-medium">{hasSharedMemory ? t("memory.overview.sharedYes") : t("memory.overview.sharedNo")}</div>
+                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{memoryResult?.sharedAgents.map((agent) => agent.name).join(", ") || t("memory.overview.sharedAgents.none")}</div>
                   </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Edit capability</div>
-                <div className="mt-2 text-sm font-medium">{canEdit ? "Writable" : "Read only"}</div>
-                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{canEdit ? "operator.admin granted" : "Current gateway scopes do not allow writes"}</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.overview.edit")}</div>
+                <div className="mt-2 text-sm font-medium">{canEdit ? t("memory.overview.edit.writable") : t("memory.overview.edit.readonly")}</div>
+                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{canEdit ? t("memory.overview.edit.scopeGranted") : t("memory.overview.edit.scopeDenied")}</div>
                   </div>
             </div>
             {_memoryError && (
@@ -732,27 +840,27 @@ export function MemoryView() {
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
               <Database className="w-4 h-4 text-sky-500" />
-              Memory sources snapshot
+              {t("memory.overview.sources.title")}
             </div>
             <div className="space-y-3 text-sm">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="font-medium">Root documents</div>
+                <div className="font-medium">{t("memory.overview.sources.documents")}</div>
                 <div className="mt-1 text-slate-500 dark:text-slate-400">
-                  {visibleDocuments.map((document) => document.name).join(", ") || "No root memory documents loaded"}
+                  {visibleDocuments.map((document) => document.name).join(", ") || t("memory.overview.sources.documentsEmpty")}
                 </div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="font-medium">Timeline source</div>
+                <div className="font-medium">{t("memory.overview.sources.timeline")}</div>
                 <div className="mt-1 text-slate-500 dark:text-slate-400">
-                  {timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : "Timeline access unresolved"}
+                  {timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : t("memory.overview.sources.timelineUnknown")}
                 </div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="font-medium">Knowledge diagnostics</div>
+                <div className="font-medium">{t("memory.overview.sources.knowledge")}</div>
                 <div className="mt-1 text-slate-500 dark:text-slate-400">
                   {memoryResult?.diagnostics
-                    ? `${memoryResult.diagnostics.backend} / ${memoryResult.diagnostics.provider ?? "no provider"}`
-                    : "Diagnostics not returned by gateway"}
+                    ? `${memoryResult.diagnostics.backend} / ${memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}`
+                    : t("memory.overview.sources.knowledgeMissing")}
                 </div>
               </div>
             </div>
@@ -772,54 +880,72 @@ export function MemoryView() {
 
       <div className={`rounded-xl md:rounded-lg overflow-hidden flex-1 flex flex-col relative transition-colors duration-500 min-h-[400px] ${activeSection === 'documents' || activeSection === 'footprints' || activeSection === 'search' || activeSection === 'knowledge' ? 'bg-transparent md:bg-white md:dark:bg-slate-900 border-none md:border md:border-slate-200 md:dark:border-slate-800 md:shadow-sm' : 'hidden'}`}>
         <AnimatePresence mode="wait">
-          {diagnosticsDrawer.open && diagnosticsSummary && (
-            <div className="absolute inset-y-0 right-0 z-20 w-full max-w-md border-l border-slate-200 bg-gradient-to-b from-white to-sky-50/70 p-4 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+          {diagnosticsDrawer.open && (healthProbeSummary || memoryResult?.diagnostics) && (
+            <div className="absolute inset-y-0 right-0 z-20 w-full max-w-md border-l border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold">Diagnostics drawer</div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Opened from {diagnosticsDrawer.source}</div>
+                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("memory.diag.drawer")}</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.diag.openedFrom", diagnosticsDrawer.source)}</div>
                 </div>
                 <button
                   onClick={() => setDiagnosticsDrawer((current) => ({ ...current, open: false }))}
-                  className="rounded-lg border border-slate-200 px-3 py-1 text-xs hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
                 >
                   Close
                 </button>
               </div>
-              <div className="mt-4 space-y-3">
-                <div className={`rounded-xl border p-3 text-sm shadow-sm ${diagnosticsTone(diagnosticsSummary)}`}>
-                  <div className="font-medium">Primary issue</div>
-                  <div className="mt-1">{diagnosticsSummary.primaryIssue ?? "No blocking issue reported"}</div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
-                    <div className="font-medium">Indexed</div>
-                    <div className="mt-1">{diagnosticsSummary.indexedFiles}</div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
-                    <div className="font-medium">Total</div>
-                    <div className="mt-1">{diagnosticsSummary.totalFiles}</div>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
-                    <div className="font-medium">Chunks</div>
-                    <div className="mt-1">{diagnosticsSummary.chunks}</div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {diagnosticsSummary.bySource.map((source) => (
-                    <div key={`drawer-${source.source}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="font-medium">{source.source}</div>
-                        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${sourceTone(source.source)}`}>
-                          {source.source}
-                        </span>
+                <div className="mt-4 space-y-3">
+                  {healthProbeSummary && (
+                    <>
+                      <DiagnosticsCard
+                        title={t("memory.diag.healthProbe")}
+                        className={diagnosticsTone(healthProbeSummary)}
+                      >
+                        <div>{healthProbeSummary.primaryIssue ?? t("memory.diag.noIssue")}</div>
+                      </DiagnosticsCard>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <DiagnosticsCard title={t("memory.diag.provider")} className="bg-white shadow-sm dark:bg-slate-950/60">
+                          <div>{healthProbeSummary.provider}</div>
+                        </DiagnosticsCard>
+                        <DiagnosticsCard title={t("memory.diag.model")} className="bg-white shadow-sm dark:bg-slate-950/60">
+                          <div>{healthProbeSummary.model}</div>
+                        </DiagnosticsCard>
+                        <DiagnosticsCard title={t("memory.diag.embeddings")} className="bg-white shadow-sm dark:bg-slate-950/60">
+                          <div>
+                            {healthProbeSummary.embeddingsReady === true
+                              ? t("memory.diag.ready")
+                              : healthProbeSummary.embeddingsReady === false
+                                ? t("memory.diag.unavailableShort")
+                                : t("memory.diag.unknownShort")}
+                          </div>
+                        </DiagnosticsCard>
                       </div>
-                      <div className="mt-1 text-slate-500 dark:text-slate-400">indexed {source.indexedFiles} / total {source.totalFiles} / chunks {source.chunks}</div>
+                      <DiagnosticsCard title={t("memory.diag.rawDoctor")}>
+                        <pre className="overflow-auto rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">{healthProbeSummary.rawPayload}</pre>
+                      </DiagnosticsCard>
+                    </>
+                  )}
+                  <DiagnosticsCard title={t("memory.diag.runtimeStatus")}>
+                    <div className="text-slate-500 dark:text-slate-400">
+                      {isLocalGatewaySession
+                        ? t("memory.diag.runtimePlaceholder")
+                        : t("memory.diag.runtimeRemoteUnavailable")}
                     </div>
-                  ))}
+                  </DiagnosticsCard>
+                  <DiagnosticsCard title={t("memory.diag.knowledge")}>
+                    {memoryResult?.diagnostics ? (
+                      <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
+                        <div>backend: {memoryResult.diagnostics.backend}</div>
+                        <div>provider: {memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}</div>
+                        <div>store: {memoryResult.diagnostics.builtinStorePath}</div>
+                        <div>sources: {memoryResult.diagnostics.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.missing")}</div>
+                    )}
+                  </DiagnosticsCard>
                 </div>
               </div>
-            </div>
           )}
           
           {activeSection === 'documents' && (
@@ -831,23 +957,23 @@ export function MemoryView() {
               <div className="border-b border-slate-200 bg-gradient-to-r from-white to-sky-50/70 px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
                 <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold">Documents</div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Real root memory documents with live reload and save.</div>
+                  <div className="text-sm font-semibold">{t("memory.documents.title")}</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.documents.desc")}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleReloadDocuments}
                     disabled={documentSaveState === "saving"}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
                   >
                     Reload
                   </button>
                   <button
                     onClick={handleSaveDocument}
                     disabled={!documentDirty || documentSaveState === "saving" || !canEdit}
-                    className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
+                    className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
                   >
-                    {documentSaveState === "saving" ? "Saving..." : "Save"}
+                    {documentSaveState === "saving" ? t("memory.documents.saving") : t("memory.documents.save")}
                   </button>
                 </div>
                 </div>
@@ -864,11 +990,11 @@ export function MemoryView() {
                     <input
                       value={documentQuery}
                       onChange={(event) => setDocumentQuery(event.target.value)}
-                      placeholder="Search inside the selected root document"
+                      placeholder={t("memory.documents.searchPlaceholder")}
                       className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 dark:border-slate-700 dark:bg-slate-950"
                     />
                     <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                      <span>{documentMatches.length} matches</span>
+                      <span>{t("memory.documents.matches", documentMatches.length)}</span>
                       <span>{documentMatches.length > 0 ? `${documentMatchIndex + 1}/${documentMatches.length}` : "0/0"}</span>
                       <button
                         onClick={() => setDocumentMatchIndex((current) => moveActiveSearchMatchIndex(current, documentMatches.length, -1))}
@@ -884,17 +1010,17 @@ export function MemoryView() {
                       >
                         Next
                       </button>
-                      <span>{documentDirty ? "Unsaved draft" : "Saved"}</span>
-                      <span>{documentSearchSource === "search_result" ? "Search-routed" : "Manual"}</span>
+                      <span>{documentDirty ? t("profile.unsaved") : t("profile.doc.exported")}</span>
+                      <span>{documentSearchSource === "search_result" ? t("memory.documents.searchSource.search") : t("memory.documents.searchSource.manual")}</span>
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                      Showing canonical document: {selectedDocument?.name ?? "none"}
+                      {t("memory.documents.current", selectedDocument?.name ?? t("memory.documents.none"))}
                     </span>
                     {!canEdit && (
                       <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-medium text-amber-700 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-300">
-                        Read-only gateway scope
+                        {t("memory.documents.readonlyScope")}
                       </span>
                     )}
                   </div>
@@ -909,8 +1035,8 @@ export function MemoryView() {
                     <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
                       <Search className="w-8 h-8 text-slate-400 dark:text-slate-500" />
                     </div>
-                    <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">No memories found</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Try adjusting your filters or search query.</p>
+                    <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">{t("memory.documents.emptyTitle")}</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">{t("memory.documents.emptyDesc")}</p>
                   </div>
                 ) : (
                   <table className="w-full text-[13px] text-left rtl:text-right whitespace-nowrap bg-white dark:bg-slate-900">
@@ -930,19 +1056,19 @@ export function MemoryView() {
                         <tr key={item.name} className={`cursor-pointer transition-colors group focus-within:bg-sky-50 dark:focus-within:bg-slate-800 ${item.name === selectedDocumentName ? "bg-sky-50 dark:bg-slate-800" : "hover:bg-[#f0f9ff] dark:hover:bg-slate-800"}`} tabIndex={0} onClick={() => setSelectedDocumentName(item.name)}>
                            <td className="px-4 py-3 text-slate-500 dark:text-slate-400 font-mono text-xs" dir="ltr">{item.updatedAtMs ? new Date(item.updatedAtMs).toLocaleString() : "-"}</td>
                            <td className="px-4 py-3">
-                             <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded text-xs font-medium">document</span>
+                             <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded text-xs font-medium">{t("memory.documents.kind")}</span>
                            </td>
                            <td className="px-4 py-3">
                              <span className="inline-flex items-center gap-1.5 text-xs text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20 px-2 py-1 rounded-md border border-cyan-100 dark:border-cyan-800/50">
                                <Network className="w-3 h-3" />
-                               {memoryResult?.workspace ?? "workspace"}
+                               {memoryResult?.workspace ?? t("memory.documents.workspaceFallback")}
                              </span>
                            </td>
                            <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{getAgentBadge(selectedAgentId)}</td>
                            <td className="px-4 py-3 text-slate-900 dark:text-slate-100 truncate max-w-[400px]" title={item.content ?? item.path}>{item.content ? item.content.slice(0, 120) : item.path}</td>
                            <td className="px-4 py-3 text-center">
-                             {!item.missing && <div className="w-2 h-2 rounded-full bg-[#16a34a] mx-auto" title="available"></div>}
-                             {item.missing && <div className="w-2 h-2 rounded-full bg-[#dc2626] mx-auto" title="missing"></div>}
+                             {!item.missing && <div className="w-2 h-2 rounded-full bg-[#16a34a] mx-auto" title={t("memory.documents.status.available")}></div>}
+                             {item.missing && <div className="w-2 h-2 rounded-full bg-[#dc2626] mx-auto" title={t("memory.documents.status.missing")}></div>}
                            </td>
                            <td className="px-4 py-3 text-right opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                              <button className="text-sky-600 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 p-1 rounded hover:bg-sky-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"><ChevronRight className="w-4 h-4 rtl:rotate-180" /></button>
@@ -954,13 +1080,17 @@ export function MemoryView() {
                 )}
                 {selectedDocument && (
                   <div className="border-t border-slate-200 px-4 py-4 dark:border-slate-800">
-                    <div className="mb-3 rounded-xl border border-sky-200 bg-gradient-to-r from-white to-sky-50/60 p-3 text-xs shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
-                      <div className="font-semibold text-slate-700 dark:text-slate-200">{selectedDocument.name}</div>
-                      <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{selectedDocument.path}</div>
-                      <div className="mt-1 text-slate-500 dark:text-slate-400">Last updated: {selectedDocumentUpdatedAtLabel}</div>
+                    <div className="mb-3 overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white px-5 py-4 text-slate-700 shadow-sm dark:border-slate-700/80 dark:from-slate-900 dark:to-slate-900 dark:text-slate-300">
+                      <div className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-sky-400 to-violet-400 dark:from-sky-500 dark:to-violet-500" />
+                      <div className="relative pl-1">
+                        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500">{t("memory.documents.source")}</div>
+                        <div className="font-semibold text-slate-800 dark:text-slate-200">{selectedDocument.name}</div>
+                        <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{selectedDocument.path}</div>
+                        <div className="mt-2 text-slate-500 dark:text-slate-400">{t("memory.documents.updated", selectedDocumentUpdatedAtLabel)}</div>
+                      </div>
                     </div>
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Highlighted preview</div>
-                    <div className="whitespace-pre-wrap rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/40 p-4 text-sm leading-6 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.documents.preview")}</div>
+                    <div className="whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-800 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-100">
                       {buildHighlightedTextSegments(selectedDocumentContent, documentMatches).map((segment, index) => (
                         segment.matchIndex === null ? (
                           <span key={index}>{segment.text}</span>
@@ -975,12 +1105,12 @@ export function MemoryView() {
                       ))}
                     </div>
                     <div className="mt-4">
-                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Editable content</div>
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.documents.editor")}</div>
                       <textarea
                         value={selectedDocumentContent}
                         onChange={(event) => handleDocumentDraftChange(event.target.value)}
                         readOnly={!canEdit}
-                        className="min-h-[220px] w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                        className="min-h-[220px] w-full rounded-[24px] border border-slate-200/90 bg-white px-4 py-4 text-sm leading-7 text-slate-800 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-sky-300 focus:shadow-[0_0_0_4px_rgba(186,230,253,0.55)] dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500 dark:focus:shadow-[0_0_0_4px_rgba(14,165,233,0.18)]"
                       />
                     </div>
                   </div>
@@ -994,8 +1124,8 @@ export function MemoryView() {
                      <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
                        <Search className="w-5 h-5 text-slate-400 dark:text-slate-500" />
                      </div>
-                     <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">No memories found</h3>
-                     <p className="text-xs text-slate-500 dark:text-slate-400">Try adjusting your filters.</p>
+                     <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t("memory.documents.emptyTitle")}</h3>
+                     <p className="text-xs text-slate-500 dark:text-slate-400">{t("memory.documents.emptyDesc")}</p>
                    </div>
                  ) : (
                    visibleDocuments.map((item) => (
@@ -1006,7 +1136,7 @@ export function MemoryView() {
                              {getAgentBadge(selectedAgentId)}
                            </div>
                            <span className="text-[10px] text-cyan-600 dark:text-cyan-400 font-medium flex items-center gap-1">
-                             <Network className="w-3 h-3" /> {memoryResult?.workspace ?? "workspace"}
+                             <Network className="w-3 h-3" /> {memoryResult?.workspace ?? t("memory.documents.workspaceFallback")}
                            </span>
                          </div>
                          <span className="text-[11px] text-slate-400 font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-0.5 rounded" dir="ltr">{item.updatedAtMs ? new Date(item.updatedAtMs).toLocaleTimeString() : "-"}</span>
@@ -1017,8 +1147,8 @@ export function MemoryView() {
                            <FileDigit className="w-3 h-3"/> document
                          </span>
                          <div className="flex items-center gap-1.5 text-[11px] font-medium">
-                           {!item.missing && <><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div><span className="text-emerald-600 dark:text-emerald-400">available</span></>}
-                           {item.missing && <><div className="w-1.5 h-1.5 rounded-full bg-red-500"></div><span className="text-red-600 dark:text-red-400">missing</span></>}
+                           {!item.missing && <><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div><span className="text-emerald-600 dark:text-emerald-400">{t("memory.documents.status.available")}</span></>}
+                           {item.missing && <><div className="w-1.5 h-1.5 rounded-full bg-red-500"></div><span className="text-red-600 dark:text-red-400">{t("memory.documents.status.missing")}</span></>}
                          </div>
                        </div>
                      </div>
@@ -1027,7 +1157,7 @@ export function MemoryView() {
               </div>
 
               <div className="hidden md:flex bg-[#f8fafc] dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400 justify-between items-center shrink-0">
-                 <span>{visibleDocuments.length} real documents loaded</span>
+                 <span>{t("memory.documents.footer", visibleDocuments.length)}</span>
                  <div className="flex gap-1.5">
                    <button disabled className="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-400 dark:text-slate-600 cursor-not-allowed shadow-sm">{t("memory.page.prev")}</button>
                    <button className="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-95 transition-all">{t("memory.page.next")}</button>
@@ -1045,39 +1175,39 @@ export function MemoryView() {
                <div className="mx-auto mb-4 max-w-3xl px-2 md:px-0">
                  <div className="grid gap-3 md:grid-cols-[1.1fr_0.9fr]">
                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Access mode</div>
+                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.footprints.accessMode")}</div>
                      <div className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">
-                       {resolveTimelineModeLabel(timelineAccess, timelineResult)}
+                       {resolveTimelineModeLabel(timelineAccess, timelineResult, t)}
                      </div>
                      <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                       {timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : "Timeline access unresolved"}
+                       {timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : t("memory.overview.sources.timelineUnknown")}
                      </div>
                    </div>
                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Probe preset</div>
+                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.footprints.probePreset")}</div>
                      <div className="mt-2 grid gap-2">
                        <input
                          value={timelineProbeRange.startDate}
                          onChange={(event) => setTimelineProbeRange((current) => ({ ...current, startDate: event.target.value }))}
                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-sky-500 dark:border-slate-700 dark:bg-slate-950"
-                         placeholder="YYYY-MM-DD"
+                         placeholder={t("memory.footprints.probePlaceholder")}
                        />
                        <input
                          value={timelineProbeRange.endDate}
                          onChange={(event) => setTimelineProbeRange((current) => ({ ...current, endDate: event.target.value }))}
                          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-sky-500 dark:border-slate-700 dark:bg-slate-950"
-                         placeholder="YYYY-MM-DD"
+                         placeholder={t("memory.footprints.probePlaceholder")}
                        />
                      </div>
                      <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                       Default range is the latest 7 days. Maximum probe span is 31 days. Remote probing stays honest: no fake directory listing, only range-based checks.
+                       {t("memory.footprints.probeHint")}
                      </div>
                      <button
                        onClick={handleProbeTimelineRange}
                        className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800 dark:bg-sky-600 dark:hover:bg-sky-500"
                      >
                        <Clock className="w-3.5 h-3.5" />
-                       {timelineProbeState === "probing" ? "Probing..." : timelineProbeState === "done" ? "Probe complete" : timelineProbeState === "error" ? "Retry probe" : "Probe range"}
+                       {timelineProbeState === "probing" ? t("memory.footprints.probe.probing") : timelineProbeState === "done" ? t("memory.footprints.probe.done") : timelineProbeState === "error" ? t("memory.footprints.probe.error") : t("memory.footprints.probe.idle")}
                      </button>
                    </div>
                  </div>
@@ -1094,8 +1224,8 @@ export function MemoryView() {
                       <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
                         <Footprints className="w-8 h-8 text-slate-400 dark:text-slate-500" />
                       </div>
-                      <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">No footprint found</h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">There are no memory footprints for the current selection.</p>
+                      <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">{t("memory.footprints.emptyTitle")}</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{t("memory.footprints.emptyDesc")}</p>
                     </div>
                 ) : (
                   <div className="relative border-l-[2px] rtl:border-l-0 rtl:border-r-[2px] border-slate-200 dark:border-slate-800 ml-4 rtl:ml-0 rtl:mr-4 md:ml-8 rtl:md:mr-8 space-y-8 md:space-y-10 pb-8 pt-2">
@@ -1108,20 +1238,20 @@ export function MemoryView() {
                             <div className="flex flex-wrap items-center gap-3 pt-0.5 md:pt-1">
                               <h3 className="text-[15px] md:text-[16px] font-bold text-slate-800 dark:text-slate-200 tracking-tight" dir="ltr">{group.dateLabel}</h3>
                               <span className="text-[10px] md:text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-200/60 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200/80 dark:border-slate-700">
-                                {group.entries.length} entries
+                                {t("memory.footprints.entries", group.entries.length)}
                               </span>
                               {group.probeDay && (
                                 <span className="text-[10px] md:text-[11px] font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-900/30 border border-sky-100 dark:border-sky-800/50 px-2 py-0.5 rounded-full">
-                                  probe: {group.probeDay.status}
+                                  {t("memory.footprints.probeStatus", group.probeDay.status)}
                                 </span>
                               )}
                             </div>
                             <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto] md:items-start">
                               <div className="text-xs leading-5 text-slate-600 dark:text-slate-300">
-                                {group.entries[0]?.content ? group.entries[0].content.slice(0, 180) : group.entries[0]?.path ?? "No detail available"}
+                                {group.entries[0]?.content ? group.entries[0].content.slice(0, 180) : group.entries[0]?.path ?? t("memory.footprints.noDetail")}
                               </div>
                               <div className={`rounded-xl border px-3 py-2 text-[11px] font-medium shadow-sm ${group.entries.some((entry) => entry.name === selectedTimelineEntryName) ? "border-sky-200 bg-white text-sky-700 dark:border-sky-700 dark:bg-slate-900 dark:text-sky-300" : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>
-                                {group.entries[0]?.updatedAtMs ? new Date(group.entries[0].updatedAtMs).toLocaleTimeString() : "No time"}
+                                {group.entries[0]?.updatedAtMs ? new Date(group.entries[0].updatedAtMs).toLocaleTimeString() : t("memory.footprints.noTime")}
                               </div>
                             </div>
                           </div>
@@ -1137,7 +1267,7 @@ export function MemoryView() {
                                       </span>
                                       <span className="text-[10px] font-medium text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-900/20 px-1.5 py-0.5 rounded border border-cyan-100 dark:border-cyan-800/50 flex items-center gap-1">
                                         <Network className="w-2.5 h-2.5 md:w-3 md:h-3" />
-                                        <span className="max-w-[120px] md:max-w-none truncate">{timelineAccess?.mode ?? timelineResult?.source ?? "timeline"}</span>
+                                        <span className="max-w-[120px] md:max-w-none truncate">{timelineAccess?.mode ?? timelineResult?.source ?? t("memory.footprints.timelineFallback")}</span>
                                       </span>
                                       {getAgentBadge(selectedAgentId)}
                                     </div>
@@ -1155,45 +1285,45 @@ export function MemoryView() {
                     </div>
                   )}
                </div>
-                 <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+                 <div className="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white p-5 text-slate-700 shadow-sm dark:border-slate-700/80 dark:from-slate-900 dark:to-slate-900 dark:text-slate-300">
                  <div className="flex items-center justify-between gap-3">
                    <div>
-                      <div className="text-sm font-semibold">Daily detail card</div>
-                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selectedTimelineDateLabel || selectedTimelineEntryName || "Select a footprint result"}</div>
+                      <div className="text-sm font-semibold">{t("memory.footprints.detailTitle")}</div>
+                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selectedTimelineDateLabel || selectedTimelineEntryName || t("memory.footprints.detailPrompt")}</div>
                     </div>
-                   <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
+                   <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                      read only
                    </span>
                  </div>
                  {timelineSelectionHint && (
-                   <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
+                   <div className="mt-3 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-300">
                      {timelineSelectionHint}
                    </div>
                  )}
-                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Selected date</div>
+                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.footprints.selectedDate")}</div>
                    <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                     {selectedTimelineEntryName ? selectedTimelineEntryName.replace(/^memory\//, "").replace(/\.md$/i, "") : "No date selected"}
+                     {selectedTimelineEntryName ? selectedTimelineEntryName.replace(/^memory\//, "").replace(/\.md$/i, "") : t("memory.footprints.noDate")}
                    </div>
                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                     <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-3 text-sm shadow-sm dark:border-sky-800/60 dark:bg-slate-800">
-                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Source mode</div>
-                       <div className="mt-1 text-slate-700 dark:text-slate-200">{resolveTimelineModeLabel(timelineAccess, timelineResult)}</div>
+                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-950/50">
+                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.footprints.sourceMode")}</div>
+                       <div className="mt-1 text-slate-800 dark:text-slate-100">{resolveTimelineModeLabel(timelineAccess, timelineResult, t)}</div>
                      </div>
-                     <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-3 text-sm shadow-sm dark:border-sky-800/60 dark:bg-slate-800">
-                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Current entry</div>
-                       <div className="mt-1 break-all text-slate-700 dark:text-slate-200">{selectedTimelineEntryName || "N/A"}</div>
+                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-950/50">
+                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.footprints.currentEntry")}</div>
+                       <div className="mt-1 break-all text-slate-800 dark:text-slate-100">{selectedTimelineEntryName || t("memory.search.na")}</div>
                      </div>
                    </div>
                  </div>
-                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Body</div>
-                   <div className="text-sm leading-6 text-slate-700 dark:text-slate-300">
+                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.footprints.body")}</div>
+                   <div className="text-sm leading-7 text-slate-800 dark:text-slate-100">
                      {_timelineEntryLoading
-                       ? "Loading daily detail..."
+                       ? t("memory.footprints.loading")
                        : _timelineEntryError
                          ? _timelineEntryError
-                         : _timelineEntryContent || "No daily detail content loaded."}
+                         : _timelineEntryContent || t("memory.footprints.noBody")}
                    </div>
                  </div>
                  </div>
@@ -1209,28 +1339,52 @@ export function MemoryView() {
             >
               <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
                 <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                  <div className="text-sm font-semibold">Semantic search</div>
-                  <div className={`mt-3 rounded-xl border p-3 text-xs shadow-sm ${diagnosticsTone(diagnosticsSummary)}`}>
+                  <div className="text-sm font-semibold">{t("memory.search.title")}</div>
+                  <div className={`mt-3 rounded-2xl border p-3 text-xs shadow-sm ${diagnosticsTone(healthProbeSummary)}`}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="font-semibold">Diagnostics bar</div>
-                        <div className="mt-1">{diagnosticsSummary ? `${diagnosticsSummary.provider} / ${diagnosticsSummary.model}` : "Diagnostics unavailable"}</div>
-                        <div className="mt-1">{diagnosticsSummary?.primaryIssue ?? "Search indexing healthy"}</div>
+                        <div className="font-semibold">{t("memory.search.diagBar")}</div>
+                        <div className="mt-1">{healthProbeSummary ? `${healthProbeSummary.provider} / ${healthProbeSummary.model}` : t("memory.diag.unavailable")}</div>
+                        <div className="mt-1">{healthProbeSummary ? (healthProbeSummary.embeddingsReady === true ? t("memory.search.diagHealthy") : healthProbeSummary.primaryIssue ?? t("memory.diag.unavailable")) : t("memory.diag.unavailable")}</div>
                       </div>
                       <button
                         onClick={() => setDiagnosticsDrawer({ open: true, source: "search" })}
-                        className="rounded-lg border border-current/20 bg-white/70 px-3 py-1 text-xs font-medium backdrop-blur dark:bg-slate-900/60"
+                        className="rounded-full border border-current/20 bg-white/90 px-3 py-1 text-xs font-semibold shadow-sm backdrop-blur dark:bg-slate-900/60"
                       >
                         Open diagnostics
                       </button>
                     </div>
                   </div>
-                  <div className="mt-4 flex gap-2">
+                  <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
+                    <div className="font-semibold">Runtime status</div>
+                    <div className="mt-1 text-slate-500 dark:text-slate-400">Runtime-level indexed files / chunks / by-source totals are not available from current LAN Gateway sources. This area is intentionally left informational until a dedicated local runtime bridge exists.</div>
+                  </div>
+                  <DiagnosticsCard title={t("memory.search.probeNote")} className="mt-3 text-xs">
+                    <div className="text-slate-500 dark:text-slate-400">{t("memory.search.probeNote")}</div>
+                  </DiagnosticsCard>
+                  <DiagnosticsCard title={t("memory.search.commands.title")} className="mt-3 text-xs">
+                    <div className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                      {healthProbeSummary?.embeddingsReady
+                        ? t("memory.search.commands.providerReady")
+                        : t("memory.search.commands.providerMissing")}
+                    </div>
+                    <div className="text-slate-500 dark:text-slate-400">
+                      {commandGuideDescription}
+                    </div>
+                    <pre className="mt-3 overflow-auto rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">{commandGuide}</pre>
+                    <button
+                      onClick={() => void handleCopyCommandGuide()}
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-sky-300 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-sky-700 dark:hover:text-sky-300"
+                    >
+                      {copiedCommandGuide ? t("memory.search.commands.copied") : t("memory.search.commands.copy")}
+                    </button>
+                  </DiagnosticsCard>
+                <div className="mt-4 flex gap-2">
                   <input
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search memory, footprints, and transcripts"
-                    className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 dark:border-slate-700 dark:bg-slate-950"
+                    placeholder={t("memory.search.inputPlaceholder")}
+                    className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-sky-300 focus:bg-white dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500"
                     />
                     <button
                       onClick={handleRunSemanticSearch}
@@ -1251,12 +1405,12 @@ export function MemoryView() {
                   <div className="mb-4 flex flex-wrap gap-2">
                     {searchGroups.map(({ group, count }) => (
                       <span key={group} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                        {group} · {count}
+                        {t("memory.search.groupCount", group, count)}
                       </span>
                     ))}
                   </div>
                   <div className="mb-4 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/60 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-                    Search open routing is complete. The compact diagnostics bar above and the diagnostics drawer both read from the same summary model, while Knowledge reuses that same summary downstream.
+                    {t("memory.search.routingNote")}
                   </div>
                   <div className="mb-4 flex flex-wrap gap-2">
                     {(searchResult?.results ?? []).slice(0, 8).map((entry) => (
@@ -1268,17 +1422,22 @@ export function MemoryView() {
                       </span>
                     ))}
                   </div>
-                  {diagnosticsSummary && (
-                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="font-medium">Shared diagnostics summary</div>
-                      <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.provider} / {diagnosticsSummary.model}</div>
-                      <div className="mt-1 text-slate-500 dark:text-slate-400">Top source: {diagnosticsSummary.bySource[0]?.source ?? "n/a"}</div>
-                    </div>
+                  {healthProbeSummary && (
+                    <DiagnosticsCard title={t("memory.diag.healthProbe")} className="mb-4 text-xs">
+                      <div className="mt-1 text-slate-500 dark:text-slate-400">{healthProbeSummary.provider} / {healthProbeSummary.model}</div>
+                      <div className="mt-1 text-slate-500 dark:text-slate-400">embeddings: {healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")}</div>
+                    </DiagnosticsCard>
                   )}
-                  {diagnosticsSummary && memoryStatusError && (
+                  {healthProbeSummary && memoryStatusError && (
                     <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
                       {memoryStatusError}
                     </div>
+                  )}
+                  {searchResult?.diagnostics && (
+                    <DiagnosticsCard title={t("memory.diag.search")} className="mb-4 text-xs">
+                      <div className="mt-1 text-slate-500 dark:text-slate-400">{searchResult.diagnostics.backend} / {searchResult.diagnostics.storeDriver}</div>
+                      <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{searchResult.diagnostics.storePath}</div>
+                    </DiagnosticsCard>
                   )}
                   {searchError ? (
                     <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
@@ -1287,36 +1446,42 @@ export function MemoryView() {
                     ) : searchResult ? (
                       <div className="space-y-3">
                       {searchResult.results.map((entry) => (
-                        <article key={entry.id} className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/50 p-4 shadow-sm transition hover:border-sky-300 dark:border-slate-800 dark:bg-slate-950/60 dark:hover:border-sky-700">
+                        <article key={entry.id} className="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white p-4 text-slate-700 shadow-sm transition hover:border-sky-300 hover:shadow-md dark:border-slate-700/80 dark:from-slate-900 dark:to-slate-900 dark:text-slate-300 dark:hover:border-sky-700">
                           <div className="flex flex-wrap items-center gap-2 text-xs">
                             <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 font-medium text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">{entry.sourceKind}</span>
                             <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">{entry.openTarget}</span>
                           </div>
-                          <div className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">{resultSubtitle(entry.path, entry.openTarget)}</div>
-                          <div className="mt-3 break-all text-sm font-semibold text-slate-900 dark:text-slate-100">{entry.path}</div>
-                          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">{entry.snippet}</p>
-                          <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">Target route: {entry.openTarget}.</div>
+                          <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{resultSubtitle(entry.path, entry.openTarget)}</div>
+                          <div className="mt-3 break-all text-sm font-semibold text-slate-800 dark:text-slate-100">{entry.path}</div>
+                          <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700 dark:text-slate-300">{entry.snippet}</p>
+                          <div className="mt-3 rounded-2xl border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300">
+                            {entry.canonicalDocumentName ?? entry.timelineEntryName ?? t("memory.search.resultFallback")}
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                            <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{t("memory.search.targetRoute", entry.openTarget)}</span>
+                            {typeof entry.score === "number" && <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{t("memory.search.score", entry.score.toFixed(3))}</span>}
+                          </div>
                           <button
                             onClick={() => void handleOpenSearchEntry(entry)}
-                            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800 dark:bg-sky-600 dark:hover:bg-sky-500"
+                            className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 dark:bg-sky-600 dark:hover:bg-sky-500"
                           >
-                            Open result
+                            {resultRouteLabel(entry.openTarget, t)}
                             <ChevronRight className="w-3.5 h-3.5" />
                           </button>
                         </article>
                       ))}
                       {searchResult.results.length === 0 && (
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                          No semantic search results returned for this query.
+                          {t("memory.search.empty")}
                         </div>
                       )}
                     </div>
                   ) : (
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                      Run a real gateway-backed search to populate this section.
+                      {t("memory.search.idle")}
                     </div>
                   )}
-                  {!diagnosticsSummary && memoryStatusError && (
+                  {!healthProbeSummary && memoryStatusError && (
                     <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
                       {memoryStatusError}
                     </div>
@@ -1325,7 +1490,7 @@ export function MemoryView() {
                     <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <div className="text-sm font-semibold">Read-only detail</div>
+                          <div className="text-sm font-semibold">{t("memory.search.detailTitle")}</div>
                           <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{searchDetail.path}</div>
                         </div>
                         <button
@@ -1336,11 +1501,11 @@ export function MemoryView() {
                         </button>
                       </div>
                       <div className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        {searchDetail.sourceKind} · read only source file
+                        {t("memory.search.detailMeta", searchDetail.sourceKind)}
                       </div>
                       <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
                         {searchDetail.loading
-                          ? "Loading source content..."
+                          ? t("memory.search.detailLoading")
                           : searchDetail.error
                             ? searchDetail.error
                             : searchDetail.content || searchDetail.snippet}
@@ -1365,12 +1530,12 @@ export function MemoryView() {
              >
                 <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
                   <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                    <div className="mb-4 text-sm font-semibold">External knowledge inputs</div>
-                    <div className={`mb-4 rounded-xl border p-3 text-xs ${diagnosticsTone(diagnosticsSummary)}`}>
+                    <div className="mb-4 text-sm font-semibold">{t("memory.knowledge.title")}</div>
+                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <div className="font-semibold">Knowledge diagnostics summary</div>
-                          <div className="mt-1">{diagnosticsSummary ? `${diagnosticsSummary.provider} / ${diagnosticsSummary.model}` : "Diagnostics unavailable"}</div>
+                          <div className="font-semibold">{t("memory.knowledge.summary")}</div>
+                          <div className="mt-1">{memoryResult?.diagnostics ? `${memoryResult.diagnostics.backend} / ${memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}` : t("memory.diag.unavailable")}</div>
                         </div>
                         <button
                           onClick={() => setDiagnosticsDrawer({ open: true, source: "knowledge" })}
@@ -1380,34 +1545,55 @@ export function MemoryView() {
                         </button>
                       </div>
                     </div>
+                    {healthProbeSummary && (
+                      <DiagnosticsCard
+                        title={t("memory.diag.healthProbe")}
+                        className={`mb-4 text-xs ${diagnosticsTone(healthProbeSummary)}`}
+                      >
+                        <div>{healthProbeSummary.provider} / {healthProbeSummary.model}</div>
+                        <div className="mt-1">
+                          embeddings: {healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")}
+                        </div>
+                        {healthProbeSummary.embeddingsError && (
+                          <div className="mt-1 text-rose-600 dark:text-rose-300">{healthProbeSummary.embeddingsError}</div>
+                        )}
+                      </DiagnosticsCard>
+                    )}
+                    <DiagnosticsCard title={t("memory.diag.runtimeStatus")} className="mb-4 text-xs">
+                      <div className="text-slate-500 dark:text-slate-400">
+                        {isLocalGatewaySession
+                          ? t("memory.diag.runtimePlaceholder")
+                          : t("memory.diag.runtimeRemoteUnavailable")}
+                      </div>
+                    </DiagnosticsCard>
                     {memoryResult?.diagnostics ? (
                       <div className="space-y-3 text-sm">
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                          <div className="font-medium">Backend</div>
+                          <div className="font-medium">{t("memory.knowledge.backend")}</div>
                           <div className="mt-1 text-slate-500 dark:text-slate-400">
                             {memoryResult.diagnostics.backend} / {memoryResult.diagnostics.provider ?? "no provider"}
                           </div>
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                          <div className="font-medium">Builtin store</div>
+                          <div className="font-medium">{t("memory.knowledge.store")}</div>
                           <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{memoryResult.diagnostics.builtinStorePath}</div>
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                          <div className="font-medium">Sources</div>
-                          <div className="mt-1 text-slate-500 dark:text-slate-400">{memoryResult.diagnostics.sources.join(", ") || "No sources reported"}</div>
+                          <div className="font-medium">{t("memory.knowledge.sources")}</div>
+                          <div className="mt-1 text-slate-500 dark:text-slate-400">{memoryResult.diagnostics.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
                         </div>
                       </div>
                     ) : (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-300">
-                        Gateway returned memory documents, but did not include diagnostics for external knowledge inputs.
+                        {t("memory.knowledge.missing")}
                       </div>
                     )}
                     <div className="mt-4 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/60 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
-                      Memory surfaces should inherit Profile's softer, richer visual language over time: more color accents, friendlier copy, and less rigid engineering framing.
+                      {t("memory.knowledge.note")}
                     </div>
                   </section>
                   <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                    <div className="mb-4 text-sm font-semibold">Resolved source paths</div>
+                    <div className="mb-4 text-sm font-semibold">{t("memory.knowledge.paths")}</div>
                     {externalSources.length > 0 ? (
                       <div className="space-y-2">
                         {externalSources.map((source) => (
@@ -1419,64 +1605,46 @@ export function MemoryView() {
                       </div>
                     ) : memoryResult?.diagnostics ? (
                       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                        Diagnostics are present, but no extra paths or QMD paths were reported.
+                        {t("memory.knowledge.pathsEmpty")}
                       </div>
                     ) : (
                       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                        No path inventory can be shown because diagnostics are unavailable.
+                        {t("memory.knowledge.pathsUnavailable")}
                       </div>
                     )}
                   </section>
                   <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-2">
-                    <div className="mb-4 text-sm font-semibold">Diagnostics drawer fields</div>
-                    {diagnosticsSummary ? (
+                    <div className="mb-4 text-sm font-semibold">{t("memory.knowledge.drawerFields")}</div>
+                    {healthProbeSummary || memoryResult?.diagnostics ? (
                       <div className="space-y-3">
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
-                          <div className="font-medium">Primary issue</div>
-                          <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.primaryIssue ?? "No blocking issue reported"}</div>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {diagnosticsSummary.primaryIssue ? (
-                              <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 dark:border-rose-800/70 dark:bg-rose-950/30 dark:text-rose-300">
-                                Primary Issue
-                              </span>
-                            ) : (
-                              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/30 dark:text-emerald-300">
-                                Healthy
-                              </span>
-                            )}
+                        <DiagnosticsCard title={t("memory.diag.healthProbe")}>
+                          <div className="mt-1 text-slate-500 dark:text-slate-400">{healthProbeSummary?.primaryIssue ?? t("memory.diag.noIssue")}</div>
+                          <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">provider: {healthProbeSummary?.provider ?? t("memory.diag.unavailable")}</div>
+                          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">embeddings: {healthProbeSummary ? (healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")) : t("memory.diag.unknownShort")}</div>
+                        </DiagnosticsCard>
+                        <DiagnosticsCard title={t("memory.diag.runtimeStatus")}>
+                          <div className="text-slate-500 dark:text-slate-400">
+                            {isLocalGatewaySession
+                              ? t("memory.diag.runtimePlaceholder")
+                              : t("memory.diag.runtimeRemoteUnavailable")}
                           </div>
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-3">
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="font-medium">Indexed files</div>
-                            <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.indexedFiles}</div>
-                          </div>
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="font-medium">Total files</div>
-                            <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.totalFiles}</div>
-                          </div>
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="font-medium">Chunks</div>
-                            <div className="mt-1 text-slate-500 dark:text-slate-400">{diagnosticsSummary.chunks}</div>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          {diagnosticsSummary.bySource.map((source) => (
-                            <div key={source.source} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="font-medium">{source.source}</div>
-                                <span className={`rounded-full border px-3 py-1 text-xs font-medium ${sourceTone(source.source)}`}>
-                                  {source.source}
-                                </span>
-                              </div>
-                              <div className="mt-1 text-slate-500 dark:text-slate-400">indexed {source.indexedFiles} / total {source.totalFiles} / chunks {source.chunks}</div>
+                        </DiagnosticsCard>
+                        <DiagnosticsCard title={t("memory.diag.knowledge")}>
+                          {memoryResult?.diagnostics ? (
+                            <div className="mt-2 space-y-1 text-xs text-slate-500 dark:text-slate-400">
+                              <div>backend: {memoryResult.diagnostics.backend}</div>
+                              <div>provider: {memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}</div>
+                              <div>store: {memoryResult.diagnostics.builtinStorePath}</div>
+                              <div>sources: {memoryResult.diagnostics.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
                             </div>
-                          ))}
-                        </div>
+                          ) : (
+                            <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.missing")}</div>
+                          )}
+                        </DiagnosticsCard>
                       </div>
                     ) : (
                       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                        Diagnostics drawer cannot render because memory status data is unavailable.
+                        {t("memory.knowledge.diagUnavailable")}
                       </div>
                     )}
                   </section>
