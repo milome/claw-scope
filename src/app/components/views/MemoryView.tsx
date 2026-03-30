@@ -131,14 +131,19 @@ export function MemoryView() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchResult, setSearchResult] = useState<GatewayAgentMemorySearchResult | null>(null);
   const [searchDetail, setSearchDetail] = useState<SearchDetailState>(null);
+  const [searchOpenHint, setSearchOpenHint] = useState<string | null>(null);
   const [selectedDocumentName, setSelectedDocumentName] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [documentQuery, setDocumentQuery] = useState("");
   const [documentMatchIndex, setDocumentMatchIndex] = useState(-1);
+  const [documentSearchSource, setDocumentSearchSource] = useState<"manual" | "search_result">("manual");
+  const [documentSearchHint, setDocumentSearchHint] = useState<string | null>(null);
   const [documentSaveState, setDocumentSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [documentSaveMessage, setDocumentSaveMessage] = useState<string | null>(null);
   const [timelineFocus] = useState<MemoryTimelineFocusFilter>("all");
   const [selectedTimelineEntryName, setSelectedTimelineEntryName] = useState("");
+  const [selectedTimelineDateLabel, setSelectedTimelineDateLabel] = useState("");
+  const [timelineSelectionHint, setTimelineSelectionHint] = useState<string | null>(null);
   const [_timelineEntryContent, setTimelineEntryContent] = useState("");
   const [_timelineEntryLoading, setTimelineEntryLoading] = useState(false);
   const [_timelineEntryError, setTimelineEntryError] = useState<string | null>(null);
@@ -376,6 +381,18 @@ export function MemoryView() {
     setDocumentMatchIndex(documentMatches.length > 0 ? 0 : -1);
   }, [documentMatches.length, selectedDocumentName]);
 
+  useEffect(() => {
+    if (!selectedTimelineEntryName) {
+      setSelectedTimelineDateLabel("");
+      return;
+    }
+
+    const match = filteredFootprintGroups.find((group) =>
+      group.entries.some((entry) => entry.name === selectedTimelineEntryName),
+    );
+    setSelectedTimelineDateLabel(match?.dateLabel ?? "");
+  }, [filteredFootprintGroups, selectedTimelineEntryName]);
+
   const diagnosticsSummary = useMemo<DiagnosticsSummary | null>(() => {
     if (!memoryStatus) {
       return null;
@@ -543,15 +560,30 @@ export function MemoryView() {
   const handleOpenSearchEntry = async (entry: NonNullable<GatewayAgentMemorySearchResult>["results"][number]) => {
     if (entry.openTarget === "documents") {
       setSelectedDocumentName(entry.canonicalDocumentName ?? entry.path.split("/").pop() ?? "");
+      const derivedQuery = entry.snippet.trim().split(/\s+/).find((token) => token.length >= 3) ?? entry.snippet.slice(0, 24).trim();
+      setDocumentQuery(derivedQuery);
+      setDocumentSearchSource("search_result");
+      setDocumentSearchHint(`Opened from search: root_memory -> Documents (${entry.path})`);
+      setTimelineSelectionHint(null);
+      setSearchOpenHint(`Documents route opened for ${entry.path}`);
       setActiveSection("documents");
       return;
     }
 
     if (entry.openTarget === "footprints") {
       setSelectedTimelineEntryName(entry.timelineEntryName ?? entry.path.split("/").slice(-2).join("/"));
+      const derivedDate = entry.timelineEntryName?.replace(/^memory\//, "").replace(/\.md$/i, "")
+        ?? entry.path.split("/").slice(-1)[0]?.replace(/\.md$/i, "")
+        ?? "";
+      setSelectedTimelineDateLabel(derivedDate);
+      setTimelineSelectionHint(`Opened from search: daily_memory -> Footprints (${derivedDate})`);
+      setDocumentSearchHint(null);
+      setSearchOpenHint(`Footprints route opened for ${entry.path}`);
       setActiveSection("footprints");
       return;
     }
+
+    setSearchOpenHint(`Read-only detail opened for ${entry.path}`);
 
     setSearchDetail({
       title: entry.path.split("/").pop() ?? entry.path,
@@ -748,6 +780,11 @@ export function MemoryView() {
                   </button>
                 </div>
               </div>
+              {documentSearchHint && (
+                <div className="border-b border-sky-200 bg-sky-50 px-4 py-2 text-xs text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
+                  {documentSearchHint}
+                </div>
+              )}
               {/* Documents View */}
               <div className="hidden md:flex flex-col flex-1 overflow-auto bg-white dark:bg-slate-900 relative">
                 <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
@@ -758,9 +795,9 @@ export function MemoryView() {
                       placeholder="Search inside the selected root document"
                       className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 dark:border-slate-700 dark:bg-slate-950"
                     />
-                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                          <span>{documentMatches.length} matches</span>
-                          <span>{documentMatches.length > 0 ? `${documentMatchIndex + 1}/${documentMatches.length}` : "0/0"}</span>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span>{documentMatches.length} matches</span>
+                      <span>{documentMatches.length > 0 ? `${documentMatchIndex + 1}/${documentMatches.length}` : "0/0"}</span>
                       <button
                         onClick={() => setDocumentMatchIndex((current) => moveActiveSearchMatchIndex(current, documentMatches.length, -1))}
                         disabled={documentMatches.length === 0}
@@ -776,6 +813,7 @@ export function MemoryView() {
                         Next
                       </button>
                       <span>{documentDirty ? "Unsaved draft" : "Saved"}</span>
+                      <span>{documentSearchSource === "search_result" ? "Search-routed" : "Manual"}</span>
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
@@ -1048,13 +1086,18 @@ export function MemoryView() {
                  <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
                  <div className="flex items-center justify-between gap-3">
                    <div>
-                     <div className="text-sm font-semibold">Daily detail card</div>
-                     <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selectedTimelineEntryName || "Select a footprint result"}</div>
-                   </div>
+                      <div className="text-sm font-semibold">Daily detail card</div>
+                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selectedTimelineDateLabel || selectedTimelineEntryName || "Select a footprint result"}</div>
+                    </div>
                    <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
                      read only
                    </span>
                  </div>
+                 {timelineSelectionHint && (
+                   <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
+                     {timelineSelectionHint}
+                   </div>
+                 )}
                  <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Selected date</div>
                    <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
@@ -1195,7 +1238,7 @@ export function MemoryView() {
                       Run a real gateway-backed search to populate this section.
                     </div>
                   )}
-                  {searchDetail && (
+                 {searchDetail && (
                     <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                       <div className="flex items-center justify-between gap-3">
                         <div>
@@ -1219,6 +1262,11 @@ export function MemoryView() {
                             ? searchDetail.error
                             : searchDetail.content || searchDetail.snippet}
                       </div>
+                    </div>
+                  )}
+                  {searchOpenHint && (
+                    <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
+                      {searchOpenHint}
                     </div>
                   )}
                   {memoryStatusError && (
