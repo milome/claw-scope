@@ -5,6 +5,7 @@ import { useI18n } from "../../contexts/I18nContext";
 import {
   gatewayAgentMemoryGet,
   gatewayAgentFileRead,
+  gatewayAgentMemorySet,
   gatewayAgentMemorySearch,
   gatewayAgentMemoryStatus,
   gatewayAgentMemoryTimelineAccessResolve,
@@ -21,11 +22,17 @@ import {
 } from "../../contexts/OpenClawContext";
 import {
   buildMemoryFootprintGroups,
+  buildHighlightedTextSegments,
   canEditMemory,
   canLoadLocalTimeline,
+  canReloadMemoryDocument,
+  canSaveMemoryDocument,
+  collectTextSearchMatches,
   createMemoryDrafts,
   filterMemoryFootprintGroups,
   hasSharedWorkspaceMemory,
+  isMemoryDocumentDirty,
+  moveActiveSearchMatchIndex,
   resolveExternalMemorySources,
   resolveMemoryDocumentContent,
   resolveMemoryRootDocument,
@@ -78,6 +85,29 @@ function sourceTone(source: string) {
   return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
 }
 
+function normalizeRootMemoryDocumentName(name: string) {
+  return name.toLowerCase() === "memory.md" ? "memory.md" : name;
+}
+
+function resolveTimelineModeLabel(
+  access: GatewayAgentMemoryTimelineAccessResult | null,
+  result: GatewayAgentMemoryTimelineResult | null,
+) {
+  if (access?.mode === "local_workspace") {
+    return "Local workspace mode";
+  }
+
+  if (access?.mode === "remote_probe" || result?.source === "remote_probe") {
+    return "Remote probe mode";
+  }
+
+  if (access?.mode === "unavailable" || result?.source === "unavailable") {
+    return "Unavailable mode";
+  }
+
+  return "Mode unresolved";
+}
+
 export function MemoryView() {
   const { t } = useI18n();
   const { agents, grantedScopes, isConnected } = useOpenClaw();
@@ -90,6 +120,10 @@ export function MemoryView() {
   const [timelineResult, setTimelineResult] = useState<GatewayAgentMemoryTimelineResult | null>(null);
   const [_timelineLoading, setTimelineLoading] = useState(false);
   const [_timelineError, setTimelineError] = useState<string | null>(null);
+  const [timelineProbeRange, setTimelineProbeRange] = useState(() =>
+    resolveTimelineProbeRangePreset(new Date().toISOString().slice(0, 10)),
+  );
+  const [timelineProbeState, setTimelineProbeState] = useState<"idle" | "probing" | "done" | "error">("idle");
   const [memoryStatus, setMemoryStatus] = useState<GatewayAgentMemoryStatusResult | null>(null);
   const [memoryStatusError, setMemoryStatusError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -99,14 +133,15 @@ export function MemoryView() {
   const [searchDetail, setSearchDetail] = useState<SearchDetailState>(null);
   const [selectedDocumentName, setSelectedDocumentName] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [documentQuery, setDocumentQuery] = useState("");
+  const [documentMatchIndex, setDocumentMatchIndex] = useState(-1);
+  const [documentSaveState, setDocumentSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [documentSaveMessage, setDocumentSaveMessage] = useState<string | null>(null);
   const [timelineFocus] = useState<MemoryTimelineFocusFilter>("all");
   const [selectedTimelineEntryName, setSelectedTimelineEntryName] = useState("");
   const [_timelineEntryContent, setTimelineEntryContent] = useState("");
   const [_timelineEntryLoading, setTimelineEntryLoading] = useState(false);
   const [_timelineEntryError, setTimelineEntryError] = useState<string | null>(null);
-  const [_timelineProbeRange] = useState(() =>
-    resolveTimelineProbeRangePreset(new Date().toISOString().slice(0, 10)),
-  );
 
   useEffect(() => {
     const nextAgentId = resolveSelectedMemoryAgentId(
@@ -249,12 +284,55 @@ export function MemoryView() {
     () => resolveMemoryRootDocument(memoryResult?.documents ?? [], selectedDocumentName),
     [memoryResult, selectedDocumentName],
   );
+  const visibleDocuments = useMemo(() => {
+    const documents = memoryResult?.documents ?? [];
+    const canonical = new Map<string, typeof documents[number]>();
+
+    for (const document of documents) {
+      const normalizedName = normalizeRootMemoryDocumentName(document.name);
+      const existing = canonical.get(normalizedName);
+
+      if (!existing) {
+        canonical.set(normalizedName, document);
+        continue;
+      }
+
+      if (!document.missing && existing.missing) {
+        canonical.set(normalizedName, document);
+        continue;
+      }
+
+      if (!existing.content && document.content) {
+        canonical.set(normalizedName, document);
+      }
+    }
+
+    return Array.from(canonical.values());
+  }, [memoryResult]);
+  const selectedDocumentUpdatedAtLabel = useMemo(
+    () => (selectedDocument?.updatedAtMs ? new Date(selectedDocument.updatedAtMs).toLocaleString() : "-"),
+    [selectedDocument],
+  );
   const selectedDocumentContent = useMemo(() => {
     if (!selectedDocument) {
       return "";
     }
     return drafts[selectedDocument.name] ?? resolveMemoryDocumentContent(selectedDocument);
   }, [drafts, selectedDocument]);
+  const documentMatches = useMemo(
+    () => collectTextSearchMatches(selectedDocumentContent, documentQuery),
+    [selectedDocumentContent, documentQuery],
+  );
+  const documentDirty = useMemo(
+    () =>
+      selectedDocument
+        ? isMemoryDocumentDirty(
+            resolveMemoryDocumentContent(selectedDocument),
+            selectedDocumentContent,
+          )
+        : false,
+    [selectedDocument, selectedDocumentContent],
+  );
   const footprintGroups = useMemo(
     () => buildMemoryFootprintGroups(timelineResult?.entries ?? [], timelineResult?.probe?.days ?? []),
     [timelineResult],
@@ -293,6 +371,10 @@ export function MemoryView() {
       count: counts[group],
     }));
   }, [searchResult]);
+
+  useEffect(() => {
+    setDocumentMatchIndex(documentMatches.length > 0 ? 0 : -1);
+  }, [documentMatches.length, selectedDocumentName]);
 
   const diagnosticsSummary = useMemo<DiagnosticsSummary | null>(() => {
     if (!memoryStatus) {
@@ -363,12 +445,13 @@ export function MemoryView() {
       return;
     }
 
+    setTimelineProbeState("probing");
     setTimelineLoading(true);
     try {
       const result = await gatewayAgentMemoryTimelineRemoteProbe(
         selectedAgentId,
-        _timelineProbeRange.startDate,
-        _timelineProbeRange.endDate,
+        timelineProbeRange.startDate,
+        timelineProbeRange.endDate,
       );
       setTimelineResult(result);
       setTimelineError(null);
@@ -376,10 +459,84 @@ export function MemoryView() {
         resolveSelectedTimelineEntryName(current, result),
       );
       setActiveSection("footprints");
+      setTimelineProbeState("done");
     } catch (error) {
       setTimelineError(error instanceof Error ? error.message : String(error));
+      setTimelineProbeState("error");
     } finally {
       setTimelineLoading(false);
+    }
+  };
+
+  const handleReloadDocuments = async () => {
+    if (!canReloadMemoryDocument({ selectedAgentId, isLoading: false, isSaving: documentSaveState === "saving" })) {
+      return;
+    }
+
+    setMemoryLoading(true);
+    try {
+      const result = await gatewayAgentMemoryGet(selectedAgentId);
+      setMemoryResult(result);
+      setDrafts(createMemoryDrafts(result));
+      setSelectedDocumentName((current) =>
+        resolveSelectedMemoryDocumentName(current, result.documents),
+      );
+      setDocumentSaveState("idle");
+      setDocumentSaveMessage(null);
+      setMemoryError(null);
+    } catch (error) {
+      setMemoryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMemoryLoading(false);
+    }
+  };
+
+  const handleSaveDocument = async () => {
+    if (!selectedDocument) {
+      return;
+    }
+    if (
+      !canSaveMemoryDocument({
+        selectedAgentId,
+        isLoading: false,
+        isSaving: documentSaveState === "saving",
+        canEdit,
+        isDirty: documentDirty,
+      })
+    ) {
+      return;
+    }
+
+    setDocumentSaveState("saving");
+    setDocumentSaveMessage(null);
+    try {
+      await gatewayAgentMemorySet(selectedAgentId, selectedDocument.name, selectedDocumentContent);
+      const result = await gatewayAgentMemoryGet(selectedAgentId);
+      setMemoryResult(result);
+      setDrafts(createMemoryDrafts(result));
+      setSelectedDocumentName((current) =>
+        resolveSelectedMemoryDocumentName(current, result.documents),
+      );
+      setDocumentSaveState("saved");
+      setDocumentSaveMessage(`Saved ${selectedDocument.name}`);
+      setMemoryError(null);
+    } catch (error) {
+      setDocumentSaveState("error");
+      setDocumentSaveMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const handleDocumentDraftChange = (value: string) => {
+    if (!selectedDocument) {
+      return;
+    }
+    setDrafts((current) => ({
+      ...current,
+      [selectedDocument.name]: value,
+    }));
+    if (documentSaveState !== "idle") {
+      setDocumentSaveState("idle");
+      setDocumentSaveMessage(null);
     }
   };
 
@@ -528,7 +685,7 @@ export function MemoryView() {
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
                 <div className="font-medium">Root documents</div>
                 <div className="mt-1 text-slate-500 dark:text-slate-400">
-                  {(memoryResult?.documents ?? []).map((document) => document.name).join(", ") || "No root memory documents loaded"}
+                  {visibleDocuments.map((document) => document.name).join(", ") || "No root memory documents loaded"}
                 </div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
@@ -569,9 +726,75 @@ export function MemoryView() {
               className="absolute inset-0 flex flex-col"
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2 }}
             >
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+                <div>
+                  <div className="text-sm font-semibold">Documents</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Real root memory documents with live reload and save.</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleReloadDocuments}
+                    disabled={documentSaveState === "saving"}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                  >
+                    Reload
+                  </button>
+                  <button
+                    onClick={handleSaveDocument}
+                    disabled={!documentDirty || documentSaveState === "saving" || !canEdit}
+                    className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
+                  >
+                    {documentSaveState === "saving" ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </div>
               {/* Documents View */}
               <div className="hidden md:flex flex-col flex-1 overflow-auto bg-white dark:bg-slate-900 relative">
-                {(memoryResult?.documents?.length ?? 0) === 0 ? (
+                <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <input
+                      value={documentQuery}
+                      onChange={(event) => setDocumentQuery(event.target.value)}
+                      placeholder="Search inside the selected root document"
+                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 dark:border-slate-700 dark:bg-slate-950"
+                    />
+                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                          <span>{documentMatches.length} matches</span>
+                          <span>{documentMatches.length > 0 ? `${documentMatchIndex + 1}/${documentMatches.length}` : "0/0"}</span>
+                      <button
+                        onClick={() => setDocumentMatchIndex((current) => moveActiveSearchMatchIndex(current, documentMatches.length, -1))}
+                        disabled={documentMatches.length === 0}
+                        className="rounded-lg border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                      >
+                        Prev
+                      </button>
+                      <button
+                        onClick={() => setDocumentMatchIndex((current) => moveActiveSearchMatchIndex(current, documentMatches.length, 1))}
+                        disabled={documentMatches.length === 0}
+                        className="rounded-lg border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                      >
+                        Next
+                      </button>
+                      <span>{documentDirty ? "Unsaved draft" : "Saved"}</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      Showing canonical document: {selectedDocument?.name ?? "none"}
+                    </span>
+                    {!canEdit && (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-medium text-amber-700 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-300">
+                        Read-only gateway scope
+                      </span>
+                    )}
+                  </div>
+                  {documentSaveMessage && (
+                    <div className={`mt-2 rounded-xl border p-2 text-xs ${documentSaveState === "error" ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300" : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300"}`}>
+                      {documentSaveMessage}
+                    </div>
+                  )}
+                </div>
+                {visibleDocuments.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl m-4">
                     <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
                       <Search className="w-8 h-8 text-slate-400 dark:text-slate-500" />
@@ -593,8 +816,8 @@ export function MemoryView() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {(memoryResult?.documents ?? []).map((item) => (
-                        <tr key={item.name} className="hover:bg-[#f0f9ff] dark:hover:bg-slate-800 cursor-pointer transition-colors group focus-within:bg-sky-50 dark:focus-within:bg-slate-800" tabIndex={0}>
+                      {visibleDocuments.map((item) => (
+                        <tr key={item.name} className={`cursor-pointer transition-colors group focus-within:bg-sky-50 dark:focus-within:bg-slate-800 ${item.name === selectedDocumentName ? "bg-sky-50 dark:bg-slate-800" : "hover:bg-[#f0f9ff] dark:hover:bg-slate-800"}`} tabIndex={0} onClick={() => setSelectedDocumentName(item.name)}>
                            <td className="px-4 py-3 text-slate-500 dark:text-slate-400 font-mono text-xs" dir="ltr">{item.updatedAtMs ? new Date(item.updatedAtMs).toLocaleString() : "-"}</td>
                            <td className="px-4 py-3">
                              <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded text-xs font-medium">document</span>
@@ -606,7 +829,7 @@ export function MemoryView() {
                              </span>
                            </td>
                            <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{getAgentBadge(selectedAgentId)}</td>
-                           <td className="px-4 py-3 text-slate-900 dark:text-slate-100 truncate max-w-[400px]" title={item.path}>{item.path}</td>
+                           <td className="px-4 py-3 text-slate-900 dark:text-slate-100 truncate max-w-[400px]" title={item.content ?? item.path}>{item.content ? item.content.slice(0, 120) : item.path}</td>
                            <td className="px-4 py-3 text-center">
                              {!item.missing && <div className="w-2 h-2 rounded-full bg-[#16a34a] mx-auto" title="available"></div>}
                              {item.missing && <div className="w-2 h-2 rounded-full bg-[#dc2626] mx-auto" title="missing"></div>}
@@ -619,11 +842,44 @@ export function MemoryView() {
                     </tbody>
                   </table>
                 )}
+                {selectedDocument && (
+                  <div className="border-t border-slate-200 px-4 py-4 dark:border-slate-800">
+                    <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 text-xs dark:border-slate-800 dark:bg-slate-900/80">
+                      <div className="font-semibold text-slate-700 dark:text-slate-200">{selectedDocument.name}</div>
+                      <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{selectedDocument.path}</div>
+                      <div className="mt-1 text-slate-500 dark:text-slate-400">Last updated: {selectedDocumentUpdatedAtLabel}</div>
+                    </div>
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Highlighted preview</div>
+                    <div className="whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                      {buildHighlightedTextSegments(selectedDocumentContent, documentMatches).map((segment, index) => (
+                        segment.matchIndex === null ? (
+                          <span key={index}>{segment.text}</span>
+                        ) : (
+                          <mark
+                            key={index}
+                            className={segment.matchIndex === documentMatchIndex ? "rounded bg-sky-300 px-0.5 text-slate-950" : "rounded bg-amber-200 px-0.5 text-slate-900"}
+                          >
+                            {segment.text}
+                          </mark>
+                        )
+                      ))}
+                    </div>
+                    <div className="mt-4">
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Editable content</div>
+                      <textarea
+                        value={selectedDocumentContent}
+                        onChange={(event) => handleDocumentDraftChange(event.target.value)}
+                        readOnly={!canEdit}
+                        className="min-h-[220px] w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 outline-none focus:border-sky-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Mobile Card List */}
               <div className="md:hidden flex-1 overflow-auto hide-scrollbar -mx-4 px-4 pb-4 space-y-3">
-                 {(memoryResult?.documents?.length ?? 0) === 0 ? (
+                 {visibleDocuments.length === 0 ? (
                    <div className="flex flex-col items-center justify-center p-8 mt-4 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
                      <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
                        <Search className="w-5 h-5 text-slate-400 dark:text-slate-500" />
@@ -632,8 +888,8 @@ export function MemoryView() {
                      <p className="text-xs text-slate-500 dark:text-slate-400">Try adjusting your filters.</p>
                    </div>
                  ) : (
-                   (memoryResult?.documents ?? []).map((item) => (
-                     <div key={item.name} tabIndex={0} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-sky-500 transition-transform relative overflow-hidden group cursor-pointer">
+                   visibleDocuments.map((item) => (
+                     <div key={item.name} tabIndex={0} onClick={() => setSelectedDocumentName(item.name)} className={`border rounded-2xl p-4 shadow-sm active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-sky-500 transition-transform relative overflow-hidden group cursor-pointer ${item.name === selectedDocumentName ? "bg-sky-50 border-sky-300 dark:bg-slate-800 dark:border-sky-700" : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"}`}>
                        <div className="flex justify-between items-start mb-2.5">
                          <div className="flex flex-col gap-1.5">
                            <div className="flex items-center gap-2">
@@ -645,7 +901,7 @@ export function MemoryView() {
                          </div>
                          <span className="text-[11px] text-slate-400 font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-0.5 rounded" dir="ltr">{item.updatedAtMs ? new Date(item.updatedAtMs).toLocaleTimeString() : "-"}</span>
                        </div>
-                       <p className="text-[14px] text-slate-700 dark:text-slate-300 leading-relaxed mb-4 line-clamp-3">{item.path}</p>
+                       <p className="text-[14px] text-slate-700 dark:text-slate-300 leading-relaxed mb-4 line-clamp-3">{item.content ? item.content.slice(0, 120) : item.path}</p>
                        <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3">
                          <span className="text-[11px] font-medium text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-900/30 border border-sky-100 dark:border-sky-800/50 px-2 py-0.5 rounded flex items-center gap-1">
                            <FileDigit className="w-3 h-3"/> document
@@ -661,7 +917,7 @@ export function MemoryView() {
               </div>
 
               <div className="hidden md:flex bg-[#f8fafc] dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400 justify-between items-center shrink-0">
-                 <span>{(memoryResult?.documents?.length ?? 0)} real documents loaded</span>
+                 <span>{visibleDocuments.length} real documents loaded</span>
                  <div className="flex gap-1.5">
                    <button disabled className="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-400 dark:text-slate-600 cursor-not-allowed shadow-sm">{t("memory.page.prev")}</button>
                    <button className="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-95 transition-all">{t("memory.page.next")}</button>
@@ -681,26 +937,37 @@ export function MemoryView() {
                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Access mode</div>
                      <div className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">
-                       {timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : "Timeline access unresolved"}
+                       {resolveTimelineModeLabel(timelineAccess, timelineResult)}
                      </div>
                      <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                       {timelineResult?.source ? `Current data source: ${timelineResult.source}` : "Timeline source not loaded yet."}
+                       {timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : "Timeline access unresolved"}
                      </div>
                    </div>
                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Probe preset</div>
-                     <div className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">
-                       {_timelineProbeRange.startDate} → {_timelineProbeRange.endDate}
+                     <div className="mt-2 grid gap-2">
+                       <input
+                         value={timelineProbeRange.startDate}
+                         onChange={(event) => setTimelineProbeRange((current) => ({ ...current, startDate: event.target.value }))}
+                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-sky-500 dark:border-slate-700 dark:bg-slate-950"
+                         placeholder="YYYY-MM-DD"
+                       />
+                       <input
+                         value={timelineProbeRange.endDate}
+                         onChange={(event) => setTimelineProbeRange((current) => ({ ...current, endDate: event.target.value }))}
+                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-sky-500 dark:border-slate-700 dark:bg-slate-950"
+                         placeholder="YYYY-MM-DD"
+                       />
                      </div>
                      <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                       Remote probing stays honest: no fake directory listing, only range-based checks.
+                       Default range is the latest 7 days. Maximum probe span is 31 days. Remote probing stays honest: no fake directory listing, only range-based checks.
                      </div>
                      <button
                        onClick={handleProbeTimelineRange}
                        className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800 dark:bg-sky-600 dark:hover:bg-sky-500"
                      >
                        <Clock className="w-3.5 h-3.5" />
-                       Probe range
+                       {timelineProbeState === "probing" ? "Probing..." : timelineProbeState === "done" ? "Probe complete" : timelineProbeState === "error" ? "Retry probe" : "Probe range"}
                      </button>
                    </div>
                  </div>
@@ -710,7 +977,8 @@ export function MemoryView() {
                    </div>
                  )}
                </div>
-               <div className="max-w-3xl mx-auto -mx-4 md:mx-auto px-2 md:px-0">
+               <div className="mx-auto grid max-w-6xl gap-6 px-2 md:grid-cols-[0.9fr_1.1fr] md:px-0">
+                 <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 {filteredFootprintGroups.length === 0 ? (
                     <div className="flex flex-col items-center justify-center p-12 mt-8 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl mx-4 shadow-sm">
                       <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
@@ -726,22 +994,32 @@ export function MemoryView() {
                           <div className="absolute -left-[15px] rtl:left-auto rtl:-right-[15px] md:-left-[17px] rtl:md:-right-[17px] top-0 w-7 h-7 md:w-8 md:h-8 bg-white dark:bg-slate-800 border-[2px] border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center shadow-sm z-10">
                             <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4 text-sky-500" />
                           </div>
-                          <div className="mb-4 md:mb-5 flex items-center gap-3 pt-0.5 md:pt-1">
-                            <h3 className="text-[15px] md:text-[16px] font-bold text-slate-800 dark:text-slate-200 tracking-tight" dir="ltr">{group.dateLabel}</h3>
-                            <span className="text-[10px] md:text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-200/60 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200/80 dark:border-slate-700">
-                              {group.entries.length} entries
-                            </span>
-                            {group.probeDay && (
-                              <span className="text-[10px] md:text-[11px] font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-900/30 border border-sky-100 dark:border-sky-800/50 px-2 py-0.5 rounded-full">
-                                probe: {group.probeDay.status}
+                          <div className={`mb-4 md:mb-5 rounded-2xl border p-4 transition ${group.entries.some((entry) => entry.name === selectedTimelineEntryName) ? "border-sky-300 bg-sky-50 shadow-sm dark:border-sky-700 dark:bg-slate-800" : "border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/70"}`}>
+                            <div className="flex flex-wrap items-center gap-3 pt-0.5 md:pt-1">
+                              <h3 className="text-[15px] md:text-[16px] font-bold text-slate-800 dark:text-slate-200 tracking-tight" dir="ltr">{group.dateLabel}</h3>
+                              <span className="text-[10px] md:text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-200/60 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200/80 dark:border-slate-700">
+                                {group.entries.length} entries
                               </span>
-                            )}
+                              {group.probeDay && (
+                                <span className="text-[10px] md:text-[11px] font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-900/30 border border-sky-100 dark:border-sky-800/50 px-2 py-0.5 rounded-full">
+                                  probe: {group.probeDay.status}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto] md:items-start">
+                              <div className="text-xs leading-5 text-slate-600 dark:text-slate-300">
+                                {group.entries[0]?.content ? group.entries[0].content.slice(0, 180) : group.entries[0]?.path ?? "No detail available"}
+                              </div>
+                              <div className={`rounded-xl border px-3 py-2 text-[11px] font-medium shadow-sm ${group.entries.some((entry) => entry.name === selectedTimelineEntryName) ? "border-sky-200 bg-white text-sky-700 dark:border-sky-700 dark:bg-slate-900 dark:text-sky-300" : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>
+                                {group.entries[0]?.updatedAtMs ? new Date(group.entries[0].updatedAtMs).toLocaleTimeString() : "No time"}
+                              </div>
+                            </div>
                           </div>
                           <div className="space-y-3 md:space-y-4">
                             {group.entries.map((item) => (
-                              <div key={item.name} className="relative group outline-none" tabIndex={0}>
+                              <div key={item.name} className="relative group outline-none" tabIndex={0} onClick={() => setSelectedTimelineEntryName(item.name)}>
                                 <div className="absolute -left-[29.5px] rtl:left-auto rtl:-right-[29.5px] md:-left-[45px] rtl:md:-right-[45px] top-[16px] md:top-[20px] w-2.5 h-2.5 md:w-3 md:h-3 bg-white dark:bg-slate-800 border-[2px] md:border-[2.5px] border-slate-300 dark:border-slate-600 rounded-full z-10 group-hover:border-sky-400 group-focus:border-sky-500 transition-colors"></div>
-                                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl md:rounded-lg p-3.5 md:p-4 shadow-sm md:hover:border-sky-300 dark:md:hover:border-sky-700 group-focus:ring-2 group-focus:ring-sky-500 transition-all cursor-pointer">
+                                <div className={`border rounded-xl md:rounded-lg p-3.5 md:p-4 shadow-sm md:hover:border-sky-300 dark:md:hover:border-sky-700 group-focus:ring-2 group-focus:ring-sky-500 transition-all cursor-pointer ${selectedTimelineEntryName === item.name ? "bg-sky-50 border-sky-300 dark:bg-slate-800 dark:border-sky-700" : "bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800"}`}>
                                   <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-1.5 md:gap-2">
                                       <span className="text-[10px] md:text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1" dir="ltr">
@@ -767,7 +1045,7 @@ export function MemoryView() {
                     </div>
                   )}
                </div>
-               <div className="mx-auto mt-4 max-w-3xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                 <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
                  <div className="flex items-center justify-between gap-3">
                    <div>
                      <div className="text-sm font-semibold">Daily detail card</div>
@@ -777,12 +1055,32 @@ export function MemoryView() {
                      read only
                    </span>
                  </div>
-                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
-                   {_timelineEntryLoading
-                     ? "Loading daily detail..."
-                     : _timelineEntryError
-                       ? _timelineEntryError
-                       : _timelineEntryContent || "No daily detail content loaded."}
+                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Selected date</div>
+                   <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                     {selectedTimelineEntryName ? selectedTimelineEntryName.replace(/^memory\//, "").replace(/\.md$/i, "") : "No date selected"}
+                   </div>
+                   <div className="mt-4 grid gap-3 md:grid-cols-2">
+                     <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-3 text-sm shadow-sm dark:border-sky-800/60 dark:bg-slate-800">
+                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Source mode</div>
+                       <div className="mt-1 text-slate-700 dark:text-slate-200">{resolveTimelineModeLabel(timelineAccess, timelineResult)}</div>
+                     </div>
+                     <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-3 text-sm shadow-sm dark:border-sky-800/60 dark:bg-slate-800">
+                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Current entry</div>
+                       <div className="mt-1 break-all text-slate-700 dark:text-slate-200">{selectedTimelineEntryName || "N/A"}</div>
+                     </div>
+                   </div>
+                 </div>
+                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Body</div>
+                   <div className="text-sm leading-6 text-slate-700 dark:text-slate-300">
+                     {_timelineEntryLoading
+                       ? "Loading daily detail..."
+                       : _timelineEntryError
+                         ? _timelineEntryError
+                         : _timelineEntryContent || "No daily detail content loaded."}
+                   </div>
+                 </div>
                  </div>
                </div>
             </motion.div>
