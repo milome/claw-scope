@@ -773,7 +773,7 @@ export function MemoryView() {
       <div className={`rounded-xl md:rounded-lg overflow-hidden flex-1 flex flex-col relative transition-colors duration-500 min-h-[400px] ${activeSection === 'documents' || activeSection === 'footprints' || activeSection === 'search' || activeSection === 'knowledge' ? 'bg-transparent md:bg-white md:dark:bg-slate-900 border-none md:border md:border-slate-200 md:dark:border-slate-800 md:shadow-sm' : 'hidden'}`}>
         <AnimatePresence mode="wait">
           {diagnosticsDrawer.open && diagnosticsSummary && (
-            <div className="absolute inset-y-0 right-0 z-20 w-full max-w-md border-l border-slate-200 bg-white/95 p-4 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+            <div className="absolute inset-y-0 right-0 z-20 w-full max-w-md border-l border-slate-200 bg-gradient-to-b from-white to-sky-50/70 p-4 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold">Diagnostics drawer</div>
@@ -828,11 +828,12 @@ export function MemoryView() {
               className="absolute inset-0 flex flex-col"
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2 }}
             >
-                <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
-                  <div>
-                    <div className="text-sm font-semibold">Documents</div>
-                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Real root memory documents with live reload and save.</div>
-                  </div>
+              <div className="border-b border-slate-200 bg-gradient-to-r from-white to-sky-50/70 px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Documents</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Real root memory documents with live reload and save.</div>
+                </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleReloadDocuments}
@@ -848,6 +849,7 @@ export function MemoryView() {
                   >
                     {documentSaveState === "saving" ? "Saving..." : "Save"}
                   </button>
+                </div>
                 </div>
               </div>
               {documentSearchHint && (
@@ -952,13 +954,13 @@ export function MemoryView() {
                 )}
                 {selectedDocument && (
                   <div className="border-t border-slate-200 px-4 py-4 dark:border-slate-800">
-                    <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 text-xs dark:border-slate-800 dark:bg-slate-900/80">
+                    <div className="mb-3 rounded-xl border border-sky-200 bg-gradient-to-r from-white to-sky-50/60 p-3 text-xs shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
                       <div className="font-semibold text-slate-700 dark:text-slate-200">{selectedDocument.name}</div>
                       <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{selectedDocument.path}</div>
                       <div className="mt-1 text-slate-500 dark:text-slate-400">Last updated: {selectedDocumentUpdatedAtLabel}</div>
                     </div>
                     <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Highlighted preview</div>
-                    <div className="whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                    <div className="whitespace-pre-wrap rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/40 p-4 text-sm leading-6 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
                       {buildHighlightedTextSegments(selectedDocumentContent, documentMatches).map((segment, index) => (
                         segment.matchIndex === null ? (
                           <span key={index}>{segment.text}</span>
@@ -978,7 +980,7 @@ export function MemoryView() {
                         value={selectedDocumentContent}
                         onChange={(event) => handleDocumentDraftChange(event.target.value)}
                         readOnly={!canEdit}
-                        className="min-h-[220px] w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 outline-none focus:border-sky-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                        className="min-h-[220px] w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
                       />
                     </div>
                   </div>
@@ -1285,15 +1287,15 @@ export function MemoryView() {
                     ) : searchResult ? (
                       <div className="space-y-3">
                       {searchResult.results.map((entry) => (
-                        <article key={entry.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
+                        <article key={entry.id} className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/50 p-4 shadow-sm transition hover:border-sky-300 dark:border-slate-800 dark:bg-slate-950/60 dark:hover:border-sky-700">
                           <div className="flex flex-wrap items-center gap-2 text-xs">
                             <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 font-medium text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">{entry.sourceKind}</span>
                             <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">{entry.openTarget}</span>
                           </div>
                           <div className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">{resultSubtitle(entry.path, entry.openTarget)}</div>
-                          <div className="mt-3 break-all text-sm font-semibold">{entry.path}</div>
+                          <div className="mt-3 break-all text-sm font-semibold text-slate-900 dark:text-slate-100">{entry.path}</div>
                           <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">{entry.snippet}</p>
-                          <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">Open routing for real navigation is deferred to M3. Current target: {entry.openTarget}.</div>
+                          <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">Target route: {entry.openTarget}.</div>
                           <button
                             onClick={() => void handleOpenSearchEntry(entry)}
                             className="mt-3 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800 dark:bg-sky-600 dark:hover:bg-sky-500"
@@ -1400,6 +1402,9 @@ export function MemoryView() {
                         Gateway returned memory documents, but did not include diagnostics for external knowledge inputs.
                       </div>
                     )}
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/60 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                      Memory surfaces should inherit Profile's softer, richer visual language over time: more color accents, friendlier copy, and less rigid engineering framing.
+                    </div>
                   </section>
                   <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                     <div className="mb-4 text-sm font-semibold">Resolved source paths</div>
