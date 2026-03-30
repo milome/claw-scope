@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Footprints, ChevronRight, Calendar, Clock, Network, Cpu, BrainCircuit, FileDigit, Database, ChevronDown, BookOpen, FileText } from "lucide-react";
+import { Search, Calendar, Network, Cpu, BrainCircuit, Database, ChevronDown, BookOpen, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { useI18n } from "../../contexts/I18nContext";
 import type { ReactNode } from "react";
 import {
   gatewayAgentMemoryGet,
-  gatewayAgentFileRead,
   gatewayAgentMemorySet,
+  gatewayAgentFileRead,
   gatewayAgentMemorySearch,
   gatewayAgentMemoryRuntimeStatus,
   gatewayAgentMemoryStatus,
@@ -26,17 +26,13 @@ import {
 } from "../../contexts/OpenClawContext";
 import {
   buildMemoryFootprintGroups,
-  buildHighlightedTextSegments,
   canEditMemory,
   canLoadLocalTimeline,
-  canReloadMemoryDocument,
-  canSaveMemoryDocument,
   collectTextSearchMatches,
   createMemoryDrafts,
   filterMemoryFootprintGroups,
   hasSharedWorkspaceMemory,
   isMemoryDocumentDirty,
-  moveActiveSearchMatchIndex,
   resolveExternalMemorySources,
   resolveMemoryDocumentContent,
   resolveMemoryRootDocument,
@@ -53,10 +49,16 @@ import {
   sortSemanticMemorySearchGroups,
   type SemanticMemorySearchGroup,
 } from "./memorySearchState";
+import { MemoryDiagnosticsDrawer } from "./MemoryDiagnosticsDrawer";
+import { MemorySearchPanel } from "./MemorySearchPanel";
+import { MemoryFootprintsPanel } from "./MemoryFootprintsPanel";
+import { MemoryKnowledgePanel } from "./MemoryKnowledgePanel";
+import { MemoryDocumentsDesktop } from "./MemoryDocumentsDesktop";
+import { MemoryDocumentsMobile } from "./MemoryDocumentsMobile";
 
 type MemorySection = "overview" | "documents" | "footprints" | "search" | "knowledge";
 
-type SearchDetailState = {
+export type SearchDetailState = {
   title: string;
   path: string;
   sourceKind: string;
@@ -66,7 +68,7 @@ type SearchDetailState = {
   error: string | null;
 } | null;
 
-type HealthProbeSummary = {
+export type HealthProbeSummary = {
   provider: string;
   model: string;
   embeddingsReady: boolean | null;
@@ -75,7 +77,7 @@ type HealthProbeSummary = {
   primaryIssue: string | null;
 };
 
-type RuntimeStatusSummary = {
+export type RuntimeStatusSummary = {
   available: boolean;
   agentId: string;
   provider: string;
@@ -89,9 +91,19 @@ type RuntimeStatusSummary = {
   rawPayload: string;
 };
 
-type DiagnosticsDrawerState = {
+export type DiagnosticsDrawerState = {
   open: boolean;
   source: "search" | "knowledge";
+};
+
+type MemoryViewShellProps = {
+  active: boolean;
+  children: ReactNode;
+};
+
+type MemoryViewScrollRegionProps = {
+  className?: string;
+  children: ReactNode;
 };
 
 function sourceTone(source: string) {
@@ -111,33 +123,22 @@ function normalizeRootMemoryDocumentName(name: string) {
   return name.toLowerCase() === "memory.md" ? "memory.md" : name;
 }
 
-function diagnosticsTone(summary: HealthProbeSummary | null) {
-  if (!summary) {
-    return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
-  }
-  if (summary.primaryIssue) {
-    return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/70 dark:bg-rose-950/30 dark:text-rose-300";
-  }
-  return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/30 dark:text-emerald-300";
-}
-
-function DiagnosticsCard({
-  title,
-  children,
-  className = "",
-}: {
-  title: string;
-  children: ReactNode;
-  className?: string;
-}) {
+function MemoryViewShell({ active, children }: MemoryViewShellProps) {
   return (
     <div
-      className={`rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60 ${className}`.trim()}
+      className={`rounded-xl md:rounded-lg overflow-hidden flex-1 flex flex-col relative transition-colors duration-500 min-h-[400px] ${
+        active
+          ? "bg-transparent md:bg-white md:dark:bg-slate-900 border-none md:border md:border-slate-200 md:dark:border-slate-800 md:shadow-sm"
+          : "hidden"
+      }`}
     >
-      <div className="font-medium">{title}</div>
-      <div className="mt-2">{children}</div>
+      {children}
     </div>
   );
+}
+
+function MemoryViewScrollRegion({ className = "", children }: MemoryViewScrollRegionProps) {
+  return <div className={`absolute inset-0 overflow-auto ${className}`.trim()}>{children}</div>;
 }
 
 async function copyTextToClipboard(text: string) {
@@ -240,6 +241,7 @@ export function MemoryView() {
   const [documentSearchHint, setDocumentSearchHint] = useState<string | null>(null);
   const [documentSaveState, setDocumentSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [documentSaveMessage, setDocumentSaveMessage] = useState<string | null>(null);
+  const [isEditingDocument, setIsEditingDocument] = useState(false);
   const [timelineFocus] = useState<MemoryTimelineFocusFilter>("all");
   const [selectedTimelineEntryName, setSelectedTimelineEntryName] = useState("");
   const [selectedTimelineDateLabel, setSelectedTimelineDateLabel] = useState("");
@@ -677,64 +679,6 @@ export function MemoryView() {
     }
   };
 
-  const handleReloadDocuments = async () => {
-    if (!canReloadMemoryDocument({ selectedAgentId, isLoading: false, isSaving: documentSaveState === "saving" })) {
-      return;
-    }
-
-    setMemoryLoading(true);
-    try {
-      const result = await gatewayAgentMemoryGet(selectedAgentId);
-      setMemoryResult(result);
-      setDrafts(createMemoryDrafts(result));
-      setSelectedDocumentName((current) =>
-        resolveSelectedMemoryDocumentName(current, result.documents),
-      );
-      setDocumentSaveState("idle");
-      setDocumentSaveMessage(null);
-      setMemoryError(null);
-    } catch (error) {
-      setMemoryError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setMemoryLoading(false);
-    }
-  };
-
-  const handleSaveDocument = async () => {
-    if (!selectedDocument) {
-      return;
-    }
-    if (
-      !canSaveMemoryDocument({
-        selectedAgentId,
-        isLoading: false,
-        isSaving: documentSaveState === "saving",
-        canEdit,
-        isDirty: documentDirty,
-      })
-    ) {
-      return;
-    }
-
-    setDocumentSaveState("saving");
-    setDocumentSaveMessage(null);
-    try {
-      await gatewayAgentMemorySet(selectedAgentId, selectedDocument.name, selectedDocumentContent);
-      const result = await gatewayAgentMemoryGet(selectedAgentId);
-      setMemoryResult(result);
-      setDrafts(createMemoryDrafts(result));
-      setSelectedDocumentName((current) =>
-        resolveSelectedMemoryDocumentName(current, result.documents),
-      );
-      setDocumentSaveState("saved");
-      setDocumentSaveMessage(t("memory.documents.saved", selectedDocument.name));
-      setMemoryError(null);
-    } catch (error) {
-      setDocumentSaveState("error");
-      setDocumentSaveMessage(error instanceof Error ? error.message : String(error));
-    }
-  };
-
   const handleDocumentDraftChange = (value: string) => {
     if (!selectedDocument) {
       return;
@@ -746,6 +690,47 @@ export function MemoryView() {
     if (documentSaveState !== "idle") {
       setDocumentSaveState("idle");
       setDocumentSaveMessage(null);
+    }
+  };
+
+  const handleCancelDocumentEdit = () => {
+    if (!selectedDocument) {
+      return;
+    }
+    setDrafts((current) => ({
+      ...current,
+      [selectedDocument.name]: resolveMemoryDocumentContent(selectedDocument),
+    }));
+    setIsEditingDocument(false);
+    setDocumentSaveState("idle");
+    setDocumentSaveMessage(null);
+  };
+
+  const handleSaveDocument = async () => {
+    if (!selectedDocument || !canEdit || !documentDirty) {
+      return;
+    }
+
+    setDocumentSaveState("saving");
+    setDocumentSaveMessage(null);
+
+    try {
+      await gatewayAgentMemorySet(selectedAgentId, selectedDocument.name, selectedDocumentContent);
+      const result = await gatewayAgentMemoryGet(selectedAgentId);
+      setMemoryResult(result);
+      setDrafts(createMemoryDrafts(result));
+      setSelectedDocumentName((current) =>
+        resolveSelectedMemoryDocumentName(current, result.documents),
+      );
+      setDocumentSaveState("saved");
+      setDocumentSaveMessage(t("memory.documents.saved", selectedDocument.name));
+      setIsEditingDocument(false);
+      toast.success(t("memory.documents.saved", selectedDocument.name));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setDocumentSaveState("error");
+      setDocumentSaveMessage(message);
+      toast.error(message);
     }
   };
 
@@ -941,838 +926,147 @@ export function MemoryView() {
         {footprintSummary.all}
       </div>
 
-      <div className={`rounded-xl md:rounded-lg overflow-hidden flex-1 flex flex-col relative transition-colors duration-500 min-h-[400px] ${activeSection === 'documents' || activeSection === 'footprints' || activeSection === 'search' || activeSection === 'knowledge' ? 'bg-transparent md:bg-white md:dark:bg-slate-900 border-none md:border md:border-slate-200 md:dark:border-slate-800 md:shadow-sm' : 'hidden'}`}>
+      <MemoryViewShell
+        active={
+          activeSection === "documents" ||
+          activeSection === "footprints" ||
+          activeSection === "search" ||
+          activeSection === "knowledge"
+        }
+      >
         <AnimatePresence mode="wait">
-          {diagnosticsDrawer.open && (healthProbeSummary || memoryResult?.diagnostics) && (
-            <div className="absolute inset-y-0 right-0 z-20 w-full max-w-md border-l border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("memory.diag.drawer")}</div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.diag.openedFrom", diagnosticsDrawer.source)}</div>
-                </div>
-                <button
-                  onClick={() => setDiagnosticsDrawer((current) => ({ ...current, open: false }))}
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
-                >
-                  Close
-                </button>
-              </div>
-                <div className="mt-4 space-y-3">
-                  {healthProbeSummary && (
-                    <>
-                      <DiagnosticsCard
-                        title={t("memory.diag.healthProbe")}
-                        className={diagnosticsTone(healthProbeSummary)}
-                      >
-                        <div>{healthProbeSummary.primaryIssue ?? t("memory.diag.noIssue")}</div>
-                      </DiagnosticsCard>
-                      <div className="grid gap-3 md:grid-cols-3">
-                        <DiagnosticsCard title={t("memory.diag.provider")} className="bg-white shadow-sm dark:bg-slate-950/60">
-                          <div>{healthProbeSummary.provider}</div>
-                        </DiagnosticsCard>
-                        <DiagnosticsCard title={t("memory.diag.model")} className="bg-white shadow-sm dark:bg-slate-950/60">
-                          <div>{healthProbeSummary.model}</div>
-                        </DiagnosticsCard>
-                        <DiagnosticsCard title={t("memory.diag.embeddings")} className="bg-white shadow-sm dark:bg-slate-950/60">
-                          <div>
-                            {healthProbeSummary.embeddingsReady === true
-                              ? t("memory.diag.ready")
-                              : healthProbeSummary.embeddingsReady === false
-                                ? t("memory.diag.unavailableShort")
-                                : t("memory.diag.unknownShort")}
-                          </div>
-                        </DiagnosticsCard>
-                      </div>
-                      <DiagnosticsCard title={t("memory.diag.rawDoctor")}>
-                        <pre className="overflow-auto rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">{healthProbeSummary.rawPayload}</pre>
-                      </DiagnosticsCard>
-                    </>
-                  )}
-                  <DiagnosticsCard title={t("memory.diag.runtimeStatus")}>
-                    {runtimeStatusSummary ? (
-                      <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
-                        <div>
-                          indexed: {runtimeStatusSummary.indexedFiles}
-                          {runtimeStatusSummary.totalFiles != null
-                            ? `/${runtimeStatusSummary.totalFiles}`
-                            : ""} files · {runtimeStatusSummary.chunks} chunks
-                        </div>
-                        {runtimeStatusSummary.bySource.map((item) => (
-                          <div key={item.source}>
-                            {item.source}: {item.files} files · {item.chunks} chunks
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-slate-500 dark:text-slate-400">
-                        {isLocalGatewaySession
-                          ? t("memory.diag.runtimePlaceholder")
-                          : t("memory.diag.runtimeRemoteUnavailable")}
-                      </div>
-                    )}
-                  </DiagnosticsCard>
-                  <DiagnosticsCard title={t("memory.diag.knowledge")}>
-                    {memoryResult?.diagnostics ? (
-                      <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
-                        <div>backend: {memoryResult.diagnostics.backend}</div>
-                        <div>provider: {memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}</div>
-                        <div>store: {memoryResult.diagnostics.builtinStorePath}</div>
-                        <div>sources: {memoryResult.diagnostics.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.missing")}</div>
-                    )}
-                  </DiagnosticsCard>
-                </div>
-              </div>
-          )}
-          
+          <MemoryDiagnosticsDrawer
+            diagnosticsDrawer={diagnosticsDrawer}
+            healthProbeSummary={healthProbeSummary}
+            memoryResult={memoryResult}
+            runtimeStatusSummary={runtimeStatusSummary}
+            isLocalGatewaySession={isLocalGatewaySession}
+            t={t}
+            onClose={() => setDiagnosticsDrawer((current) => ({ ...current, open: false }))}
+          />
+
           {activeSection === 'documents' && (
             <motion.div 
               key="view-table"
-              className="absolute inset-0 flex flex-col"
+              className="flex flex-1 flex-col"
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2 }}
             >
-              <div className="border-b border-slate-200 bg-gradient-to-r from-white to-sky-50/70 px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold">{t("memory.documents.title")}</div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.documents.desc")}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleReloadDocuments}
-                    disabled={documentSaveState === "saving"}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
-                  >
-                    Reload
-                  </button>
-                  <button
-                    onClick={handleSaveDocument}
-                    disabled={!documentDirty || documentSaveState === "saving" || !canEdit}
-                    className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
-                  >
-                    {documentSaveState === "saving" ? t("memory.documents.saving") : t("memory.documents.save")}
-                  </button>
-                </div>
-                </div>
-              </div>
-              {documentSearchHint && (
-                <div className="border-b border-sky-200 bg-gradient-to-r from-sky-50 to-cyan-50 px-4 py-2 text-xs text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
-                  {documentSearchHint}
-                </div>
-              )}
               {/* Documents View */}
-              <div className="hidden md:flex flex-col flex-1 overflow-auto bg-white dark:bg-slate-900 relative">
-                <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <input
-                      value={documentQuery}
-                      onChange={(event) => setDocumentQuery(event.target.value)}
-                      placeholder={t("memory.documents.searchPlaceholder")}
-                      className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 dark:border-slate-700 dark:bg-slate-950"
-                    />
-                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                      <span>{t("memory.documents.matches", documentMatches.length)}</span>
-                      <span>{documentMatches.length > 0 ? `${documentMatchIndex + 1}/${documentMatches.length}` : "0/0"}</span>
-                      <button
-                        onClick={() => setDocumentMatchIndex((current) => moveActiveSearchMatchIndex(current, documentMatches.length, -1))}
-                        disabled={documentMatches.length === 0}
-                        className="rounded-lg border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
-                      >
-                        Prev
-                      </button>
-                      <button
-                        onClick={() => setDocumentMatchIndex((current) => moveActiveSearchMatchIndex(current, documentMatches.length, 1))}
-                        disabled={documentMatches.length === 0}
-                        className="rounded-lg border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
-                      >
-                        Next
-                      </button>
-                      <span>{documentDirty ? t("profile.unsaved") : t("profile.doc.exported")}</span>
-                      <span>{documentSearchSource === "search_result" ? t("memory.documents.searchSource.search") : t("memory.documents.searchSource.manual")}</span>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                      {t("memory.documents.current", selectedDocument?.name ?? t("memory.documents.none"))}
-                    </span>
-                    {!canEdit && (
-                      <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-medium text-amber-700 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-300">
-                        {t("memory.documents.readonlyScope")}
-                      </span>
-                    )}
-                  </div>
-                  {documentSaveMessage && (
-                    <div className={`mt-2 rounded-xl border p-2 text-xs ${documentSaveState === "error" ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300" : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300"}`}>
-                      {documentSaveMessage}
-                    </div>
-                  )}
-                </div>
-                {visibleDocuments.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl m-4">
-                    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                      <Search className="w-8 h-8 text-slate-400 dark:text-slate-500" />
-                    </div>
-                    <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">{t("memory.documents.emptyTitle")}</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">{t("memory.documents.emptyDesc")}</p>
-                  </div>
-                ) : (
-                  <table className="w-full text-[13px] text-left rtl:text-right whitespace-nowrap bg-white dark:bg-slate-900">
-                    <thead className="bg-[#f8fafc] dark:bg-slate-900 text-slate-600 dark:text-slate-300 font-semibold sticky top-0 z-10 shadow-[0_1px_0_rgba(226,232,240,1)] dark:shadow-[0_1px_0_rgba(30,41,59,1)]">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold w-[160px]">{t("memory.table.time")}</th>
-                        <th className="px-4 py-3 font-semibold w-[140px]">{t("memory.table.type")}</th>
-                        <th className="px-4 py-3 font-semibold w-[160px]">{t("memory.table.node")}</th>
-                        <th className="px-4 py-3 font-semibold w-[120px]">{t("memory.table.agent")}</th>
-                        <th className="px-4 py-3 font-semibold min-w-[300px]">{t("memory.table.summary")}</th>
-                        <th className="px-4 py-3 font-semibold w-[80px] text-center">{t("memory.table.status")}</th>
-                        <th className="px-4 py-3 font-semibold w-[50px]"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {visibleDocuments.map((item) => (
-                        <tr key={item.name} className={`cursor-pointer transition-colors group focus-within:bg-sky-50 dark:focus-within:bg-slate-800 ${item.name === selectedDocumentName ? "bg-sky-50 dark:bg-slate-800" : "hover:bg-[#f0f9ff] dark:hover:bg-slate-800"}`} tabIndex={0} onClick={() => setSelectedDocumentName(item.name)}>
-                           <td className="px-4 py-3 text-slate-500 dark:text-slate-400 font-mono text-xs" dir="ltr">{item.updatedAtMs ? new Date(item.updatedAtMs).toLocaleString() : "-"}</td>
-                           <td className="px-4 py-3">
-                             <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded text-xs font-medium">{t("memory.documents.kind")}</span>
-                           </td>
-                           <td className="px-4 py-3">
-                             <span className="inline-flex items-center gap-1.5 text-xs text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/20 px-2 py-1 rounded-md border border-cyan-100 dark:border-cyan-800/50">
-                               <Network className="w-3 h-3" />
-                               {memoryResult?.workspace ?? t("memory.documents.workspaceFallback")}
-                             </span>
-                           </td>
-                           <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{getAgentBadge(selectedAgentId)}</td>
-                           <td className="px-4 py-3 text-slate-900 dark:text-slate-100 truncate max-w-[400px]" title={item.content ?? item.path}>{item.content ? item.content.slice(0, 120) : item.path}</td>
-                           <td className="px-4 py-3 text-center">
-                             {!item.missing && <div className="w-2 h-2 rounded-full bg-[#16a34a] mx-auto" title={t("memory.documents.status.available")}></div>}
-                             {item.missing && <div className="w-2 h-2 rounded-full bg-[#dc2626] mx-auto" title={t("memory.documents.status.missing")}></div>}
-                           </td>
-                           <td className="px-4 py-3 text-right opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                             <button className="text-sky-600 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 p-1 rounded hover:bg-sky-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"><ChevronRight className="w-4 h-4 rtl:rotate-180" /></button>
-                           </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-                {selectedDocument && (
-                  <div className="border-t border-slate-200 px-4 py-4 dark:border-slate-800">
-                    <div className="mb-3 overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white px-5 py-4 text-slate-700 shadow-sm dark:border-slate-700/80 dark:from-slate-900 dark:to-slate-900 dark:text-slate-300">
-                      <div className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-sky-400 to-violet-400 dark:from-sky-500 dark:to-violet-500" />
-                      <div className="relative pl-1">
-                        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500">{t("memory.documents.source")}</div>
-                        <div className="font-semibold text-slate-800 dark:text-slate-200">{selectedDocument.name}</div>
-                        <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{selectedDocument.path}</div>
-                        <div className="mt-2 text-slate-500 dark:text-slate-400">{t("memory.documents.updated", selectedDocumentUpdatedAtLabel)}</div>
-                      </div>
-                    </div>
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.documents.preview")}</div>
-                    <div className="whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-800 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-100">
-                      {buildHighlightedTextSegments(selectedDocumentContent, documentMatches).map((segment, index) => (
-                        segment.matchIndex === null ? (
-                          <span key={index}>{segment.text}</span>
-                        ) : (
-                          <mark
-                            key={index}
-                            className={segment.matchIndex === documentMatchIndex ? "rounded bg-sky-300 px-0.5 text-slate-950" : "rounded bg-amber-200 px-0.5 text-slate-900"}
-                          >
-                            {segment.text}
-                          </mark>
-                        )
-                      ))}
-                    </div>
-                    <div className="mt-4">
-                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.documents.editor")}</div>
-                      <textarea
-                        value={selectedDocumentContent}
-                        onChange={(event) => handleDocumentDraftChange(event.target.value)}
-                        readOnly={!canEdit}
-                        className="min-h-[220px] w-full rounded-[24px] border border-slate-200/90 bg-white px-4 py-4 text-sm leading-7 text-slate-800 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-sky-300 focus:shadow-[0_0_0_4px_rgba(186,230,253,0.55)] dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500 dark:focus:shadow-[0_0_0_4px_rgba(14,165,233,0.18)]"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+              <MemoryDocumentsDesktop
+                title={t("memory.documents.title")}
+                description={documentSearchHint ?? t("memory.documents.desc")}
+                documentQuery={documentQuery}
+                documentMatches={documentMatches}
+                documentMatchIndex={documentMatchIndex}
+                documentDirty={documentDirty}
+                documentSearchSource={documentSearchSource}
+                documentSaveMessage={documentSaveMessage}
+                documentSaveState={documentSaveState}
+                selectedDocument={selectedDocument}
+                selectedDocumentName={selectedDocumentName}
+                selectedDocumentContent={selectedDocumentContent}
+                selectedDocumentUpdatedAtLabel={selectedDocumentUpdatedAtLabel}
+                visibleDocuments={visibleDocuments}
+                canEdit={canEdit}
+                isEditing={isEditingDocument}
+                workspaceLabel={memoryResult?.workspace ?? t("memory.documents.workspaceFallback")}
+                t={t}
+                getAgentBadge={getAgentBadge}
+                selectedAgentId={selectedAgentId}
+                onDocumentQueryChange={setDocumentQuery}
+                onSelectDocument={setSelectedDocumentName}
+                onDocumentDraftChange={handleDocumentDraftChange}
+                onStartEdit={() => setIsEditingDocument(true)}
+                onCancelEdit={handleCancelDocumentEdit}
+                onSave={() => void handleSaveDocument()}
+                footerLabel={t("memory.documents.footer", visibleDocuments.length)}
+              />
 
-              {/* Mobile Card List */}
-              <div className="md:hidden flex-1 overflow-auto hide-scrollbar -mx-4 px-4 pb-4 space-y-3">
-                 {visibleDocuments.length === 0 ? (
-                   <div className="flex flex-col items-center justify-center p-8 mt-4 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
-                     <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
-                       <Search className="w-5 h-5 text-slate-400 dark:text-slate-500" />
-                     </div>
-                     <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t("memory.documents.emptyTitle")}</h3>
-                     <p className="text-xs text-slate-500 dark:text-slate-400">{t("memory.documents.emptyDesc")}</p>
-                   </div>
-                 ) : (
-                   visibleDocuments.map((item) => (
-                     <div key={item.name} tabIndex={0} onClick={() => setSelectedDocumentName(item.name)} className={`border rounded-2xl p-4 shadow-sm active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-sky-500 transition-transform relative overflow-hidden group cursor-pointer ${item.name === selectedDocumentName ? "bg-sky-50 border-sky-300 dark:bg-slate-800 dark:border-sky-700" : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"}`}>
-                       <div className="flex justify-between items-start mb-2.5">
-                         <div className="flex flex-col gap-1.5">
-                           <div className="flex items-center gap-2">
-                             {getAgentBadge(selectedAgentId)}
-                           </div>
-                           <span className="text-[10px] text-cyan-600 dark:text-cyan-400 font-medium flex items-center gap-1">
-                             <Network className="w-3 h-3" /> {memoryResult?.workspace ?? t("memory.documents.workspaceFallback")}
-                           </span>
-                         </div>
-                         <span className="text-[11px] text-slate-400 font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-0.5 rounded" dir="ltr">{item.updatedAtMs ? new Date(item.updatedAtMs).toLocaleTimeString() : "-"}</span>
-                       </div>
-                       <p className="text-[14px] text-slate-700 dark:text-slate-300 leading-relaxed mb-4 line-clamp-3">{item.content ? item.content.slice(0, 120) : item.path}</p>
-                       <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3">
-                         <span className="text-[11px] font-medium text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-900/30 border border-sky-100 dark:border-sky-800/50 px-2 py-0.5 rounded flex items-center gap-1">
-                           <FileDigit className="w-3 h-3"/> document
-                         </span>
-                         <div className="flex items-center gap-1.5 text-[11px] font-medium">
-                           {!item.missing && <><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div><span className="text-emerald-600 dark:text-emerald-400">{t("memory.documents.status.available")}</span></>}
-                           {item.missing && <><div className="w-1.5 h-1.5 rounded-full bg-red-500"></div><span className="text-red-600 dark:text-red-400">{t("memory.documents.status.missing")}</span></>}
-                         </div>
-                       </div>
-                     </div>
-                   ))
-                 )}
-              </div>
+              <MemoryDocumentsMobile
+                visibleDocuments={visibleDocuments}
+                selectedDocumentName={selectedDocumentName}
+                selectedAgentId={selectedAgentId}
+                workspaceLabel={memoryResult?.workspace ?? t("memory.documents.workspaceFallback")}
+                t={t}
+                getAgentBadge={getAgentBadge}
+                onSelectDocument={setSelectedDocumentName}
+              />
 
-              <div className="hidden md:flex bg-[#f8fafc] dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400 justify-between items-center shrink-0">
-                 <span>{t("memory.documents.footer", visibleDocuments.length)}</span>
-                 <div className="flex gap-1.5">
-                   <button disabled className="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-400 dark:text-slate-600 cursor-not-allowed shadow-sm">{t("memory.page.prev")}</button>
-                   <button className="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-95 transition-all">{t("memory.page.next")}</button>
-                 </div>
-              </div>
             </motion.div>
           )}
 
           {activeSection === 'footprints' && (
-            <motion.div 
-              key="view-day"
-              className="absolute inset-0 overflow-auto bg-transparent md:bg-slate-50/50 md:dark:bg-slate-900/50 md:p-6 hide-scrollbar"
-              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2 }}
-            >
-               <div className="mx-auto mb-4 max-w-3xl px-2 md:px-0">
-                 <div className="grid gap-3 md:grid-cols-[1.1fr_0.9fr]">
-                   <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.footprints.accessMode")}</div>
-                     <div className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">
-                       {resolveTimelineModeLabel(timelineAccess, timelineResult, t)}
-                     </div>
-                     <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                       {timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : t("memory.overview.sources.timelineUnknown")}
-                     </div>
-                   </div>
-                   <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.footprints.probePreset")}</div>
-                     <div className="mt-2 grid gap-2">
-                       <input
-                         value={timelineProbeRange.startDate}
-                         onChange={(event) => setTimelineProbeRange((current) => ({ ...current, startDate: event.target.value }))}
-                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-sky-500 dark:border-slate-700 dark:bg-slate-950"
-                         placeholder={t("memory.footprints.probePlaceholder")}
-                       />
-                       <input
-                         value={timelineProbeRange.endDate}
-                         onChange={(event) => setTimelineProbeRange((current) => ({ ...current, endDate: event.target.value }))}
-                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-sky-500 dark:border-slate-700 dark:bg-slate-950"
-                         placeholder={t("memory.footprints.probePlaceholder")}
-                       />
-                     </div>
-                     <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                       {t("memory.footprints.probeHint")}
-                     </div>
-                     <button
-                       onClick={handleProbeTimelineRange}
-                       className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800 dark:bg-sky-600 dark:hover:bg-sky-500"
-                     >
-                       <Clock className="w-3.5 h-3.5" />
-                       {timelineProbeState === "probing" ? t("memory.footprints.probe.probing") : timelineProbeState === "done" ? t("memory.footprints.probe.done") : timelineProbeState === "error" ? t("memory.footprints.probe.error") : t("memory.footprints.probe.idle")}
-                     </button>
-                   </div>
-                 </div>
-                 {_timelineError && (
-                   <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
-                     {_timelineError}
-                   </div>
-                 )}
-               </div>
-               <div className="mx-auto grid max-w-6xl gap-6 px-2 md:grid-cols-[0.9fr_1.1fr] md:px-0">
-                 <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                {filteredFootprintGroups.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center p-12 mt-8 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl mx-4 shadow-sm">
-                      <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                        <Footprints className="w-8 h-8 text-slate-400 dark:text-slate-500" />
-                      </div>
-                      <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">{t("memory.footprints.emptyTitle")}</h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">{t("memory.footprints.emptyDesc")}</p>
-                    </div>
-                ) : (
-                  <div className="relative border-l-[2px] rtl:border-l-0 rtl:border-r-[2px] border-slate-200 dark:border-slate-800 ml-4 rtl:ml-0 rtl:mr-4 md:ml-8 rtl:md:mr-8 space-y-8 md:space-y-10 pb-8 pt-2">
-                      {filteredFootprintGroups.map((group) => (
-                        <div key={group.id} className="relative pl-6 rtl:pl-0 rtl:pr-6 md:pl-10 rtl:md:pr-10">
-                          <div className="absolute -left-[15px] rtl:left-auto rtl:-right-[15px] md:-left-[17px] rtl:md:-right-[17px] top-0 w-7 h-7 md:w-8 md:h-8 bg-white dark:bg-slate-800 border-[2px] border-slate-200 dark:border-slate-700 rounded-full flex items-center justify-center shadow-sm z-10">
-                            <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4 text-sky-500" />
-                          </div>
-                          <div className={`mb-4 md:mb-5 rounded-2xl border p-4 transition ${group.entries.some((entry) => entry.name === selectedTimelineEntryName) ? "border-sky-300 bg-sky-50 shadow-sm dark:border-sky-700 dark:bg-slate-800" : "border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/70"}`}>
-                            <div className="flex flex-wrap items-center gap-3 pt-0.5 md:pt-1">
-                              <h3 className="text-[15px] md:text-[16px] font-bold text-slate-800 dark:text-slate-200 tracking-tight" dir="ltr">{group.dateLabel}</h3>
-                              <span className="text-[10px] md:text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-200/60 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200/80 dark:border-slate-700">
-                                {t("memory.footprints.entries", group.entries.length)}
-                              </span>
-                              {group.probeDay && (
-                                <span className="text-[10px] md:text-[11px] font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-900/30 border border-sky-100 dark:border-sky-800/50 px-2 py-0.5 rounded-full">
-                                  {t("memory.footprints.probeStatus", group.probeDay.status)}
-                                </span>
-                              )}
-                            </div>
-                            <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto] md:items-start">
-                              <div className="text-xs leading-5 text-slate-600 dark:text-slate-300">
-                                {group.entries[0]?.content ? group.entries[0].content.slice(0, 180) : group.entries[0]?.path ?? t("memory.footprints.noDetail")}
-                              </div>
-                              <div className={`rounded-xl border px-3 py-2 text-[11px] font-medium shadow-sm ${group.entries.some((entry) => entry.name === selectedTimelineEntryName) ? "border-sky-200 bg-white text-sky-700 dark:border-sky-700 dark:bg-slate-900 dark:text-sky-300" : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>
-                                {group.entries[0]?.updatedAtMs ? new Date(group.entries[0].updatedAtMs).toLocaleTimeString() : t("memory.footprints.noTime")}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="space-y-3 md:space-y-4">
-                            {group.entries.map((item) => (
-                              <div key={item.name} className="relative group outline-none" tabIndex={0} onClick={() => setSelectedTimelineEntryName(item.name)}>
-                                <div className="absolute -left-[29.5px] rtl:left-auto rtl:-right-[29.5px] md:-left-[45px] rtl:md:-right-[45px] top-[16px] md:top-[20px] w-2.5 h-2.5 md:w-3 md:h-3 bg-white dark:bg-slate-800 border-[2px] md:border-[2.5px] border-slate-300 dark:border-slate-600 rounded-full z-10 group-hover:border-sky-400 group-focus:border-sky-500 transition-colors"></div>
-                                <div className={`border rounded-xl md:rounded-lg p-3.5 md:p-4 shadow-sm md:hover:border-sky-300 dark:md:hover:border-sky-700 group-focus:ring-2 group-focus:ring-sky-500 transition-all cursor-pointer ${selectedTimelineEntryName === item.name ? "bg-sky-50 border-sky-300 dark:bg-slate-800 dark:border-sky-700" : "bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-800"}`}>
-                                  <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center gap-1.5 md:gap-2">
-                                      <span className="text-[10px] md:text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1" dir="ltr">
-                                        <Clock className="w-2.5 h-2.5 md:w-3 md:h-3"/> {item.updatedAtMs ? new Date(item.updatedAtMs).toLocaleTimeString() : "-"}
-                                      </span>
-                                      <span className="text-[10px] font-medium text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-900/20 px-1.5 py-0.5 rounded border border-cyan-100 dark:border-cyan-800/50 flex items-center gap-1">
-                                        <Network className="w-2.5 h-2.5 md:w-3 md:h-3" />
-                                        <span className="max-w-[120px] md:max-w-none truncate">{timelineAccess?.mode ?? timelineResult?.source ?? t("memory.footprints.timelineFallback")}</span>
-                                      </span>
-                                      {getAgentBadge(selectedAgentId)}
-                                    </div>
-                                    <span className="text-[10px] md:text-[11px] font-medium text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-900/30 border border-sky-100 dark:border-sky-800/50 px-1.5 md:px-2 py-0.5 rounded">
-                                      {item.name}
-                                    </span>
-                                  </div>
-                                  <p className="text-[13px] text-slate-700 dark:text-slate-300 leading-relaxed">{item.path}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-               </div>
-                 <div className="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white p-5 text-slate-700 shadow-sm dark:border-slate-700/80 dark:from-slate-900 dark:to-slate-900 dark:text-slate-300">
-                 <div className="flex items-center justify-between gap-3">
-                   <div>
-                      <div className="text-sm font-semibold">{t("memory.footprints.detailTitle")}</div>
-                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selectedTimelineDateLabel || selectedTimelineEntryName || t("memory.footprints.detailPrompt")}</div>
-                    </div>
-                   <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                     read only
-                   </span>
-                 </div>
-                 {timelineSelectionHint && (
-                   <div className="mt-3 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-300">
-                     {timelineSelectionHint}
-                   </div>
-                 )}
-                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.footprints.selectedDate")}</div>
-                   <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                     {selectedTimelineEntryName ? selectedTimelineEntryName.replace(/^memory\//, "").replace(/\.md$/i, "") : t("memory.footprints.noDate")}
-                   </div>
-                   <div className="mt-4 grid gap-3 md:grid-cols-2">
-                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-950/50">
-                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.footprints.sourceMode")}</div>
-                       <div className="mt-1 text-slate-800 dark:text-slate-100">{resolveTimelineModeLabel(timelineAccess, timelineResult, t)}</div>
-                     </div>
-                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-950/50">
-                       <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.footprints.currentEntry")}</div>
-                       <div className="mt-1 break-all text-slate-800 dark:text-slate-100">{selectedTimelineEntryName || t("memory.search.na")}</div>
-                     </div>
-                   </div>
-                 </div>
-                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                   <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.footprints.body")}</div>
-                   <div className="text-sm leading-7 text-slate-800 dark:text-slate-100">
-                     {_timelineEntryLoading
-                       ? t("memory.footprints.loading")
-                       : _timelineEntryError
-                         ? _timelineEntryError
-                         : _timelineEntryContent || t("memory.footprints.noBody")}
-                   </div>
-                 </div>
-                 </div>
-               </div>
-            </motion.div>
+            <MemoryViewScrollRegion className="bg-transparent md:bg-slate-50/50 md:dark:bg-slate-900/50 md:p-6 hide-scrollbar">
+              <MemoryFootprintsPanel
+                timelineAccess={timelineAccess}
+                timelineResult={timelineResult}
+                timelineProbeRange={timelineProbeRange}
+                timelineProbeState={timelineProbeState}
+                timelineError={_timelineError}
+                filteredFootprintGroups={filteredFootprintGroups}
+                selectedTimelineEntryName={selectedTimelineEntryName}
+                selectedTimelineDateLabel={selectedTimelineDateLabel}
+                timelineSelectionHint={timelineSelectionHint}
+                timelineEntryContent={_timelineEntryContent}
+                timelineEntryLoading={_timelineEntryLoading}
+                timelineEntryError={_timelineEntryError}
+                selectedAgentId={selectedAgentId}
+                resolveTimelineModeLabel={(access, result) => resolveTimelineModeLabel(access, result, t)}
+                getAgentBadge={getAgentBadge}
+                t={t}
+                onProbeRangeChange={setTimelineProbeRange}
+                onProbeTimelineRange={() => void handleProbeTimelineRange()}
+                onSelectTimelineEntry={setSelectedTimelineEntryName}
+              />
+            </MemoryViewScrollRegion>
           )}
 
           {activeSection === 'search' && (
-            <motion.div
-              key="view-search"
-              className="absolute inset-0 overflow-auto bg-transparent md:bg-slate-50/50 md:dark:bg-slate-900/50 p-4 md:p-6"
-              initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2 }}
-            >
-              <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
-                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                  <div className="text-sm font-semibold">{t("memory.search.title")}</div>
-                  <div className={`mt-3 rounded-2xl border p-3 text-xs shadow-sm ${diagnosticsTone(healthProbeSummary)}`}>
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-semibold">{t("memory.search.diagBar")}</div>
-                        <div className="mt-1">{healthProbeSummary ? `${healthProbeSummary.provider} / ${healthProbeSummary.model}` : t("memory.diag.unavailable")}</div>
-                        <div className="mt-1">{healthProbeSummary ? (healthProbeSummary.embeddingsReady === true ? t("memory.search.diagHealthy") : healthProbeSummary.primaryIssue ?? t("memory.diag.unavailable")) : t("memory.diag.unavailable")}</div>
-                      </div>
-                      <button
-                        onClick={() => setDiagnosticsDrawer({ open: true, source: "search" })}
-                        className="rounded-full border border-current/20 bg-white/90 px-3 py-1 text-xs font-semibold shadow-sm backdrop-blur dark:bg-slate-900/60"
-                      >
-                        Open diagnostics
-                      </button>
-                    </div>
-                  </div>
-                  <DiagnosticsCard title={t("memory.diag.runtimeStatus")} className="mt-3 text-xs">
-                    {runtimeStatusSummary ? (
-                      <div className="space-y-1 text-slate-500 dark:text-slate-400">
-                        <div>
-                          indexed: {runtimeStatusSummary.indexedFiles}
-                          {runtimeStatusSummary.totalFiles != null
-                            ? `/${runtimeStatusSummary.totalFiles}`
-                            : ""} files · {runtimeStatusSummary.chunks} chunks
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-slate-500 dark:text-slate-400">
-                        {isLocalGatewaySession
-                          ? t("memory.diag.runtimePlaceholder")
-                          : t("memory.diag.runtimeRemoteUnavailable")}
-                      </div>
-                    )}
-                  </DiagnosticsCard>
-                  <DiagnosticsCard title={t("memory.search.probeNote")} className="mt-3 text-xs">
-                    <div className="text-slate-500 dark:text-slate-400">{t("memory.search.probeNote")}</div>
-                  </DiagnosticsCard>
-                  <DiagnosticsCard title={t("memory.search.commands.title")} className="mt-3 text-xs">
-                    <div className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                      {healthProbeSummary?.embeddingsReady
-                        ? t("memory.search.commands.providerReady")
-                        : t("memory.search.commands.providerMissing")}
-                    </div>
-                    <div className="text-slate-500 dark:text-slate-400">
-                      {commandGuideDescription}
-                    </div>
-                    <pre className="mt-3 overflow-auto rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">{commandGuide}</pre>
-                    <button
-                      onClick={() => void handleCopyCommandGuide()}
-                      className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-sky-300 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-sky-700 dark:hover:text-sky-300"
-                    >
-                      {copiedCommandGuide ? t("memory.search.commands.copied") : t("memory.search.commands.copy")}
-                    </button>
-                  </DiagnosticsCard>
-                <div className="mt-4 flex gap-2">
-                  <input
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder={t("memory.search.inputPlaceholder")}
-                    className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-sky-300 focus:bg-white dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500"
-                    />
-                    <button
-                      onClick={handleRunSemanticSearch}
-                      disabled={!canRunSemanticMemorySearch(searchQuery, searchRunning)}
-                      className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
-                    >
-                      {searchRunning ? <Search className="w-4 h-4 animate-pulse" /> : <Search className="w-4 h-4" />}
-                      Run
-                    </button>
-                  </div>
-                  {searchError && (
-                    <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
-                      {searchError}
-                    </div>
-                  )}
-                </section>
-                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    {searchGroups.map(({ group, count }) => (
-                      <span key={group} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                        {t("memory.search.groupCount", group, count)}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mb-4 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/60 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-                    {t("memory.search.routingNote")}
-                  </div>
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    {(searchResult?.results ?? []).slice(0, 8).map((entry) => (
-                      <span
-                        key={`source-${entry.id}`}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium ${sourceTone(entry.sourceKind)}`}
-                      >
-                        {entry.sourceKind}
-                      </span>
-                    ))}
-                  </div>
-                  {healthProbeSummary && (
-                    <DiagnosticsCard title={t("memory.diag.healthProbe")} className="mb-4 text-xs">
-                      <div className="mt-1 text-slate-500 dark:text-slate-400">{healthProbeSummary.provider} / {healthProbeSummary.model}</div>
-                      <div className="mt-1 text-slate-500 dark:text-slate-400">embeddings: {healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")}</div>
-                    </DiagnosticsCard>
-                  )}
-                  {healthProbeSummary && memoryStatusError && (
-                    <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
-                      {memoryStatusError}
-                    </div>
-                  )}
-                  {searchResult?.diagnostics && (
-                    <DiagnosticsCard title={t("memory.diag.search")} className="mb-4 text-xs">
-                      <div className="mt-1 text-slate-500 dark:text-slate-400">{searchResult.diagnostics.backend} / {searchResult.diagnostics.storeDriver}</div>
-                      <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{searchResult.diagnostics.storePath}</div>
-                    </DiagnosticsCard>
-                  )}
-                  {searchError ? (
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
-                      {searchError}
-                    </div>
-                    ) : searchResult ? (
-                      <div className="space-y-3">
-                      {searchResult.results.map((entry) => (
-                        <article key={entry.id} className="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white p-4 text-slate-700 shadow-sm transition hover:border-sky-300 hover:shadow-md dark:border-slate-700/80 dark:from-slate-900 dark:to-slate-900 dark:text-slate-300 dark:hover:border-sky-700">
-                          <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 font-medium text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">{entry.sourceKind}</span>
-                            <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">{entry.openTarget}</span>
-                          </div>
-                          <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{resultSubtitle(entry.path, entry.openTarget)}</div>
-                          <div className="mt-3 break-all text-sm font-semibold text-slate-800 dark:text-slate-100">{entry.path}</div>
-                          <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700 dark:text-slate-300">{entry.snippet}</p>
-                          <div className="mt-3 rounded-2xl border border-slate-200 bg-white/90 px-3 py-2 text-xs text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300">
-                            {entry.canonicalDocumentName ?? entry.timelineEntryName ?? t("memory.search.resultFallback")}
-                          </div>
-                          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                            <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{t("memory.search.targetRoute", entry.openTarget)}</span>
-                            {typeof entry.score === "number" && <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-1 font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{t("memory.search.score", entry.score.toFixed(3))}</span>}
-                          </div>
-                          <button
-                            onClick={() => void handleOpenSearchEntry(entry)}
-                            className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 dark:bg-sky-600 dark:hover:bg-sky-500"
-                          >
-                            {resultRouteLabel(entry.openTarget, t)}
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </button>
-                        </article>
-                      ))}
-                      {searchResult.results.length === 0 && (
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                          {t("memory.search.empty")}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                      {t("memory.search.idle")}
-                    </div>
-                  )}
-                  {!healthProbeSummary && memoryStatusError && (
-                    <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
-                      {memoryStatusError}
-                    </div>
-                  )}
-                  {searchDetail && (
-                    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold">{t("memory.search.detailTitle")}</div>
-                          <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{searchDetail.path}</div>
-                        </div>
-                        <button
-                          onClick={() => setSearchDetail(null)}
-                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
-                        >
-                          Close
-                        </button>
-                      </div>
-                      <div className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        {t("memory.search.detailMeta", searchDetail.sourceKind)}
-                      </div>
-                      <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
-                        {searchDetail.loading
-                          ? t("memory.search.detailLoading")
-                          : searchDetail.error
-                            ? searchDetail.error
-                            : searchDetail.content || searchDetail.snippet}
-                      </div>
-                    </div>
-                  )}
-                  {searchOpenHint && (
-                    <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
-                      {searchOpenHint}
-                    </div>
-                  )}
-                </section>
-              </div>
-            </motion.div>
+            <MemoryViewScrollRegion className="bg-transparent md:bg-slate-50/50 md:dark:bg-slate-900/50 p-4 md:p-6">
+              <MemorySearchPanel
+                healthProbeSummary={healthProbeSummary}
+                runtimeStatusSummary={runtimeStatusSummary}
+                isLocalGatewaySession={isLocalGatewaySession}
+                commandGuide={commandGuide}
+                commandGuideDescription={commandGuideDescription}
+                copiedCommandGuide={copiedCommandGuide}
+                searchQuery={searchQuery}
+                searchRunning={searchRunning}
+                searchError={searchError}
+                searchResult={searchResult}
+                searchGroups={searchGroups}
+                searchDetail={searchDetail}
+                searchOpenHint={searchOpenHint}
+                memoryStatusError={memoryStatusError}
+                t={t}
+                sourceTone={sourceTone}
+                resultSubtitle={resultSubtitle}
+                resultRouteLabel={(openTarget) => resultRouteLabel(openTarget, t)}
+                onOpenDiagnostics={() => setDiagnosticsDrawer({ open: true, source: "search" })}
+                onCopyCommandGuide={() => void handleCopyCommandGuide()}
+                onSearchQueryChange={setSearchQuery}
+                onRunSemanticSearch={() => void handleRunSemanticSearch()}
+                onOpenSearchEntry={(entry) => void handleOpenSearchEntry(entry)}
+                onCloseSearchDetail={() => setSearchDetail(null)}
+              />
+            </MemoryViewScrollRegion>
           )}
 
           {activeSection === 'knowledge' && (
-             <motion.div 
-               key="view-knowledge"
-               className="absolute inset-0 overflow-auto bg-transparent md:bg-slate-50/50 md:dark:bg-slate-900/50 p-4 md:p-6"
-               initial={{ opacity: 0, scale: 1.02 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2 }}
-             >
-                <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
-                  <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                    <div className="mb-4 text-sm font-semibold">{t("memory.knowledge.title")}</div>
-                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="font-semibold">{t("memory.knowledge.summary")}</div>
-                          <div className="mt-1">{memoryResult?.diagnostics ? `${memoryResult.diagnostics.backend} / ${memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}` : t("memory.diag.unavailable")}</div>
-                        </div>
-                        <button
-                          onClick={() => setDiagnosticsDrawer({ open: true, source: "knowledge" })}
-                          className="rounded-lg border border-current/20 px-3 py-1 text-xs font-medium"
-                        >
-                          Open diagnostics
-                        </button>
-                      </div>
-                    </div>
-                    {healthProbeSummary && (
-                      <DiagnosticsCard
-                        title={t("memory.diag.healthProbe")}
-                        className={`mb-4 text-xs ${diagnosticsTone(healthProbeSummary)}`}
-                      >
-                        <div>{healthProbeSummary.provider} / {healthProbeSummary.model}</div>
-                        <div className="mt-1">
-                          embeddings: {healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")}
-                        </div>
-                        {healthProbeSummary.embeddingsError && (
-                          <div className="mt-1 text-rose-600 dark:text-rose-300">{healthProbeSummary.embeddingsError}</div>
-                        )}
-                      </DiagnosticsCard>
-                    )}
-                    <DiagnosticsCard title={t("memory.diag.runtimeStatus")} className="mb-4 text-xs">
-                      {runtimeStatusSummary ? (
-                        <div className="space-y-1 text-slate-500 dark:text-slate-400">
-                          <div>
-                            indexed: {runtimeStatusSummary.indexedFiles}
-                            {runtimeStatusSummary.totalFiles != null
-                              ? `/${runtimeStatusSummary.totalFiles}`
-                              : ""} files · {runtimeStatusSummary.chunks} chunks
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-slate-500 dark:text-slate-400">
-                          {isLocalGatewaySession
-                            ? t("memory.diag.runtimePlaceholder")
-                            : t("memory.diag.runtimeRemoteUnavailable")}
-                        </div>
-                      )}
-                    </DiagnosticsCard>
-                    {memoryResult?.diagnostics ? (
-                      <div className="space-y-3 text-sm">
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                          <div className="font-medium">{t("memory.knowledge.backend")}</div>
-                          <div className="mt-1 text-slate-500 dark:text-slate-400">
-                            {memoryResult.diagnostics.backend} / {memoryResult.diagnostics.provider ?? "no provider"}
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                          <div className="font-medium">{t("memory.knowledge.store")}</div>
-                          <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{memoryResult.diagnostics.builtinStorePath}</div>
-                        </div>
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                          <div className="font-medium">{t("memory.knowledge.sources")}</div>
-                          <div className="mt-1 text-slate-500 dark:text-slate-400">{memoryResult.diagnostics.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-300">
-                        {t("memory.knowledge.missing")}
-                      </div>
-                    )}
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/60 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
-                      {t("memory.knowledge.note")}
-                    </div>
-                  </section>
-                  <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                    <div className="mb-4 text-sm font-semibold">{t("memory.knowledge.paths")}</div>
-                    {externalSources.length > 0 ? (
-                      <div className="space-y-2">
-                        {externalSources.map((source) => (
-                          <div key={source.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{source.kind}</div>
-                            <div className="mt-1 break-all text-slate-700 dark:text-slate-200">{source.value}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : memoryResult?.diagnostics ? (
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                        {t("memory.knowledge.pathsEmpty")}
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                        {t("memory.knowledge.pathsUnavailable")}
-                      </div>
-                    )}
-                  </section>
-                  <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-2">
-                    <div className="mb-4 text-sm font-semibold">{t("memory.knowledge.drawerFields")}</div>
-                    {healthProbeSummary || memoryResult?.diagnostics ? (
-                      <div className="space-y-3">
-                        <DiagnosticsCard title={t("memory.diag.healthProbe")}>
-                          <div className="mt-1 text-slate-500 dark:text-slate-400">{healthProbeSummary?.primaryIssue ?? t("memory.diag.noIssue")}</div>
-                          <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">provider: {healthProbeSummary?.provider ?? t("memory.diag.unavailable")}</div>
-                          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">embeddings: {healthProbeSummary ? (healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")) : t("memory.diag.unknownShort")}</div>
-                        </DiagnosticsCard>
-                        <DiagnosticsCard title={t("memory.diag.runtimeStatus")}>
-                          {runtimeStatusSummary ? (
-                            <div className="space-y-1 text-slate-500 dark:text-slate-400">
-                              <div>
-                                indexed: {runtimeStatusSummary.indexedFiles}
-                                {runtimeStatusSummary.totalFiles != null
-                                  ? `/${runtimeStatusSummary.totalFiles}`
-                                  : ""} files · {runtimeStatusSummary.chunks} chunks
-                              </div>
-                              {runtimeStatusSummary.bySource.map((item) => (
-                                <div key={item.source}>
-                                  {item.source}: {item.files} files · {item.chunks} chunks
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-slate-500 dark:text-slate-400">
-                              {isLocalGatewaySession
-                                ? t("memory.diag.runtimePlaceholder")
-                                : t("memory.diag.runtimeRemoteUnavailable")}
-                            </div>
-                          )}
-                        </DiagnosticsCard>
-                        <DiagnosticsCard title={t("memory.diag.knowledge")}>
-                          {memoryResult?.diagnostics ? (
-                            <div className="mt-2 space-y-1 text-xs text-slate-500 dark:text-slate-400">
-                              <div>backend: {memoryResult.diagnostics.backend}</div>
-                              <div>provider: {memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}</div>
-                              <div>store: {memoryResult.diagnostics.builtinStorePath}</div>
-                              <div>sources: {memoryResult.diagnostics.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
-                            </div>
-                          ) : (
-                            <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.missing")}</div>
-                          )}
-                        </DiagnosticsCard>
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                        {t("memory.knowledge.diagUnavailable")}
-                      </div>
-                    )}
-                  </section>
-                </div>
-             </motion.div>
+            <MemoryViewScrollRegion className="bg-transparent md:bg-slate-50/50 md:dark:bg-slate-900/50 p-4 md:p-6">
+              <MemoryKnowledgePanel
+                memoryResult={memoryResult}
+                healthProbeSummary={healthProbeSummary}
+                runtimeStatusSummary={runtimeStatusSummary}
+                externalSources={externalSources}
+                isLocalGatewaySession={isLocalGatewaySession}
+                t={t}
+                onOpenDiagnostics={() => setDiagnosticsDrawer({ open: true, source: "knowledge" })}
+              />
+            </MemoryViewScrollRegion>
           )}
         </AnimatePresence>
-      </div>
+      </MemoryViewShell>
       <style>{`
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
