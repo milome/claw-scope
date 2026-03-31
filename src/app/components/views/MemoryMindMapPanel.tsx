@@ -7,6 +7,8 @@ import { ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveIn
 type MemoryMindMapPanelProps = {
   model: SemanticMindMapModel;
   t: (key: string, ...args: (string | number)[]) => string;
+  showDebug: boolean;
+  onToggleDebug: () => void;
   onOpenEvidence: (evidence: {
     entryId: string;
     title: string;
@@ -108,7 +110,7 @@ function buildFloatingConcepts(anchors: SemanticClusterAnchor[]) {
   );
 }
 
-export function MemoryMindMapPanel({ model, t, onOpenEvidence }: MemoryMindMapPanelProps) {
+export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenEvidence }: MemoryMindMapPanelProps) {
   const anchors = useMemo(() => buildClusterAnchors(model), [model]);
   const floatingConcepts = useMemo(() => buildFloatingConcepts(anchors), [anchors]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>(anchors[0]?.cluster.id ?? model.concepts[0]?.id ?? "");
@@ -175,6 +177,20 @@ export function MemoryMindMapPanel({ model, t, onOpenEvidence }: MemoryMindMapPa
               <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
                 {model.entries.length} entries
               </div>
+            </div>
+
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Semantic Corpus Debug</div>
+                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Inspect exactly which documents/timeline entries were included or filtered out.</div>
+              </div>
+              <button
+                type="button"
+                onClick={onToggleDebug}
+                className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:border-sky-300 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-sky-700 dark:hover:text-sky-300"
+              >
+                {showDebug ? "Hide Debug" : "Show Debug"}
+              </button>
             </div>
 
             <ArchiveDiagnosticsCard title="Semantic summary" className="mb-4 text-xs">
@@ -459,6 +475,58 @@ export function MemoryMindMapPanel({ model, t, onOpenEvidence }: MemoryMindMapPa
                 "No source corpus entries available."
               )}
             </ArchiveDiagnosticsCard>
+
+            {showDebug ? (
+              <ArchiveDiagnosticsCard title="Semantic Corpus Debug" className="mt-4 text-xs">
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-700 dark:bg-slate-950/40">
+                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Diagnostics</div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <div>input documents: {model.debug?.diagnostics.inputDocuments ?? 0}</div>
+                      <div>input timeline entries: {model.debug?.diagnostics.inputTimelineEntries ?? 0}</div>
+                      <div>timeline with content: {model.debug?.diagnostics.timelineEntriesWithContent ?? 0}</div>
+                      <div>timeline missing content: {model.debug?.diagnostics.timelineEntriesMissingContent ?? 0}</div>
+                      <div>timeline too short: {model.debug?.diagnostics.timelineEntriesTooShort ?? 0}</div>
+                      <div>timeline source: {model.debug?.diagnostics.timelineSource ?? "none"}</div>
+                      <div>timeline probe days: {model.debug?.diagnostics.timelineProbeDays ?? 0}</div>
+                      <div className="md:col-span-2">selected timeline entry: {model.debug?.diagnostics.timelineSelectedEntry ?? "none"}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">Included</div>
+                    {model.debug?.included?.length ? (
+                      <div className="space-y-2">
+                        {model.debug.included.map((item) => (
+                          <div key={`included-${item.id}`} className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+                            <div className="font-semibold text-slate-800 dark:text-slate-100">{item.title}</div>
+                            <div className="mt-1 text-slate-600 dark:text-slate-300">{item.sourceKind} · {item.length} chars</div>
+                            {item.path ? <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{item.path}</div> : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-slate-500 dark:text-slate-400">No included corpus items.</div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-300">Excluded</div>
+                    {model.debug?.excluded?.length ? (
+                      <div className="space-y-2">
+                        {model.debug.excluded.map((item) => (
+                          <div key={`excluded-${item.id}`} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900/60 dark:bg-rose-950/20">
+                            <div className="font-semibold text-slate-800 dark:text-slate-100">{item.title}</div>
+                            <div className="mt-1 text-slate-600 dark:text-slate-300">{item.sourceKind} · {item.length} chars · {item.reason}</div>
+                            {item.path ? <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{item.path}</div> : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-slate-500 dark:text-slate-400">No excluded corpus items.</div>
+                    )}
+                  </div>
+                </div>
+              </ArchiveDiagnosticsCard>
+            ) : null}
           </ArchiveSectionCard>
         )}
       />

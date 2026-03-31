@@ -5,6 +5,7 @@ import type {
   SemanticEvidence,
   SemanticGraphEdge,
   SemanticGraphNode,
+  SemanticMemorySourceKind,
   SemanticMemoryEntry,
   SemanticMindMapModel,
 } from "./memorySemanticTypes";
@@ -270,6 +271,96 @@ export function buildSemanticMemoryEntries({
     }));
 
   return [...documentEntries, ...timelineDerived].sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+}
+
+export function buildSemanticCorpusDebug({
+  documents,
+  timelineEntries,
+  agentId,
+  timelineSource,
+  timelineProbeDays,
+  timelineSelectedEntry,
+}: {
+  documents: GatewayAgentFileEntry[];
+  timelineEntries: GatewayAgentFileEntry[];
+  agentId: string;
+  timelineSource?: string | null;
+  timelineProbeDays?: number;
+  timelineSelectedEntry?: string | null;
+}) {
+  const included: Array<{
+    id: string;
+    title: string;
+    sourceKind: SemanticMemorySourceKind;
+    path?: string;
+    length: number;
+    timestamp: number | null;
+  }> = [];
+  const excluded: Array<{
+    id: string;
+    title: string;
+    sourceKind: SemanticMemorySourceKind;
+    path?: string;
+    length: number;
+    reason: string;
+    timestamp: number | null;
+  }> = [];
+
+  let timelineEntriesWithContent = 0;
+  let timelineEntriesMissingContent = 0;
+  let timelineEntriesTooShort = 0;
+
+  const inspect = (entry: GatewayAgentFileEntry, sourceKind: "document" | "timeline") => {
+    const text = normalizeWhitespace(entry.content ?? "");
+    const base = {
+      id: `${sourceKind}:${entry.name}`,
+      title: entry.name,
+      sourceKind,
+      path: entry.path,
+      length: text.length,
+      timestamp: entry.updatedAtMs ?? null,
+    };
+
+    if (entry.missing) {
+      if (sourceKind === "timeline") {
+        timelineEntriesMissingContent += 1;
+      }
+      excluded.push({ ...base, reason: "missing" });
+      return;
+    }
+
+    if (text.length < MIN_TEXT_LENGTH) {
+      if (sourceKind === "timeline") {
+        timelineEntriesTooShort += 1;
+      }
+      excluded.push({ ...base, reason: `too_short(<${MIN_TEXT_LENGTH})` });
+      return;
+    }
+
+    if (sourceKind === "timeline") {
+      timelineEntriesWithContent += 1;
+    }
+    included.push(base);
+  };
+
+  documents.forEach((document) => inspect(document, "document"));
+  timelineEntries.forEach((entry) => inspect(entry, "timeline"));
+
+  return {
+    agentId,
+    included: included.sort((a: { timestamp: number | null }, b: { timestamp: number | null }) => (b.timestamp ?? 0) - (a.timestamp ?? 0)),
+    excluded: excluded.sort((a: { timestamp: number | null }, b: { timestamp: number | null }) => (b.timestamp ?? 0) - (a.timestamp ?? 0)),
+    diagnostics: {
+      inputDocuments: documents.length,
+      inputTimelineEntries: timelineEntries.length,
+      timelineEntriesWithContent,
+      timelineEntriesMissingContent,
+      timelineEntriesTooShort,
+      timelineSource: timelineSource ?? null,
+      timelineProbeDays: timelineProbeDays ?? 0,
+      timelineSelectedEntry: timelineSelectedEntry ?? null,
+    },
+  };
 }
 
 export function buildSemanticMindMapModel(entries: SemanticMemoryEntry[]): SemanticMindMapModel {

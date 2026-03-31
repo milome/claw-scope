@@ -62,4 +62,33 @@ export type SemanticMindMapModel = {
   clusters: SemanticCluster[];
   nodes: SemanticGraphNode[];
   edges: SemanticGraphEdge[];
+  debug?: {
+    included: Array<{
+      id: string;
+      title: string;
+      sourceKind: SemanticMemorySourceKind;
+      path?: string;
+      length: number;
+      timestamp: number | null;
+    }>;
+    excluded: Array<{
+      id: string;
+      title: string;
+      sourceKind: SemanticMemorySourceKind;
+      path?: string;
+      length: number;
+      reason: string;
+      timestamp: number | null;
+    }>;
+    diagnostics: {
+      inputDocuments: number;
+      inputTimelineEntries: number;
+      timelineEntriesWithContent: number;
+      timelineEntriesMissingContent: number;
+      timelineEntriesTooShort: number;
+      timelineSource: string | null;
+      timelineProbeDays: number;
+      timelineSelectedEntry: string | null;
+    };
+  };
 };

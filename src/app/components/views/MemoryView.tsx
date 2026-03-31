@@ -62,6 +62,7 @@ import { MemoryDocumentsDesktop } from "./MemoryDocumentsDesktop";
 import { MemoryDocumentsMobile } from "./MemoryDocumentsMobile";
 import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ArchiveCapsule, ArchiveInfoBlock, ArchiveNotice, ArchivePageHeader, ArchivePane, ArchiveSectionCard, ArchiveSegmentedTabButton, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
 import { buildSemanticMemoryEntries, buildSemanticMindMapModel } from "./memorySemanticState";
+import { buildSemanticCorpusDebug } from "./memorySemanticState";
 
 type MemorySection = "overview" | "documents" | "footprints" | "search" | "knowledge" | "resources";
 
@@ -238,6 +239,7 @@ export function MemoryView() {
   const [searchDetail, setSearchDetail] = useState<SearchDetailState>(null);
   const [searchOpenHint, setSearchOpenHint] = useState<string | null>(null);
   const [copiedCommandGuide, setCopiedCommandGuide] = useState(false);
+  const [mindMapDebugVisible, setMindMapDebugVisible] = useState(false);
   const [mindMapOpenHint, setMindMapOpenHint] = useState<string | null>(null);
   const [selectedDocumentName, setSelectedDocumentName] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -515,8 +517,21 @@ export function MemoryView() {
     [selectedAgentId, timelineResult?.entries, visibleDocuments],
   );
   const semanticMindMapModel = useMemo(
-    () => buildSemanticMindMapModel(semanticEntries),
-    [semanticEntries],
+    () => {
+      const model = buildSemanticMindMapModel(semanticEntries);
+      return {
+        ...model,
+        debug: buildSemanticCorpusDebug({
+          documents: visibleDocuments,
+          timelineEntries: timelineResult?.entries ?? [],
+          agentId: selectedAgentId,
+          timelineSource: timelineResult?.source ?? null,
+          timelineProbeDays: timelineResult?.probe?.days?.length ?? 0,
+          timelineSelectedEntry: selectedTimelineEntryName || null,
+        }),
+      };
+    },
+    [selectedAgentId, selectedTimelineEntryName, semanticEntries, timelineResult?.entries, timelineResult?.probe?.days, timelineResult?.source, visibleDocuments],
   );
   const hasSharedMemory = useMemo(
     () => hasSharedWorkspaceMemory(memoryResult?.sharedAgents ?? []),
@@ -1152,7 +1167,13 @@ export function MemoryView() {
       <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
         <div className="space-y-4">
           {mindMapOpenHint ? <ArchiveNotice>{mindMapOpenHint}</ArchiveNotice> : null}
-          <MemoryMindMapPanel model={semanticMindMapModel} t={t} onOpenEvidence={openMindMapEvidence} />
+          <MemoryMindMapPanel
+            model={semanticMindMapModel}
+            t={t}
+            showDebug={mindMapDebugVisible}
+            onToggleDebug={() => setMindMapDebugVisible((current) => !current)}
+            onOpenEvidence={openMindMapEvidence}
+          />
         </div>
       </ArchivePane>
     ),
