@@ -55,7 +55,7 @@ import { MemoryFootprintsPanel } from "./MemoryFootprintsPanel";
 import { MemoryKnowledgePanel } from "./MemoryKnowledgePanel";
 import { MemoryDocumentsDesktop } from "./MemoryDocumentsDesktop";
 import { MemoryDocumentsMobile } from "./MemoryDocumentsMobile";
-import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ARCHIVE_TABS, ArchiveCapsule, ArchiveInfoBlock, ArchivePageHeader, ArchivePane, ArchiveSectionCard, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
+import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ARCHIVE_TABS, ArchiveCapsule, ArchiveInfoBlock, ArchiveNotice, ArchivePageHeader, ArchivePane, ArchiveSectionCard, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
 
 type MemorySection = "overview" | "documents" | "footprints" | "search" | "knowledge";
 
@@ -787,7 +787,7 @@ export function MemoryView() {
               <ArchiveStatCard label={t("memory.overview.shared")} value={<span className="text-sm font-medium">{hasSharedMemory ? t("memory.overview.sharedYes") : t("memory.overview.sharedNo")}</span>} meta={memoryResult?.sharedAgents.map((agent) => agent.name).join(", ") || t("memory.overview.sharedAgents.none")} />
               <ArchiveStatCard label={t("memory.overview.edit")} value={<span className="text-sm font-medium">{canEdit ? t("memory.overview.edit.writable") : t("memory.overview.edit.readonly")}</span>} meta={canEdit ? t("memory.overview.edit.scopeGranted") : t("memory.overview.edit.scopeDenied")} />
             </div>
-            {_memoryError ? <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">{_memoryError}</div> : null}
+            {_memoryError ? <div className="mt-4"><ArchiveNotice tone="error">{_memoryError}</ArchiveNotice></div> : null}
           </ArchiveSectionCard>
 
           <ArchiveSectionCard>
@@ -806,7 +806,7 @@ export function MemoryView() {
                 <div className="text-slate-500 dark:text-slate-400">{memoryResult?.diagnostics ? `${memoryResult.diagnostics.backend} / ${memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}` : t("memory.overview.sources.knowledgeMissing")}</div>
               </ArchiveInfoBlock>
             </div>
-            {_timelineError ? <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">{_timelineError}</div> : null}
+            {_timelineError ? <div className="mt-4"><ArchiveNotice tone="error">{_timelineError}</ArchiveNotice></div> : null}
           </ArchiveSectionCard>
         </div>
       </ArchiveTabFrame>

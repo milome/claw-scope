@@ -25,7 +25,7 @@ type DiagnosticsDrawerState = {
   source: "search" | "knowledge";
 };
 
-export function DiagnosticsCard({
+function DiagnosticsCard({
   title,
   children,
   className = "",
