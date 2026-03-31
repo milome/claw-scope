@@ -1,7 +1,9 @@
 import { Network, Search } from "lucide-react";
+import { useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import type { GatewayAgentFileEntry } from "../../contexts/OpenClawContext";
 import { ARCHIVE_SPACING, ArchiveActionButton, ArchiveCapsule, ArchiveDetailHeader, ArchiveDetailPane, ArchiveEditorPane, ArchiveFormHeader, ArchiveLayerHeader, ArchiveListCard, ArchiveListPane } from "./memoryArchiveUi";
+import { EvidenceFocusCard } from "./EvidenceFocusCard";
 
 type MemorySearchMatch = {
   start: number;
@@ -22,6 +24,11 @@ type MemoryDocumentsDesktopProps = {
   selectedDocumentName: string;
   selectedDocumentContent: string;
   selectedDocumentUpdatedAtLabel: string;
+  selectedSnippet: string | null;
+  selectedHighlightTerm: string | null;
+  activeHighlightIndex: number;
+  evidenceExpanded: boolean;
+  onToggleEvidenceExpanded: () => void;
   visibleDocuments: GatewayAgentFileEntry[];
   canEdit: boolean;
   isEditing: boolean;
@@ -30,6 +37,8 @@ type MemoryDocumentsDesktopProps = {
   getAgentBadge: (agentId: string) => ReactNode;
   selectedAgentId: string;
   onDocumentQueryChange: (value: string) => void;
+  onPreviousHighlight: () => void;
+  onNextHighlight: () => void;
   onSelectDocument: (name: string) => void;
   onDocumentDraftChange: (value: string) => void;
   onStartEdit: () => void;
@@ -52,6 +61,11 @@ export function MemoryDocumentsDesktop({
   selectedDocumentName,
   selectedDocumentContent,
   selectedDocumentUpdatedAtLabel,
+  selectedSnippet,
+  selectedHighlightTerm,
+  activeHighlightIndex,
+  evidenceExpanded,
+  onToggleEvidenceExpanded,
   visibleDocuments,
   canEdit,
   isEditing,
@@ -60,6 +74,8 @@ export function MemoryDocumentsDesktop({
   getAgentBadge,
   selectedAgentId,
   onDocumentQueryChange,
+  onPreviousHighlight,
+  onNextHighlight,
   onSelectDocument,
   onDocumentDraftChange,
   onStartEdit,
@@ -67,6 +83,88 @@ export function MemoryDocumentsDesktop({
   onSave,
   footerLabel,
 }: MemoryDocumentsDesktopProps) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+
+  const highlightSelection = useMemo(() => {
+    if (!selectedDocumentContent || !selectedHighlightTerm) {
+      return null;
+    }
+
+    const lowerContent = selectedDocumentContent.toLowerCase();
+    const lowerTerm = selectedHighlightTerm.toLowerCase();
+    const matches: { start: number; end: number }[] = [];
+    let cursor = 0;
+
+    while (cursor < selectedDocumentContent.length) {
+      const start = lowerContent.indexOf(lowerTerm, cursor);
+      if (start === -1) {
+        break;
+      }
+      matches.push({ start, end: start + selectedHighlightTerm.length });
+      cursor = start + selectedHighlightTerm.length;
+    }
+
+    if (matches.length === 0) {
+      return null;
+    }
+
+    return {
+      matches,
+      current: matches[Math.max(0, Math.min(activeHighlightIndex, matches.length - 1))],
+    };
+  }, [selectedDocumentContent, selectedHighlightTerm]);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    const overlay = overlayRef.current;
+    if ((!textarea && !overlay) || !highlightSelection) {
+      return;
+    }
+
+    const lineHeight = 24;
+    const linesBefore = selectedDocumentContent.slice(0, highlightSelection.current.start).split("\n").length - 1;
+    const scrollTop = Math.max(0, linesBefore * lineHeight - (textarea?.clientHeight ?? overlay?.clientHeight ?? 0) / 3);
+
+    if (textarea) {
+      textarea.scrollTop = scrollTop;
+      if (isEditing) {
+        textarea.focus();
+        textarea.setSelectionRange(highlightSelection.current.start, highlightSelection.current.end);
+      }
+    }
+
+    if (overlay) {
+      overlay.scrollTop = scrollTop;
+    }
+  }, [highlightSelection, isEditing, selectedDocumentContent]);
+
+  const highlightedSegments = useMemo(() => {
+    if (!selectedDocumentContent || !selectedHighlightTerm) {
+      return [{ text: selectedDocumentContent, match: false }];
+    }
+
+    const lowerContent = selectedDocumentContent.toLowerCase();
+    const lowerTerm = selectedHighlightTerm.toLowerCase();
+    const segments: { text: string; match: boolean }[] = [];
+    let cursor = 0;
+
+    while (cursor < selectedDocumentContent.length) {
+      const index = lowerContent.indexOf(lowerTerm, cursor);
+      if (index === -1) {
+        segments.push({ text: selectedDocumentContent.slice(cursor), match: false });
+        break;
+      }
+      if (index > cursor) {
+        segments.push({ text: selectedDocumentContent.slice(cursor, index), match: false });
+      }
+      segments.push({ text: selectedDocumentContent.slice(index, index + selectedHighlightTerm.length), match: true });
+      cursor = index + selectedHighlightTerm.length;
+    }
+
+    return segments;
+  }, [selectedDocumentContent, selectedHighlightTerm]);
+
   return (
     <div className="hidden flex-1 flex-col md:flex bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.88))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,1),rgba(2,6,23,0.92))]">
       <div className="px-5 pt-5">
@@ -197,14 +295,75 @@ export function MemoryDocumentsDesktop({
                     )}
                   </ArchiveFormHeader>
                   <div className="flex min-h-0 flex-1 rounded-[24px] border border-slate-200/90 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-950/50">
-                    <textarea
-                      value={selectedDocumentContent}
-                      onChange={(event) => onDocumentDraftChange(event.target.value)}
-                      readOnly={!canEdit || !isEditing}
-                      spellCheck={false}
-                      className="min-h-0 flex-1 w-full resize-none rounded-[24px] bg-transparent px-4 py-4 font-mono text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500 overflow-auto"
-                    />
+                    {canEdit && isEditing ? (
+                      <div className="relative min-h-0 flex-1">
+                        <div
+                          ref={overlayRef}
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-0 overflow-auto whitespace-pre-wrap rounded-[24px] px-4 py-4 font-mono text-[13px] leading-6 text-transparent"
+                        >
+                          {highlightedSegments.map((segment, index) =>
+                            segment.match ? (
+                              <mark key={index} className="rounded bg-sky-200 px-0.5 text-transparent dark:bg-sky-500/40">
+                                {segment.text}
+                              </mark>
+                            ) : (
+                              <span key={index}>{segment.text}</span>
+                            ),
+                          )}
+                        </div>
+                        <textarea
+                          ref={textareaRef}
+                          value={selectedDocumentContent}
+                          onChange={(event) => onDocumentDraftChange(event.target.value)}
+                          onScroll={(event) => {
+                            if (overlayRef.current) {
+                              overlayRef.current.scrollTop = event.currentTarget.scrollTop;
+                            }
+                          }}
+                          readOnly={false}
+                          spellCheck={false}
+                          className="relative min-h-0 flex-1 w-full resize-none rounded-[24px] bg-transparent px-4 py-4 font-mono text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500 overflow-auto"
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        ref={overlayRef}
+                        className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded-[24px] px-4 py-4 font-mono text-[13px] leading-6 text-slate-800 dark:text-slate-100"
+                      >
+                        {highlightedSegments.map((segment, index) =>
+                          segment.match ? (
+                            <mark key={index} className="rounded bg-sky-200 px-0.5 text-slate-900 dark:bg-sky-500/40 dark:text-sky-50">
+                              {segment.text}
+                            </mark>
+                          ) : (
+                            <span key={index}>{segment.text}</span>
+                          ),
+                        )}
+                      </div>
+                    )}
                   </div>
+                  {selectedSnippet ? (
+                    <div className="mt-4">
+                      <EvidenceFocusCard
+                        title="Evidence focus"
+                        snippet={selectedSnippet}
+                        sourceTitle={selectedDocument?.name ?? null}
+                        expanded={evidenceExpanded}
+                        onToggle={onToggleEvidenceExpanded}
+                        navigationLabel="Source anchor"
+                        navigationMeta={selectedDocument?.path ?? null}
+                      >
+                        {highlightSelection ? (
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={onPreviousHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">Prev</button>
+                            <span className="text-[11px] font-semibold">{Math.max(1, Math.min(activeHighlightIndex + 1, highlightSelection.matches.length))}/{highlightSelection.matches.length}</span>
+                            <button type="button" onClick={onNextHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">Next</button>
+                          </div>
+                        ) : null}
+                      </EvidenceFocusCard>
+                    </div>
+                  ) : null}
                 </>
               )}
               footer={(

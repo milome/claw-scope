@@ -1,20 +1,33 @@
 import { Calendar, Clock, Footprints, Network } from "lucide-react";
 import { motion } from "motion/react";
+import { useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import type { GatewayAgentMemoryTimelineAccessResult, GatewayAgentMemoryTimelineResult } from "../../contexts/OpenClawContext";
 import type { MemoryFootprintGroup } from "./memoryState";
 import { ArchiveCapsule, ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveInfoBlock, ArchiveNotice, ArchiveSectionCard, ArchiveSplitPanel } from "./memoryArchiveUi";
+import { EvidenceFocusCard } from "./EvidenceFocusCard";
 
 type MemoryFootprintsPanelProps = {
   timelineAccess: GatewayAgentMemoryTimelineAccessResult | null;
   timelineResult: GatewayAgentMemoryTimelineResult | null;
   timelineProbeRange: { startDate: string; endDate: string };
   timelineProbeState: "idle" | "probing" | "done" | "error";
+  timelineProbeFeedback: {
+    coveredDates: string[];
+    missingDates: string[];
+    probingDates: string[];
+    failureReasons: Record<string, string>;
+  };
   timelineError: string | null;
   filteredFootprintGroups: MemoryFootprintGroup[];
   selectedTimelineEntryName: string;
   selectedTimelineDateLabel: string;
   timelineSelectionHint: string | null;
+  selectedSnippet: string | null;
+  selectedHighlightTerm: string | null;
+  activeHighlightIndex: number;
+  evidenceExpanded: boolean;
+  onToggleEvidenceExpanded: () => void;
   timelineEntryContent: string;
   timelineEntryLoading: boolean;
   timelineEntryError: string | null;
@@ -27,6 +40,9 @@ type MemoryFootprintsPanelProps = {
   t: (key: string, ...args: (string | number)[]) => string;
   onProbeRangeChange: (next: { startDate: string; endDate: string }) => void;
   onProbeTimelineRange: () => void;
+  onRetryProbeDate: (date: string) => void;
+  onPreviousHighlight: () => void;
+  onNextHighlight: () => void;
   onSelectTimelineEntry: (name: string) => void;
 };
 
@@ -35,11 +51,17 @@ export function MemoryFootprintsPanel({
   timelineResult,
   timelineProbeRange,
   timelineProbeState,
+  timelineProbeFeedback,
   timelineError,
   filteredFootprintGroups,
   selectedTimelineEntryName,
   selectedTimelineDateLabel,
   timelineSelectionHint,
+  selectedSnippet,
+  selectedHighlightTerm,
+  activeHighlightIndex,
+  evidenceExpanded,
+  onToggleEvidenceExpanded,
   timelineEntryContent,
   timelineEntryLoading,
   timelineEntryError,
@@ -49,8 +71,79 @@ export function MemoryFootprintsPanel({
   t,
   onProbeRangeChange,
   onProbeTimelineRange,
+  onRetryProbeDate,
+  onPreviousHighlight,
+  onNextHighlight,
   onSelectTimelineEntry,
 }: MemoryFootprintsPanelProps) {
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+
+  const highlightSelection = useMemo(() => {
+    if (!timelineEntryContent || !selectedHighlightTerm) {
+      return null;
+    }
+
+    const lowerContent = timelineEntryContent.toLowerCase();
+    const lowerTerm = selectedHighlightTerm.toLowerCase();
+    const matches: { start: number; end: number }[] = [];
+    let cursor = 0;
+
+    while (cursor < timelineEntryContent.length) {
+      const start = lowerContent.indexOf(lowerTerm, cursor);
+      if (start === -1) {
+        break;
+      }
+      matches.push({ start, end: start + selectedHighlightTerm.length });
+      cursor = start + selectedHighlightTerm.length;
+    }
+
+    if (matches.length === 0) {
+      return null;
+    }
+
+    return {
+      matches,
+      current: matches[Math.max(0, Math.min(activeHighlightIndex, matches.length - 1))],
+    };
+  }, [activeHighlightIndex, selectedHighlightTerm, timelineEntryContent]);
+
+  const highlightedSegments = useMemo(() => {
+    if (!timelineEntryContent || !selectedHighlightTerm) {
+      return [{ text: timelineEntryContent, match: false }];
+    }
+
+    const lowerContent = timelineEntryContent.toLowerCase();
+    const lowerTerm = selectedHighlightTerm.toLowerCase();
+    const segments: { text: string; match: boolean }[] = [];
+    let cursor = 0;
+
+    while (cursor < timelineEntryContent.length) {
+      const index = lowerContent.indexOf(lowerTerm, cursor);
+      if (index === -1) {
+        segments.push({ text: timelineEntryContent.slice(cursor), match: false });
+        break;
+      }
+      if (index > cursor) {
+        segments.push({ text: timelineEntryContent.slice(cursor, index), match: false });
+      }
+      segments.push({ text: timelineEntryContent.slice(index, index + selectedHighlightTerm.length), match: true });
+      cursor = index + selectedHighlightTerm.length;
+    }
+
+    return segments;
+  }, [selectedHighlightTerm, timelineEntryContent]);
+
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body || !highlightSelection) {
+      return;
+    }
+
+    const lineHeight = 28;
+    const linesBefore = timelineEntryContent.slice(0, highlightSelection.current.start).split("\n").length - 1;
+    body.scrollTop = Math.max(0, linesBefore * lineHeight - body.clientHeight / 3);
+  }, [highlightSelection, timelineEntryContent]);
+
   return (
     <motion.div
       key="view-day"
@@ -101,6 +194,39 @@ export function MemoryFootprintsPanel({
                           ? t("memory.footprints.probe.error")
                           : t("memory.footprints.probe.idle")}
                   </button>
+                  <div className="mt-3 space-y-2 text-[11px]">
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
+                      covered: {timelineProbeFeedback.coveredDates.length > 0 ? timelineProbeFeedback.coveredDates.join(", ") : "none"}
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                      <div>missing:</div>
+                      {timelineProbeFeedback.missingDates.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {timelineProbeFeedback.missingDates.map((date) => (
+                            <div key={date} className="flex items-center gap-2 rounded-full border border-amber-300 bg-white px-2.5 py-1 text-[10px] font-semibold text-amber-700 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+                              <button
+                                type="button"
+                                onClick={() => onRetryProbeDate(date)}
+                                className="transition hover:text-amber-900 dark:hover:text-amber-100"
+                              >
+                                {date}
+                              </button>
+                              {timelineProbeFeedback.failureReasons[date] ? (
+                                <span className="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300">
+                                  {timelineProbeFeedback.failureReasons[date]}
+                                </span>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-1">none</div>
+                      )}
+                    </div>
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300">
+                      probing: {timelineProbeFeedback.probingDates.length > 0 ? timelineProbeFeedback.probingDates.join(", ") : "idle"}
+                    </div>
+                  </div>
                 </ArchiveInfoBlock>
               </div>
               {timelineError ? <div className="mt-3"><ArchiveNotice tone="error">{timelineError}</ArchiveNotice></div> : null}
@@ -184,14 +310,45 @@ export function MemoryFootprintsPanel({
                     </div>
                   </ArchiveInfoBlock>
                   <ArchiveDiagnosticsCard title={t("memory.footprints.body")} className="mt-4 text-sm leading-7 text-slate-800 dark:text-slate-100">
-                    <div className="text-sm leading-7 text-slate-800 dark:text-slate-100">
+                    <div ref={bodyRef} className="max-h-[360px] overflow-auto text-sm leading-7 text-slate-800 dark:text-slate-100">
                       {timelineEntryLoading
                         ? t("memory.footprints.loading")
                         : timelineEntryError
                           ? timelineEntryError
-                          : timelineEntryContent || t("memory.footprints.noBody")}
+                          : timelineEntryContent
+                            ? highlightedSegments.map((segment, index) =>
+                                segment.match ? (
+                                  <mark key={index} className="rounded bg-sky-200 px-0.5 text-slate-900 dark:bg-sky-500/40 dark:text-sky-50">
+                                    {segment.text}
+                                  </mark>
+                                ) : (
+                                  <span key={index}>{segment.text}</span>
+                                ),
+                              )
+                            : t("memory.footprints.noBody")}
                     </div>
                   </ArchiveDiagnosticsCard>
+                  {selectedSnippet ? (
+                    <div className="mt-4">
+                      <EvidenceFocusCard
+                        title="Evidence focus"
+                        snippet={selectedSnippet}
+                        sourceTitle={selectedTimelineEntryName || null}
+                        expanded={evidenceExpanded}
+                        onToggle={onToggleEvidenceExpanded}
+                        navigationLabel="Source anchor"
+                        navigationMeta={selectedTimelineDateLabel || null}
+                      >
+                        {highlightSelection ? (
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={onPreviousHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">Prev</button>
+                            <span className="text-[11px] font-semibold">{Math.max(1, Math.min(activeHighlightIndex + 1, highlightSelection.matches.length))}/{highlightSelection.matches.length}</span>
+                            <button type="button" onClick={onNextHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">Next</button>
+                          </div>
+                        ) : null}
+                      </EvidenceFocusCard>
+                    </div>
+                  ) : null}
                 </>
               )}
             />

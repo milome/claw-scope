@@ -13,11 +13,11 @@ export const ARCHIVE_SURFACE = {
 };
 
 export const ARCHIVE_TABS = {
-  container: "flex flex-wrap gap-2",
+  container: "flex flex-wrap gap-2 rounded-[24px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.88))] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(2,6,23,0.78))]",
   active:
-    "border border-sky-200 bg-sky-50 text-sky-700 shadow-sm dark:border-sky-700 dark:bg-sky-950/30 dark:text-sky-300",
+    "border border-sky-200 bg-[linear-gradient(180deg,rgba(240,249,255,1),rgba(224,242,254,0.92))] text-sky-700 shadow-sm shadow-sky-100/80 dark:border-sky-700 dark:bg-[linear-gradient(180deg,rgba(8,47,73,0.9),rgba(12,74,110,0.52))] dark:text-sky-300 dark:shadow-none",
   idle:
-    "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600",
+    "border border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white/90 hover:text-slate-900 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-900/80 dark:hover:text-slate-100",
 };
 
 export function ArchiveLayerHeader({
@@ -201,7 +201,7 @@ export function ArchiveTabSurface({
   children: ReactNode;
 }) {
   return (
-    <div className="flex-1 rounded-xl md:rounded-lg border-none md:border md:border-slate-200 md:shadow-sm overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.88))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,1),rgba(2,6,23,0.92))] dark:md:border-slate-800">
+    <div className="flex-1 min-h-0 rounded-[28px] border border-slate-200/90 shadow-[0_18px_44px_rgba(15,23,42,0.08)] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.88))] dark:border-slate-800 dark:bg-[linear-gradient(180deg,rgba(15,23,42,1),rgba(2,6,23,0.92))] dark:shadow-none">
       {children}
     </div>
   );
@@ -445,4 +445,40 @@ export function ArchiveTabFrame({
 
 export function ArchiveTabBar({ children }: { children: ReactNode }) {
   return <div className={ARCHIVE_TABS.container}>{children}</div>;
+}
+
+export function ArchiveSegmentedTabButton({
+  active,
+  icon: Icon,
+  label,
+  description,
+  onClick,
+}: {
+  active: boolean;
+  icon: LucideIcon;
+  label: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group min-w-[150px] flex-1 rounded-[18px] px-3 py-3 text-left transition ${active ? ARCHIVE_TABS.active : ARCHIVE_TABS.idle}`}
+    >
+      <div className="flex items-start gap-3">
+        <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border transition ${active ? "border-sky-200 bg-white text-sky-600 dark:border-sky-700 dark:bg-slate-950/60 dark:text-sky-300" : "border-slate-200 bg-white/90 text-slate-500 group-hover:border-slate-300 group-hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:border-slate-600 dark:group-hover:text-slate-100"}`}>
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <div className={`text-sm font-semibold tracking-tight ${active ? "text-sky-900 dark:text-sky-100" : "text-slate-800 dark:text-slate-100"}`}>
+            {label}
+          </div>
+          <div className={`mt-1 text-xs leading-5 ${active ? "text-sky-700/90 dark:text-sky-200/80" : "text-slate-500 dark:text-slate-400"}`}>
+            {description}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
 }

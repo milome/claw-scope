@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Calendar, Network, Cpu, BrainCircuit, Database, ChevronDown, BookOpen, FileText } from "lucide-react";
+import { Search, Calendar, Network, Cpu, BrainCircuit, Database, ChevronDown, BookOpen, FileText, FolderTree } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { useI18n } from "../../contexts/I18nContext";
@@ -15,6 +15,7 @@ import {
   gatewayAgentMemoryTimelineEntryRead,
   gatewayAgentMemoryTimelineGet,
   gatewayAgentMemoryTimelineLocalScan,
+  gatewayAgentMemoryTimelineRemoteProbeDates,
   gatewayAgentMemoryTimelineRemoteProbe,
   type GatewayAgentMemoryResult,
   type GatewayAgentMemoryRuntimeStatusResult,
@@ -25,14 +26,17 @@ import {
   useOpenClaw,
 } from "../../contexts/OpenClawContext";
 import {
+  buildCanonicalDateRange,
   buildMemoryFootprintGroups,
   canEditMemory,
   canLoadLocalTimeline,
+  collectTimelineEntryCoveredDates,
   collectTextSearchMatches,
   createMemoryDrafts,
   filterMemoryFootprintGroups,
   hasSharedWorkspaceMemory,
   isMemoryDocumentDirty,
+  mergeTimelineProbeResults,
   resolveExternalMemorySources,
   resolveMemoryDocumentContent,
   resolveMemoryRootDocument,
@@ -52,12 +56,14 @@ import {
 import { MemoryDiagnosticsDrawer } from "./MemoryDiagnosticsDrawer";
 import { MemorySearchPanel } from "./MemorySearchPanel";
 import { MemoryFootprintsPanel } from "./MemoryFootprintsPanel";
-import { MemoryKnowledgePanel } from "./MemoryKnowledgePanel";
+import { MemoryMindMapPanel } from "./MemoryMindMapPanel";
+import { MemoryResourcesPanel } from "./MemoryResourcesPanel";
 import { MemoryDocumentsDesktop } from "./MemoryDocumentsDesktop";
 import { MemoryDocumentsMobile } from "./MemoryDocumentsMobile";
-import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ARCHIVE_TABS, ArchiveCapsule, ArchiveInfoBlock, ArchiveNotice, ArchivePageHeader, ArchivePane, ArchiveSectionCard, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
+import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ArchiveCapsule, ArchiveInfoBlock, ArchiveNotice, ArchivePageHeader, ArchivePane, ArchiveSectionCard, ArchiveSegmentedTabButton, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
+import { buildSemanticMemoryEntries, buildSemanticMindMapModel } from "./memorySemanticState";
 
-type MemorySection = "overview" | "documents" | "footprints" | "search" | "knowledge";
+type MemorySection = "overview" | "documents" | "footprints" | "search" | "knowledge" | "resources";
 
 export type SearchDetailState = {
   title: string;
@@ -179,6 +185,25 @@ function resolveTimelineModeLabel(
   return t("memory.timeline.mode.unknown");
 }
 
+function sectionDescription(section: MemorySection, t: (key: string, ...args: (string | number)[]) => string) {
+  switch (section) {
+    case "overview":
+      return t("memory.overview.sources.title");
+    case "documents":
+      return t("memory.documents.desc");
+    case "footprints":
+      return t("memory.footprints.probeHint");
+    case "search":
+      return t("memory.search.routingNote");
+    case "knowledge":
+      return t("memory.knowledge.subtitle");
+    case "resources":
+      return "Structural sources, files, diagnostics, and runtime topology.";
+    default:
+      return t("memory.desc");
+  }
+}
+
 export function MemoryView() {
   const { t } = useI18n();
   const { agents, grantedScopes, isConnected, connectedOrigin } = useOpenClaw();
@@ -195,6 +220,13 @@ export function MemoryView() {
     resolveTimelineProbeRangePreset(new Date().toISOString().slice(0, 10)),
   );
   const [timelineProbeState, setTimelineProbeState] = useState<"idle" | "probing" | "done" | "error">("idle");
+  const [timelineProbeCache, setTimelineProbeCache] = useState<Record<string, GatewayAgentMemoryTimelineResult>>({});
+  const [timelineProbeFeedback, setTimelineProbeFeedback] = useState<{
+    coveredDates: string[];
+    missingDates: string[];
+    probingDates: string[];
+    failureReasons: Record<string, string>;
+  }>({ coveredDates: [], missingDates: [], probingDates: [], failureReasons: {} });
   const [memoryStatus, setMemoryStatus] = useState<GatewayAgentMemoryStatusResult | null>(null);
   const [memoryStatusError, setMemoryStatusError] = useState<string | null>(null);
   const [memoryRuntimeStatus, setMemoryRuntimeStatus] = useState<GatewayAgentMemoryRuntimeStatusResult | null>(null);
@@ -206,12 +238,17 @@ export function MemoryView() {
   const [searchDetail, setSearchDetail] = useState<SearchDetailState>(null);
   const [searchOpenHint, setSearchOpenHint] = useState<string | null>(null);
   const [copiedCommandGuide, setCopiedCommandGuide] = useState(false);
+  const [mindMapOpenHint, setMindMapOpenHint] = useState<string | null>(null);
   const [selectedDocumentName, setSelectedDocumentName] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [documentQuery, setDocumentQuery] = useState("");
   const [documentMatchIndex, setDocumentMatchIndex] = useState(-1);
   const [documentSearchSource, setDocumentSearchSource] = useState<"manual" | "search_result">("manual");
   const [documentSearchHint, setDocumentSearchHint] = useState<string | null>(null);
+  const [documentEvidenceSnippet, setDocumentEvidenceSnippet] = useState<string | null>(null);
+  const [documentEvidenceTerm, setDocumentEvidenceTerm] = useState<string | null>(null);
+  const [documentEvidenceMatchIndex, setDocumentEvidenceMatchIndex] = useState(0);
+  const [documentEvidenceExpanded, setDocumentEvidenceExpanded] = useState(false);
   const [documentSaveState, setDocumentSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [documentSaveMessage, setDocumentSaveMessage] = useState<string | null>(null);
   const [isEditingDocument, setIsEditingDocument] = useState(false);
@@ -219,6 +256,10 @@ export function MemoryView() {
   const [selectedTimelineEntryName, setSelectedTimelineEntryName] = useState("");
   const [selectedTimelineDateLabel, setSelectedTimelineDateLabel] = useState("");
   const [timelineSelectionHint, setTimelineSelectionHint] = useState<string | null>(null);
+  const [timelineEvidenceSnippet, setTimelineEvidenceSnippet] = useState<string | null>(null);
+  const [timelineEvidenceTerm, setTimelineEvidenceTerm] = useState<string | null>(null);
+  const [timelineEvidenceMatchIndex, setTimelineEvidenceMatchIndex] = useState(0);
+  const [timelineEvidenceExpanded, setTimelineEvidenceExpanded] = useState(false);
   const [_timelineEntryContent, setTimelineEntryContent] = useState("");
   const [_timelineEntryLoading, setTimelineEntryLoading] = useState(false);
   const [_timelineEntryError, setTimelineEntryError] = useState<string | null>(null);
@@ -465,6 +506,18 @@ export function MemoryView() {
     () => resolveExternalMemorySources(memoryResult?.diagnostics),
     [memoryResult?.diagnostics],
   );
+  const semanticEntries = useMemo(
+    () => buildSemanticMemoryEntries({
+      documents: visibleDocuments,
+      timelineEntries: timelineResult?.entries ?? [],
+      agentId: selectedAgentId,
+    }),
+    [selectedAgentId, timelineResult?.entries, visibleDocuments],
+  );
+  const semanticMindMapModel = useMemo(
+    () => buildSemanticMindMapModel(semanticEntries),
+    [semanticEntries],
+  );
   const hasSharedMemory = useMemo(
     () => hasSharedWorkspaceMemory(memoryResult?.sharedAgents ?? []),
     [memoryResult?.sharedAgents],
@@ -486,6 +539,53 @@ export function MemoryView() {
       count: counts[group],
     }));
   }, [searchResult]);
+
+  const openMindMapEvidence = (evidence: {
+    entryId: string;
+    title: string;
+    sourceKind: "document" | "timeline";
+    path?: string;
+    snippet: string;
+    matchedTerms: string[];
+  }) => {
+    if (evidence.sourceKind === "document") {
+      const normalizedTitle = normalizeRootMemoryDocumentName(evidence.title);
+      const targetDocument = visibleDocuments.find(
+        (document) => normalizeRootMemoryDocumentName(document.name) === normalizedTitle,
+      );
+      if (targetDocument) {
+        setSelectedDocumentName(targetDocument.name);
+        setDocumentQuery(evidence.matchedTerms?.[0] ?? evidence.snippet.split(" ")[0] ?? "");
+        setDocumentSearchSource("search_result");
+        setDocumentSearchHint(`Mind Map evidence opened ${targetDocument.name}.`);
+        setDocumentEvidenceSnippet(evidence.snippet);
+        setDocumentEvidenceTerm(evidence.matchedTerms[0] ?? null);
+        setDocumentEvidenceMatchIndex(0);
+        setDocumentEvidenceExpanded(true);
+        setActiveSection("documents");
+        setMindMapOpenHint(`Opened evidence in Documents: ${targetDocument.name}`);
+        return;
+      }
+    }
+
+    if (evidence.sourceKind === "timeline") {
+      const timelineName = evidence.title;
+      const timelineMatch = (timelineResult?.entries ?? []).find((entry) => entry.name === timelineName);
+      if (timelineMatch) {
+        setSelectedTimelineEntryName(timelineMatch.name);
+        setTimelineSelectionHint(`Mind Map evidence opened ${timelineMatch.name}.`);
+        setTimelineEvidenceSnippet(evidence.snippet);
+        setTimelineEvidenceTerm(evidence.matchedTerms[0] ?? null);
+        setTimelineEvidenceMatchIndex(0);
+        setTimelineEvidenceExpanded(true);
+        setActiveSection("footprints");
+        setMindMapOpenHint(`Opened evidence in Footprints: ${timelineMatch.name}`);
+        return;
+      }
+    }
+
+    setMindMapOpenHint("Could not resolve the evidence target back to documents or footprints.");
+  };
 
   useEffect(() => {
     setDocumentMatchIndex(documentMatches.length > 0 ? 0 : -1);
@@ -629,24 +729,147 @@ export function MemoryView() {
       return;
     }
 
-    setTimelineProbeState("probing");
-    setTimelineLoading(true);
-    try {
-      const result = await gatewayAgentMemoryTimelineRemoteProbe(
-        selectedAgentId,
-        timelineProbeRange.startDate,
-        timelineProbeRange.endDate,
-      );
-      setTimelineResult(result);
+    const cacheKey = `${selectedAgentId}:${timelineProbeRange.startDate}:${timelineProbeRange.endDate}`;
+    const cached = timelineProbeCache[cacheKey];
+    if (cached) {
+      setTimelineResult(cached);
       setTimelineError(null);
       setSelectedTimelineEntryName((current) =>
-        resolveSelectedTimelineEntryName(current, result),
+        resolveSelectedTimelineEntryName(current, cached),
       );
       setActiveSection("footprints");
       setTimelineProbeState("done");
+      return;
+    }
+
+    const requestedDates = buildCanonicalDateRange(
+      timelineProbeRange.startDate,
+      timelineProbeRange.endDate,
+    );
+    const coveredDates = collectTimelineEntryCoveredDates(timelineResult?.entries ?? []);
+    const missingDates = requestedDates.filter((date) => !coveredDates.has(date));
+    const locallyCovered = requestedDates.filter((date) => coveredDates.has(date));
+
+    setTimelineProbeFeedback({
+      coveredDates: locallyCovered,
+      missingDates,
+      probingDates: [],
+      failureReasons: {},
+    });
+
+    if (missingDates.length === 0 && timelineResult) {
+      setTimelineProbeCache((current) => ({
+        ...current,
+        [cacheKey]: timelineResult,
+      }));
+      setTimelineResult(timelineResult);
+      setTimelineError(null);
+      setSelectedTimelineEntryName((current) =>
+        resolveSelectedTimelineEntryName(current, timelineResult),
+      );
+      setActiveSection("footprints");
+      setTimelineProbeState("done");
+      setTimelineProbeFeedback({
+        coveredDates: locallyCovered,
+        missingDates: [],
+        probingDates: [],
+        failureReasons: {},
+      });
+      return;
+    }
+
+    setTimelineProbeState("probing");
+    setTimelineLoading(true);
+    setTimelineProbeFeedback({
+      coveredDates: locallyCovered,
+      missingDates,
+      probingDates: missingDates,
+      failureReasons: {},
+    });
+    try {
+      const result = missingDates.length > 0
+        ? await gatewayAgentMemoryTimelineRemoteProbeDates(selectedAgentId, missingDates)
+        : await gatewayAgentMemoryTimelineRemoteProbe(
+            selectedAgentId,
+            timelineProbeRange.startDate,
+            timelineProbeRange.endDate,
+          );
+      const merged = mergeTimelineProbeResults({
+        current: timelineResult,
+        retryResult: result,
+      });
+      setTimelineResult(merged);
+      setTimelineProbeCache((current) => ({
+        ...current,
+        [cacheKey]: merged,
+      }));
+      setTimelineError(null);
+      setSelectedTimelineEntryName((current) =>
+        resolveSelectedTimelineEntryName(current, merged),
+      );
+      setActiveSection("footprints");
+      setTimelineProbeState("done");
+      setTimelineProbeFeedback({
+        coveredDates: requestedDates,
+        missingDates: [],
+        probingDates: [],
+        failureReasons: {},
+      });
     } catch (error) {
       setTimelineError(error instanceof Error ? error.message : String(error));
       setTimelineProbeState("error");
+      setTimelineProbeFeedback({
+        coveredDates: locallyCovered,
+        missingDates,
+        probingDates: [],
+        failureReasons: Object.fromEntries(missingDates.map((date) => [date, error instanceof Error ? error.message : String(error)])),
+      });
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
+
+  const handleRetryProbeDate = async (date: string) => {
+    if (!selectedAgentId) {
+      return;
+    }
+
+    setTimelineProbeState("probing");
+    setTimelineLoading(true);
+    setTimelineProbeFeedback((current) => ({
+      ...current,
+      probingDates: [date],
+    }));
+
+    try {
+      const result = await gatewayAgentMemoryTimelineRemoteProbeDates(selectedAgentId, [date]);
+      const merged = mergeTimelineProbeResults({
+        current: timelineResult,
+        retryResult: result,
+      });
+      setTimelineResult(merged);
+      setTimelineError(null);
+      setSelectedTimelineEntryName((current) =>
+        resolveSelectedTimelineEntryName(current, merged),
+      );
+      setTimelineProbeState("done");
+      setTimelineProbeFeedback((current) => ({
+        coveredDates: Array.from(new Set([...current.coveredDates, date])).sort(),
+        missingDates: current.missingDates.filter((item) => item !== date),
+        probingDates: [],
+        failureReasons: Object.fromEntries(Object.entries(current.failureReasons).filter(([key]) => key !== date)),
+      }));
+    } catch (error) {
+      setTimelineError(error instanceof Error ? error.message : String(error));
+      setTimelineProbeState("error");
+      setTimelineProbeFeedback((current) => ({
+        ...current,
+        probingDates: [],
+        failureReasons: {
+          ...current.failureReasons,
+          [date]: error instanceof Error ? error.message : String(error),
+        },
+      }));
     } finally {
       setTimelineLoading(false);
     }
@@ -827,6 +1050,11 @@ export function MemoryView() {
           selectedDocumentName={selectedDocumentName}
           selectedDocumentContent={selectedDocumentContent}
           selectedDocumentUpdatedAtLabel={selectedDocumentUpdatedAtLabel}
+          selectedSnippet={documentEvidenceSnippet}
+          selectedHighlightTerm={documentEvidenceTerm}
+          activeHighlightIndex={documentEvidenceMatchIndex}
+          evidenceExpanded={documentEvidenceExpanded}
+          onToggleEvidenceExpanded={() => setDocumentEvidenceExpanded((current) => !current)}
           visibleDocuments={visibleDocuments}
           canEdit={canEdit}
           isEditing={isEditingDocument}
@@ -835,6 +1063,8 @@ export function MemoryView() {
           getAgentBadge={getAgentBadge}
           selectedAgentId={selectedAgentId}
           onDocumentQueryChange={setDocumentQuery}
+          onPreviousHighlight={() => setDocumentEvidenceMatchIndex((current) => Math.max(0, current - 1))}
+          onNextHighlight={() => setDocumentEvidenceMatchIndex((current) => current + 1)}
           onSelectDocument={setSelectedDocumentName}
           onDocumentDraftChange={handleDocumentDraftChange}
           onStartEdit={() => setIsEditingDocument(true)}
@@ -861,11 +1091,17 @@ export function MemoryView() {
           timelineResult={timelineResult}
           timelineProbeRange={timelineProbeRange}
           timelineProbeState={timelineProbeState}
+          timelineProbeFeedback={timelineProbeFeedback}
           timelineError={_timelineError}
           filteredFootprintGroups={filteredFootprintGroups}
           selectedTimelineEntryName={selectedTimelineEntryName}
           selectedTimelineDateLabel={selectedTimelineDateLabel}
           timelineSelectionHint={timelineSelectionHint}
+          selectedSnippet={timelineEvidenceSnippet}
+          selectedHighlightTerm={timelineEvidenceTerm}
+          activeHighlightIndex={timelineEvidenceMatchIndex}
+          evidenceExpanded={timelineEvidenceExpanded}
+          onToggleEvidenceExpanded={() => setTimelineEvidenceExpanded((current) => !current)}
           timelineEntryContent={_timelineEntryContent}
           timelineEntryLoading={_timelineEntryLoading}
           timelineEntryError={_timelineEntryError}
@@ -875,6 +1111,9 @@ export function MemoryView() {
           t={t}
           onProbeRangeChange={setTimelineProbeRange}
           onProbeTimelineRange={() => void handleProbeTimelineRange()}
+          onRetryProbeDate={(date) => void handleRetryProbeDate(date)}
+          onPreviousHighlight={() => setTimelineEvidenceMatchIndex((current) => Math.max(0, current - 1))}
+          onNextHighlight={() => setTimelineEvidenceMatchIndex((current) => current + 1)}
           onSelectTimelineEntry={setSelectedTimelineEntryName}
         />
       </ArchivePane>
@@ -911,11 +1150,20 @@ export function MemoryView() {
     ),
     knowledge: (
       <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
-        <MemoryKnowledgePanel
+        <div className="space-y-4">
+          {mindMapOpenHint ? <ArchiveNotice>{mindMapOpenHint}</ArchiveNotice> : null}
+          <MemoryMindMapPanel model={semanticMindMapModel} t={t} onOpenEvidence={openMindMapEvidence} />
+        </div>
+      </ArchivePane>
+    ),
+    resources: (
+      <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
+        <MemoryResourcesPanel
           memoryResult={memoryResult}
+          timelineResult={timelineResult}
+          externalSources={externalSources}
           healthProbeSummary={healthProbeSummary}
           runtimeStatusSummary={runtimeStatusSummary}
-          externalSources={externalSources}
           isLocalGatewaySession={isLocalGatewaySession}
           t={t}
           onOpenDiagnostics={() => setDiagnosticsDrawer({ open: true, source: "knowledge" })}
@@ -925,7 +1173,7 @@ export function MemoryView() {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto h-full flex flex-col text-slate-900 dark:text-slate-100 transition-colors">
+    <div className="max-w-[1400px] mx-auto h-full min-h-0 flex flex-col text-slate-900 dark:text-slate-100 transition-colors">
       <ArchivePageHeader
         title={t("memory.title")}
         description={t("memory.desc")}
@@ -946,30 +1194,50 @@ export function MemoryView() {
       />
 
       <ArchiveCapsule>
-        <ArchiveTabFrame icon={BookOpen} title={t("memory.title")} description={t("memory.desc")}>
+        <ArchiveTabFrame icon={BookOpen} title={t("memory.title")} description={sectionDescription(activeSection, t)}>
+        <div className="space-y-4">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Memory Modes</div>
+            <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              {activeSection === "documents"
+                ? "Table workspace stays primary while footprints and knowledge remain peer views."
+                : activeSection === "footprints"
+                  ? "Daily footprints share the same memory dataset and keep the timeline as a first-class peer mode."
+                  : activeSection === "knowledge"
+                    ? "Mind Map is now reserved for semantic graph work and should stop carrying structural topology." 
+                    : activeSection === "resources"
+                      ? "Resources is the structural topology lane for files, paths, and diagnostics." 
+                      : "Overview, documents, footprints, search, mind map, and resources stay inside one governed memory shell."}
+            </div>
+          </div>
+          <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+            {agents.length} agent{agents.length === 1 ? "" : "s"} available
+          </div>
+        </div>
         <ArchiveTabBar>
           {([
-            ["overview", t("memory.tab.overview"), BookOpen],
-            ["documents", t("memory.tab.documents"), FileText],
-            ["footprints", t("memory.tab.footprints"), Calendar],
-            ["search", t("memory.tab.search"), Search],
-            ["knowledge", t("memory.tab.knowledge"), BrainCircuit],
-          ] as const).map(([section, label, Icon]) => {
+            ["overview", t("memory.tab.overview"), "Workspace status, source summary, and editability.", BookOpen],
+            ["documents", t("memory.tab.documents"), "Primary table-style document workspace for readable memory files.", FileText],
+            ["footprints", t("memory.tab.footprints"), "Daily footprints view for timeline-first browsing.", Calendar],
+            ["search", t("memory.tab.search"), "Semantic lookup and routed result inspection.", Search],
+            ["knowledge", t("memory.tab.knowledge"), "Reserved semantic mind-map lane backed by memory-content inference.", BrainCircuit],
+            ["resources", "Resources", "Structural source tree for files, paths, and diagnostics.", FolderTree],
+          ] as const).map(([section, label, description, Icon]) => {
             const active = activeSection === section;
             return (
-              <button
+              <ArchiveSegmentedTabButton
                 key={section}
+                active={active}
+                icon={Icon}
+                label={label}
+                description={description}
                 onClick={() => setActiveSection(section)}
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition ${
-                  active ? ARCHIVE_TABS.active : ARCHIVE_TABS.idle
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {label}
-              </button>
+              />
             );
           })}
         </ArchiveTabBar>
+        </div>
         </ArchiveTabFrame>
       </ArchiveCapsule>
 

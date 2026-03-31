@@ -33,6 +33,44 @@ export interface MemoryExternalSourceItem {
   value: string;
 }
 
+export interface MemoryKnowledgeTreeNode {
+  id: string;
+  label: string;
+  kind: "root" | "group" | "document" | "timeline" | "source";
+  badge?: string;
+  meta?: string;
+  inferred?: boolean;
+  children: MemoryKnowledgeTreeNode[];
+  content?: string;
+}
+
+export interface MemoryKnowledgeGraphNode {
+  id: string;
+  label: string;
+  kind: MemoryKnowledgeTreeNode["kind"];
+  depth: number;
+  parentId: string | null;
+  badge?: string;
+  meta?: string;
+  inferred?: boolean;
+  content?: string;
+}
+
+export interface MemoryKnowledgeGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export interface MemoryKnowledgeSlotBucket {
+  slotId: "workspace_docs" | "timeline_days" | "external_sources" | "runtime_health";
+  label: string;
+  meta?: string;
+  badge?: string;
+  children: MemoryKnowledgeTreeNode[];
+  inferred?: boolean;
+}
+
 export interface MemoryFootprintGroup {
   id: string;
   dateLabel: string;
@@ -459,6 +497,33 @@ export function resolveTimelineProbeFailedDates(
     .map((day) => day.date);
 }
 
+export function buildCanonicalDateRange(startDate: string, endDate: string) {
+  const start = parseCanonicalDate(startDate);
+  const end = parseCanonicalDate(endDate);
+  if (!start || !end || start.getTime() > end.getTime()) {
+    return [];
+  }
+
+  const dates: string[] = [];
+  const cursor = new Date(start.getTime());
+  while (cursor.getTime() <= end.getTime()) {
+    dates.push(formatCanonicalDate(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+export function collectTimelineEntryCoveredDates(entries: GatewayAgentFileEntry[]) {
+  const covered = new Set<string>();
+  entries.forEach((entry) => {
+    const date = resolveTimelineEntryDateLabel(entry.name);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      covered.add(date);
+    }
+  });
+  return covered;
+}
+
 export function mergeTimelineProbeResults({
   current,
   retryResult,
@@ -697,6 +762,235 @@ export function resolveExternalMemorySources(
   });
 
   return items;
+}
+
+function buildDocumentNode(document: GatewayAgentFileEntry): MemoryKnowledgeTreeNode {
+  return {
+    id: `document:${document.name}`,
+    label: document.name,
+    kind: "document",
+    badge: document.missing ? "missing" : "document",
+    meta: document.path,
+    inferred: false,
+    children: [],
+    content: document.content ?? "",
+  };
+}
+
+function buildTimelineNode(entry: GatewayAgentFileEntry): MemoryKnowledgeTreeNode {
+  return {
+    id: `timeline:${entry.name}`,
+    label: resolveTimelineEntryDateLabel(entry.name),
+    kind: "timeline",
+    badge: "timeline",
+    meta: entry.path,
+    inferred: false,
+    children: [],
+    content: entry.content ?? "",
+  };
+}
+
+export function buildMemoryKnowledgeTree({
+  workspace,
+  documents,
+  timeline,
+  externalSources,
+}: {
+  workspace: string | null | undefined;
+  documents: GatewayAgentFileEntry[];
+  timeline: GatewayAgentMemoryTimelineResult | null | undefined;
+  externalSources: MemoryExternalSourceItem[];
+}): MemoryKnowledgeTreeNode[] {
+  const documentNodes = documents.map(buildDocumentNode);
+  const timelineNodes = (timeline?.entries ?? []).map(buildTimelineNode);
+  const sourceNodes = externalSources.map((source) => ({
+    id: `source:${source.id}`,
+    label: source.value,
+    kind: "source" as const,
+    badge: source.kind,
+    meta: workspace ?? undefined,
+    inferred: false,
+    children: [],
+    content: source.value,
+  }));
+
+  const groups: MemoryKnowledgeTreeNode[] = [
+    {
+      id: "group:documents",
+      label: "Documents",
+      kind: "group",
+      badge: `${documentNodes.length}`,
+      meta: workspace ?? undefined,
+      inferred: false,
+      children: documentNodes,
+    },
+    {
+      id: "group:footprints",
+      label: "Daily Footprints",
+      kind: "group",
+      badge: `${timelineNodes.length}`,
+      meta: timeline?.source ?? undefined,
+      inferred: false,
+      children: timelineNodes,
+    },
+    {
+      id: "group:sources",
+      label: "External Sources",
+      kind: "group",
+      badge: `${sourceNodes.length}`,
+      meta: workspace ?? undefined,
+      inferred: sourceNodes.length === 0,
+      children: sourceNodes,
+    },
+  ];
+
+  return [
+    {
+      id: "root:memory-workspace",
+      label: workspace || "Memory Workspace",
+      kind: "root",
+      badge: "workspace",
+      meta: "Structured tree",
+      inferred: false,
+      children: groups,
+    },
+  ];
+}
+
+export function buildMemoryKnowledgeSlots({
+  workspace,
+  documents,
+  timeline,
+  externalSources,
+  diagnostics,
+}: {
+  workspace: string | null | undefined;
+  documents: GatewayAgentFileEntry[];
+  timeline: GatewayAgentMemoryTimelineResult | null | undefined;
+  externalSources: MemoryExternalSourceItem[];
+  diagnostics: GatewayAgentMemoryDiagnostics | null | undefined;
+}): MemoryKnowledgeSlotBucket[] {
+  const documentNodes = documents.map(buildDocumentNode);
+  const timelineNodes = (timeline?.entries ?? []).map(buildTimelineNode);
+  const sourceNodes = externalSources.map((source) => ({
+    id: `source:${source.id}`,
+    label: source.value,
+    kind: "source" as const,
+    badge: source.kind,
+    meta: workspace ?? undefined,
+    inferred: false,
+    children: [],
+    content: source.value,
+  }));
+
+  const runtimeNodes: MemoryKnowledgeTreeNode[] = diagnostics
+    ? [
+        {
+          id: "runtime:backend",
+          label: diagnostics.backend,
+          kind: "source",
+          badge: "backend",
+          meta: diagnostics.provider ?? "no provider",
+          children: [],
+          content: diagnostics.builtinStorePath,
+        },
+        {
+          id: "runtime:store",
+          label: diagnostics.builtinStorePath,
+          kind: "source",
+          badge: "store",
+          meta: workspace ?? undefined,
+          children: [],
+          content: diagnostics.builtinStorePath,
+        },
+        ...diagnostics.sources.map((source, index) => ({
+          id: `runtime:source:${index}`,
+          label: source,
+          kind: "source" as const,
+          badge: "signal",
+          meta: diagnostics.backend,
+          children: [],
+          content: source,
+        })),
+      ]
+    : [];
+
+  return [
+    {
+      slotId: "workspace_docs",
+      label: "Workspace Documents",
+      meta: workspace ?? undefined,
+      badge: `${documentNodes.length}`,
+      children: documentNodes,
+      inferred: false,
+    },
+    {
+      slotId: "timeline_days",
+      label: "Daily Footprints",
+      meta: timeline?.source ?? undefined,
+      badge: `${timelineNodes.length}`,
+      children: timelineNodes,
+      inferred: false,
+    },
+    {
+      slotId: "external_sources",
+      label: "External Sources",
+      meta: workspace ?? undefined,
+      badge: `${sourceNodes.length}`,
+      children: sourceNodes,
+      inferred: sourceNodes.length === 0,
+    },
+    {
+      slotId: "runtime_health",
+      label: "Runtime Health",
+      meta: diagnostics?.backend ?? workspace ?? undefined,
+      badge: `${runtimeNodes.length}`,
+      children: runtimeNodes,
+      inferred: runtimeNodes.length === 0,
+    },
+  ];
+}
+
+export function buildMemoryKnowledgeGraph(
+  roots: MemoryKnowledgeTreeNode[],
+): {
+  nodes: MemoryKnowledgeGraphNode[];
+  edges: MemoryKnowledgeGraphEdge[];
+} {
+  const nodes: MemoryKnowledgeGraphNode[] = [];
+  const edges: MemoryKnowledgeGraphEdge[] = [];
+
+  const visit = (
+    node: MemoryKnowledgeTreeNode,
+    depth: number,
+    parentId: string | null,
+  ) => {
+    nodes.push({
+      id: node.id,
+      label: node.label,
+      kind: node.kind,
+      depth,
+      parentId,
+      badge: node.badge,
+      meta: node.meta,
+      inferred: node.inferred,
+      content: node.content,
+    });
+
+    if (parentId) {
+      edges.push({
+        id: `${parentId}->${node.id}`,
+        source: parentId,
+        target: node.id,
+      });
+    }
+
+    node.children.forEach((child) => visit(child, depth + 1, node.id));
+  };
+
+  roots.forEach((root) => visit(root, 0, null));
+
+  return { nodes, edges };
 }
 
 export function canReloadMemoryDocument({
