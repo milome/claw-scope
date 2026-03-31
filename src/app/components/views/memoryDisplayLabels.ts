@@ -35,6 +35,32 @@ export function probeStatusLabel(
   return t("memory.footprints.probeStatus", status);
 }
 
+export function timelineModeLabel(
+  mode: string,
+  t: (key: string, ...args: (string | number)[]) => string,
+) {
+  switch (mode) {
+    case "local_workspace":
+      return t("memory.timeline.mode.local");
+    case "remote_probe":
+      return t("memory.timeline.mode.remote");
+    case "unavailable":
+      return t("memory.timeline.mode.unavailable");
+    default:
+      return t("memory.timeline.mode.unknown");
+  }
+}
+
+export function timelineReasonLabel(
+  reason: string,
+  t: (key: string, ...args: (string | number)[]) => string,
+) {
+  if (!reason) {
+    return t("memory.search.na");
+  }
+  return reason;
+}
+
 export function debugReasonLabel(
   reason: string,
   t: (key: string, ...args: (string | number)[]) => string,

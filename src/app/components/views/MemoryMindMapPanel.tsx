@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { SemanticCluster, SemanticConcept, SemanticMindMapModel } from "./memorySemanticTypes";
 import { ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveInfoBlock, ArchiveNotice, ArchiveSectionCard, ArchiveSplitPanel } from "./memoryArchiveUi";
 import { debugReasonLabel, sourceKindLabel } from "./memoryDisplayLabels";
+import { LabelValueList } from "./LabelValueList";
 
 type MemoryMindMapPanelProps = {
   model: SemanticMindMapModel;
@@ -196,24 +197,15 @@ export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenE
             </div>
 
             <ArchiveDiagnosticsCard title={t("memory.mindmap.semanticSummary")} className="mb-4 text-xs">
-              <div className="grid gap-3 md:grid-cols-4">
-                <div>
-                  <div className="text-slate-500 dark:text-slate-400">{t("memory.mindmap.entriesStat")}</div>
-                  <div className="mt-1 text-slate-900 dark:text-slate-100">{model.entries.length}</div>
-                </div>
-                <div>
-                  <div className="text-slate-500 dark:text-slate-400">{t("memory.mindmap.clustersStat")}</div>
-                  <div className="mt-1 text-slate-900 dark:text-slate-100">{model.clusters.length}</div>
-                </div>
-                <div>
-                  <div className="text-slate-500 dark:text-slate-400">{t("memory.mindmap.conceptsStat")}</div>
-                  <div className="mt-1 text-slate-900 dark:text-slate-100">{model.concepts.length}</div>
-                </div>
-                <div>
-                  <div className="text-slate-500 dark:text-slate-400">{t("memory.mindmap.edgesStat")}</div>
-                  <div className="mt-1 text-slate-900 dark:text-slate-100">{model.edges.length}</div>
-                </div>
-              </div>
+              <LabelValueList
+                className="md:grid-cols-2"
+                items={[
+                  { label: t("memory.mindmap.entriesStat"), value: model.entries.length },
+                  { label: t("memory.mindmap.clustersStat"), value: model.clusters.length },
+                  { label: t("memory.mindmap.conceptsStat"), value: model.concepts.length },
+                  { label: t("memory.mindmap.edgesStat"), value: model.edges.length },
+                ]}
+              />
             </ArchiveDiagnosticsCard>
 
             {anchors.length === 0 ? (
@@ -483,16 +475,19 @@ export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenE
                 <div className="space-y-4">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-700 dark:bg-slate-950/40">
                     <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.mindmap.diagnostics")}</div>
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <div>{t("memory.mindmap.inputDocuments")}: {model.debug?.diagnostics.inputDocuments ?? 0}</div>
-                      <div>{t("memory.mindmap.inputTimelineEntries")}: {model.debug?.diagnostics.inputTimelineEntries ?? 0}</div>
-                      <div>{t("memory.mindmap.timelineWithContent")}: {model.debug?.diagnostics.timelineEntriesWithContent ?? 0}</div>
-                      <div>{t("memory.mindmap.timelineMissingContent")}: {model.debug?.diagnostics.timelineEntriesMissingContent ?? 0}</div>
-                      <div>{t("memory.mindmap.timelineTooShort")}: {model.debug?.diagnostics.timelineEntriesTooShort ?? 0}</div>
-                      <div>{t("memory.mindmap.timelineSource")}: {model.debug?.diagnostics.timelineSource ?? t("memory.documents.none")}</div>
-                      <div>{t("memory.mindmap.timelineProbeDays")}: {model.debug?.diagnostics.timelineProbeDays ?? 0}</div>
-                      <div className="md:col-span-2">{t("memory.mindmap.selectedTimelineEntry")}: {model.debug?.diagnostics.timelineSelectedEntry ?? t("memory.documents.none")}</div>
-                    </div>
+                    <LabelValueList
+                      className="md:grid-cols-2"
+                      items={[
+                        { label: t("memory.mindmap.inputDocuments"), value: model.debug?.diagnostics.inputDocuments ?? 0 },
+                        { label: t("memory.mindmap.inputTimelineEntries"), value: model.debug?.diagnostics.inputTimelineEntries ?? 0 },
+                        { label: t("memory.mindmap.timelineWithContent"), value: model.debug?.diagnostics.timelineEntriesWithContent ?? 0 },
+                        { label: t("memory.mindmap.timelineMissingContent"), value: model.debug?.diagnostics.timelineEntriesMissingContent ?? 0 },
+                        { label: t("memory.mindmap.timelineTooShort"), value: model.debug?.diagnostics.timelineEntriesTooShort ?? 0 },
+                        { label: t("memory.mindmap.timelineSource"), value: model.debug?.diagnostics.timelineSource ?? t("memory.documents.none") },
+                        { label: t("memory.mindmap.timelineProbeDays"), value: model.debug?.diagnostics.timelineProbeDays ?? 0 },
+                        { label: t("memory.mindmap.selectedTimelineEntry"), value: model.debug?.diagnostics.timelineSelectedEntry ?? t("memory.documents.none") },
+                      ]}
+                    />
                   </div>
                   <div>
                     <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">{t("memory.mindmap.debug.included")}</div>
@@ -549,12 +544,14 @@ export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenE
           body={
             <>
               <ArchiveDiagnosticsCard title={t("memory.mindmap.pipelineContract") }>
-                <div className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
-                  <div>{t("memory.mindmap.entriesStat")}: {model.entries.length}</div>
-                  <div>{t("memory.mindmap.clustersStat")}: {model.clusters.length}</div>
-                  <div>{t("memory.mindmap.conceptsStat")}: {model.concepts.length}</div>
-                  <div>{t("memory.mindmap.edgesStat")}: {model.edges.length}</div>
-                </div>
+                <LabelValueList
+                  items={[
+                    { label: t("memory.mindmap.entriesStat"), value: model.entries.length },
+                    { label: t("memory.mindmap.clustersStat"), value: model.clusters.length },
+                    { label: t("memory.mindmap.conceptsStat"), value: model.concepts.length },
+                    { label: t("memory.mindmap.edgesStat"), value: model.edges.length },
+                  ]}
+                />
               </ArchiveDiagnosticsCard>
               <ArchiveDiagnosticsCard title={t("memory.mindmap.implementationNote") }>
                 <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">

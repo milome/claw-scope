@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { GatewayAgentFileEntry } from "../../contexts/OpenClawContext";
 import { ARCHIVE_SPACING, ArchiveActionButton, ArchiveCapsule, ArchiveDetailHeader, ArchiveDetailPane, ArchiveEditorPane, ArchiveFormHeader, ArchiveLayerHeader, ArchiveListCard, ArchiveListPane } from "./memoryArchiveUi";
 import { EvidenceFocusCard } from "./EvidenceFocusCard";
+import { RichContentRenderer } from "./RichContentRenderer";
 
 type MemorySearchMatch = {
   start: number;
@@ -285,7 +286,7 @@ export function MemoryDocumentsDesktop({
               body={(
                 <>
                   <ArchiveFormHeader label={t("memory.documents.editor")}>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">{isEditing ? t("memory.documents.editing") : t("memory.documents.readonly")}</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">{isEditing ? t("memory.documents.editingMode") : t("memory.documents.readonlyMode")}</div>
                     <ArchiveActionButton onClick={onReload}>{t("memory.documents.reload")}</ArchiveActionButton>
                     {canEdit && !isEditing && <ArchiveActionButton onClick={onStartEdit}>{t("memory.documents.edit")}</ArchiveActionButton>}
                     {canEdit && isEditing && (
@@ -332,17 +333,9 @@ export function MemoryDocumentsDesktop({
                     ) : (
                       <div
                         ref={overlayRef}
-                        className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded-[24px] px-4 py-4 font-mono text-[13px] leading-6 text-slate-800 dark:text-slate-100"
+                        className="min-h-0 flex-1 overflow-auto rounded-[24px] px-4 py-4 text-[13px] leading-6 text-slate-800 dark:text-slate-100"
                       >
-                        {highlightedSegments.map((segment, index) =>
-                          segment.match ? (
-                            <mark key={index} className="rounded bg-sky-200 px-0.5 text-slate-900 dark:bg-sky-500/40 dark:text-sky-50">
-                              {segment.text}
-                            </mark>
-                          ) : (
-                            <span key={index}>{segment.text}</span>
-                          ),
-                        )}
+                        <RichContentRenderer text={selectedDocumentContent} highlightTerm={selectedHighlightTerm} />
                       </div>
                     )}
                   </div>

@@ -7,6 +7,7 @@ import type { MemoryFootprintGroup } from "./memoryState";
 import { ArchiveCapsule, ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveInfoBlock, ArchiveNotice, ArchiveSectionCard, ArchiveSplitPanel } from "./memoryArchiveUi";
 import { EvidenceFocusCard } from "./EvidenceFocusCard";
 import { RichContentRenderer } from "./RichContentRenderer";
+import { probeStatusLabel, timelineModeLabel, timelineReasonLabel } from "./memoryDisplayLabels";
 
 type MemoryFootprintsPanelProps = {
   timelineAccess: GatewayAgentMemoryTimelineAccessResult | null;
@@ -138,7 +139,7 @@ export function MemoryFootprintsPanel({
               <div className="grid gap-3 md:grid-cols-[1.1fr_0.9fr]">
                 <ArchiveInfoBlock title={t("memory.footprints.accessMode")}>
                   <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{resolveTimelineModeLabel(timelineAccess, timelineResult)}</div>
-                  <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : t("memory.overview.sources.timelineUnknown")}</div>
+                  <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{timelineAccess ? `${timelineModeLabel(timelineAccess.mode, t)} / ${timelineReasonLabel(timelineAccess.reason, t)}` : t("memory.overview.sources.timelineUnknown")}</div>
                 </ArchiveInfoBlock>
                 <ArchiveInfoBlock title={t("memory.footprints.probePreset")}>
                   <div className="mt-2 grid gap-2">
@@ -226,7 +227,7 @@ export function MemoryFootprintsPanel({
                         <div className="flex flex-wrap items-center gap-3 pt-0.5 md:pt-1">
                           <h3 className="text-[15px] font-bold tracking-tight text-slate-800 dark:text-slate-200 md:text-[16px]" dir="ltr">{group.dateLabel}</h3>
                           <span className="rounded-full border border-slate-200/80 bg-slate-200/60 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 md:text-[11px]">{t("memory.footprints.entries", group.entries.length)}</span>
-                          {group.probeDay ? <span className="rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700 dark:border-sky-800/50 dark:bg-sky-900/30 dark:text-sky-300 md:text-[11px]">{t("memory.footprints.probeStatus", group.probeDay.status)}</span> : null}
+                          {group.probeDay ? <span className="rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700 dark:border-sky-800/50 dark:bg-sky-900/30 dark:text-sky-300 md:text-[11px]">{probeStatusLabel(group.probeDay.status, t)}</span> : null}
                         </div>
                         <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto] md:items-start">
                           <div className="text-xs leading-5 text-slate-600 dark:text-slate-300">{group.entries[0]?.content ? group.entries[0].content.slice(0, 180) : group.entries[0]?.path ?? t("memory.footprints.noDetail")}</div>

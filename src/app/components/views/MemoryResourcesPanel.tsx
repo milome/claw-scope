@@ -139,7 +139,7 @@ export function MemoryResourcesPanel({
                         </div>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                        <span>{group.leaves.length}</span>
+                        <span>{t("memory.resources.count", group.leaves.length)}</span>
                         {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </div>
                     </button>

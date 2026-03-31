@@ -122,7 +122,7 @@ export function MemorySearchPanel({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="font-semibold">{t("memory.search.diagBar")}</div>
-                <div className="mt-1">{healthProbeSummary ? `${healthProbeSummary.provider} / ${healthProbeSummary.model}` : t("memory.diag.unavailable")}</div>
+                <div className="mt-1">{healthProbeSummary ? t("memory.search.diagnosticsPair", healthProbeSummary.provider, healthProbeSummary.model) : t("memory.diag.unavailable")}</div>
                 <div className="mt-1">{healthProbeSummary ? (healthProbeSummary.embeddingsReady === true ? t("memory.search.diagHealthy") : healthProbeSummary.primaryIssue ?? t("memory.diag.unavailable")) : t("memory.diag.unavailable")}</div>
               </div>
               <button
@@ -137,8 +137,12 @@ export function MemorySearchPanel({
             {runtimeStatusSummary ? (
               <div className="space-y-1 text-slate-500 dark:text-slate-400">
                 <div>
-                  indexed: {runtimeStatusSummary.indexedFiles}
-                  {runtimeStatusSummary.totalFiles != null ? `/${runtimeStatusSummary.totalFiles}` : ""} files · {runtimeStatusSummary.chunks} chunks
+                  {t(
+                    "memory.search.indexedSummary",
+                    runtimeStatusSummary.indexedFiles,
+                    runtimeStatusSummary.totalFiles != null ? `/${runtimeStatusSummary.totalFiles}` : "",
+                    runtimeStatusSummary.chunks,
+                  )}
                 </div>
               </div>
             ) : (
@@ -187,7 +191,7 @@ export function MemorySearchPanel({
           <ArchiveNotice>{t("memory.search.routingNote")}</ArchiveNotice>
           {healthProbeSummary && (
             <ArchiveDiagnosticsCard title={t("memory.diag.healthProbe")} className="mb-4 text-xs">
-              <div className="mt-1 text-slate-500 dark:text-slate-400">{healthProbeSummary.provider} / {healthProbeSummary.model}</div>
+              <div className="mt-1 text-slate-500 dark:text-slate-400">{t("memory.search.diagnosticsPair", healthProbeSummary.provider, healthProbeSummary.model)}</div>
               <div className="mt-1 text-slate-500 dark:text-slate-400">{t("memory.search.embeddings")}: {healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")}</div>
             </ArchiveDiagnosticsCard>
           )}
