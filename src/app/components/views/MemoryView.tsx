@@ -772,7 +772,45 @@ export function MemoryView() {
     }
   };
 
-  const memoryPanels: Record<Exclude<MemorySection, "overview">, ReactNode> = {
+  const memoryPanels: Record<MemorySection, ReactNode> = {
+    overview: (
+      <ArchiveTabFrame icon={BookOpen} title={t("memory.tab.overview")} description={t("memory.overview.sources.title")}>
+        <div className={`grid lg:grid-cols-[1.4fr_1fr] ${ARCHIVE_SPACING.sectionGap}`}>
+          <ArchiveSectionCard>
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <Network className="w-4 h-4 text-sky-500" />
+              {t("memory.overview.agent.title")}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <ArchiveStatCard label={t("memory.overview.agent.active")} value={activeAgent?.name ?? t("memory.overview.agent.none")} meta={selectedAgentId || "-"} />
+              <ArchiveStatCard label={t("memory.overview.workspace")} value={<span className="break-all text-sm font-medium text-slate-700 dark:text-slate-200">{memoryResult?.workspace ?? t("memory.overview.workspaceUnavailable")}</span>} />
+              <ArchiveStatCard label={t("memory.overview.shared")} value={<span className="text-sm font-medium">{hasSharedMemory ? t("memory.overview.sharedYes") : t("memory.overview.sharedNo")}</span>} meta={memoryResult?.sharedAgents.map((agent) => agent.name).join(", ") || t("memory.overview.sharedAgents.none")} />
+              <ArchiveStatCard label={t("memory.overview.edit")} value={<span className="text-sm font-medium">{canEdit ? t("memory.overview.edit.writable") : t("memory.overview.edit.readonly")}</span>} meta={canEdit ? t("memory.overview.edit.scopeGranted") : t("memory.overview.edit.scopeDenied")} />
+            </div>
+            {_memoryError ? <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">{_memoryError}</div> : null}
+          </ArchiveSectionCard>
+
+          <ArchiveSectionCard>
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <Database className="w-4 h-4 text-sky-500" />
+              {t("memory.overview.sources.title")}
+            </div>
+            <div className="space-y-3 text-sm">
+              <ArchiveInfoBlock title={t("memory.overview.sources.documents")}>
+                <div className="text-slate-500 dark:text-slate-400">{visibleDocuments.map((document) => document.name).join(", ") || t("memory.overview.sources.documentsEmpty")}</div>
+              </ArchiveInfoBlock>
+              <ArchiveInfoBlock title={t("memory.overview.sources.timeline")}>
+                <div className="text-slate-500 dark:text-slate-400">{timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : t("memory.overview.sources.timelineUnknown")}</div>
+              </ArchiveInfoBlock>
+              <ArchiveInfoBlock title={t("memory.overview.sources.knowledge")}>
+                <div className="text-slate-500 dark:text-slate-400">{memoryResult?.diagnostics ? `${memoryResult.diagnostics.backend} / ${memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}` : t("memory.overview.sources.knowledgeMissing")}</div>
+              </ArchiveInfoBlock>
+            </div>
+            {_timelineError ? <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">{_timelineError}</div> : null}
+          </ArchiveSectionCard>
+        </div>
+      </ArchiveTabFrame>
+    ),
     documents: (
       <>
         <MemoryDocumentsDesktop
@@ -939,80 +977,12 @@ export function MemoryView() {
         </ArchiveTabFrame>
       </ArchiveCapsule>
 
-      {activeSection === "overview" && (
-        <ArchiveTabFrame icon={BookOpen} title={t("memory.tab.overview")} description={t("memory.overview.sources.title")}>
-        <div className={`grid lg:grid-cols-[1.4fr_1fr] ${ARCHIVE_SPACING.sectionGap}`}>
-          <ArchiveSectionCard>
-            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-              <Network className="w-4 h-4 text-sky-500" />
-              {t("memory.overview.agent.title")}
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <ArchiveStatCard
-                label={t("memory.overview.agent.active")}
-                value={activeAgent?.name ?? t("memory.overview.agent.none")}
-                meta={selectedAgentId || "-"}
-              />
-              <ArchiveStatCard
-                label={t("memory.overview.workspace")}
-                value={<span className="break-all text-sm font-medium text-slate-700 dark:text-slate-200">{memoryResult?.workspace ?? t("memory.overview.workspaceUnavailable")}</span>}
-              />
-              <ArchiveStatCard
-                label={t("memory.overview.shared")}
-                value={<span className="text-sm font-medium">{hasSharedMemory ? t("memory.overview.sharedYes") : t("memory.overview.sharedNo")}</span>}
-                meta={memoryResult?.sharedAgents.map((agent) => agent.name).join(", ") || t("memory.overview.sharedAgents.none")}
-              />
-              <ArchiveStatCard
-                label={t("memory.overview.edit")}
-                value={<span className="text-sm font-medium">{canEdit ? t("memory.overview.edit.writable") : t("memory.overview.edit.readonly")}</span>}
-                meta={canEdit ? t("memory.overview.edit.scopeGranted") : t("memory.overview.edit.scopeDenied")}
-              />
-            </div>
-            {_memoryError && (
-              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
-                {_memoryError}
-              </div>
-            )}
-          </ArchiveSectionCard>
-
-          <ArchiveSectionCard>
-            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-              <Database className="w-4 h-4 text-sky-500" />
-              {t("memory.overview.sources.title")}
-            </div>
-            <div className="space-y-3 text-sm">
-              <ArchiveInfoBlock title={t("memory.overview.sources.documents")}>
-                <div className="text-slate-500 dark:text-slate-400">
-                  {visibleDocuments.map((document) => document.name).join(", ") || t("memory.overview.sources.documentsEmpty")}
-                </div>
-              </ArchiveInfoBlock>
-              <ArchiveInfoBlock title={t("memory.overview.sources.timeline")}>
-                <div className="text-slate-500 dark:text-slate-400">
-                  {timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : t("memory.overview.sources.timelineUnknown")}
-                </div>
-              </ArchiveInfoBlock>
-              <ArchiveInfoBlock title={t("memory.overview.sources.knowledge")}>
-                <div className="text-slate-500 dark:text-slate-400">
-                  {memoryResult?.diagnostics
-                    ? `${memoryResult.diagnostics.backend} / ${memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}`
-                    : t("memory.overview.sources.knowledgeMissing")}
-                </div>
-              </ArchiveInfoBlock>
-            </div>
-            {_timelineError && (
-              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
-                {_timelineError}
-              </div>
-            )}
-          </ArchiveSectionCard>
-        </div>
-        </ArchiveTabFrame>
-      )}
-
       <div className="hidden">
         {selectedDocumentContent}
         {footprintSummary.all}
       </div>
+
+      {activeSection === "overview" ? memoryPanels.overview : null}
 
       <ArchiveTabSwitch active={activeSection !== "overview"}>
         <AnimatePresence mode="wait">
@@ -1026,7 +996,7 @@ export function MemoryView() {
             onClose={() => setDiagnosticsDrawer((current) => ({ ...current, open: false }))}
           />
 
-          {activeSection !== "overview" ? memoryPanels[activeSection as Exclude<MemorySection, "overview">] : null}
+          {memoryPanels[activeSection]}
         </AnimatePresence>
       </ArchiveTabSwitch>
       <style>{`
