@@ -55,7 +55,7 @@ import { MemoryFootprintsPanel } from "./MemoryFootprintsPanel";
 import { MemoryKnowledgePanel } from "./MemoryKnowledgePanel";
 import { MemoryDocumentsDesktop } from "./MemoryDocumentsDesktop";
 import { MemoryDocumentsMobile } from "./MemoryDocumentsMobile";
-import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ARCHIVE_TABS, ArchiveCapsule, ArchiveInfoBlock, ArchivePane, ArchiveSectionCard, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
+import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ARCHIVE_TABS, ArchiveCapsule, ArchiveInfoBlock, ArchivePageHeader, ArchivePane, ArchiveSectionCard, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
 
 type MemorySection = "overview" | "documents" | "footprints" | "search" | "knowledge";
 
@@ -926,28 +926,24 @@ export function MemoryView() {
 
   return (
     <div className="max-w-[1400px] mx-auto h-full flex flex-col text-slate-900 dark:text-slate-100 transition-colors">
-      <div className="mb-4 md:mb-5 shrink-0 flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-[20px] md:text-[22px] font-bold tracking-tight text-slate-900 dark:text-slate-100 mb-1">{t("memory.title")}</h1>
-          <p className="text-[13px] md:text-sm text-slate-500 dark:text-slate-400">
-            {t("memory.desc")}
-          </p>
-        </div>
-        
-        {/* Agent Dropdown Selector */}
-        <div className="relative inline-flex items-center">
-          <select 
-            value={selectedAgentId}
-            onChange={(e) => setSelectedAgentId(e.target.value)}
-            className="appearance-none bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2 pl-4 pr-10 rounded-lg shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all cursor-pointer min-w-[200px]"
-          >
-            {agents.map(a => (
-              <option key={a.id} value={a.id}>{a.name} ({a.id.split('-')[0]}-{a.id.split('-')[2]})</option>
-            ))}
-          </select>
-          <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 pointer-events-none" />
-        </div>
-      </div>
+      <ArchivePageHeader
+        title={t("memory.title")}
+        description={t("memory.desc")}
+        actions={(
+          <div className="relative inline-flex items-center">
+            <select
+              value={selectedAgentId}
+              onChange={(e) => setSelectedAgentId(e.target.value)}
+              className="appearance-none bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2 pl-4 pr-10 rounded-lg shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all cursor-pointer min-w-[200px]"
+            >
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>{a.name} ({a.id.split('-')[0]}-{a.id.split('-')[2]})</option>
+              ))}
+            </select>
+            <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 pointer-events-none" />
+          </div>
+        )}
+      />
 
       <ArchiveCapsule>
         <ArchiveTabFrame icon={BookOpen} title={t("memory.title")} description={t("memory.desc")}>

@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import type { ReactNode } from "react";
 import type { GatewayAgentMemoryTimelineAccessResult, GatewayAgentMemoryTimelineResult } from "../../contexts/OpenClawContext";
 import type { MemoryFootprintGroup } from "./memoryState";
-import { ArchiveCapsule, ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveInfoBlock, ArchiveSectionCard, ArchiveSplitPanel } from "./memoryArchiveUi";
+import { ArchiveCapsule, ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveInfoBlock, ArchiveNotice, ArchiveSectionCard, ArchiveSplitPanel } from "./memoryArchiveUi";
 
 type MemoryFootprintsPanelProps = {
   timelineAccess: GatewayAgentMemoryTimelineAccessResult | null;
@@ -103,7 +103,7 @@ export function MemoryFootprintsPanel({
                   </button>
                 </ArchiveInfoBlock>
               </div>
-              {timelineError ? <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">{timelineError}</div> : null}
+              {timelineError ? <div className="mt-3"><ArchiveNotice tone="error">{timelineError}</ArchiveNotice></div> : null}
             </ArchiveCapsule>
             <ArchiveSectionCard>
               {filteredFootprintGroups.length === 0 ? (
@@ -171,7 +171,7 @@ export function MemoryFootprintsPanel({
               )}
               body={(
                 <>
-                  {timelineSelectionHint ? <div className="mt-3 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-300">{timelineSelectionHint}</div> : null}
+                  {timelineSelectionHint ? <div className="mt-3"><ArchiveNotice>{timelineSelectionHint}</ArchiveNotice></div> : null}
                   <ArchiveInfoBlock title={t("memory.footprints.selectedDate")}>
                     <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{selectedTimelineEntryName ? selectedTimelineEntryName.replace(/^memory\//, "").replace(/\.md$/i, "") : t("memory.footprints.noDate")}</div>
                     <div className="mt-4 grid gap-3 md:grid-cols-2">

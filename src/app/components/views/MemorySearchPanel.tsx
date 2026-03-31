@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import type {
   GatewayAgentMemorySearchResult,
 } from "../../contexts/OpenClawContext";
-import { ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveDiagnosticsLayout, archiveDiagnosticsTone, ArchiveEditorPane, ArchiveInfoBlock, ArchiveListPane, ArchiveSplitPanel } from "./memoryArchiveUi";
+import { ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveDiagnosticsLayout, archiveDiagnosticsTone, ArchiveEditorPane, ArchiveInfoBlock, ArchiveListPane, ArchiveNotice, ArchiveResultCard, ArchiveSplitPanel } from "./memoryArchiveUi";
 
 type HealthProbeSummary = {
   provider: string;
@@ -99,7 +99,6 @@ export function MemorySearchPanel({
         description={t("memory.search.routingNote")}
         left={(
         <ArchiveListPane title={t("memory.search.title")}>
-          <div className="text-sm font-semibold">{t("memory.search.title")}</div>
           <div className={`mt-3 rounded-2xl border p-3 text-xs shadow-sm ${diagnosticsTone(healthProbeSummary)}`}>
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -161,11 +160,7 @@ export function MemorySearchPanel({
               Run
             </button>
           </div>
-          {searchError && (
-            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
-              {searchError}
-            </div>
-          )}
+          {searchError ? <div className="mt-4"><ArchiveNotice tone="error">{searchError}</ArchiveNotice></div> : null}
         </ArchiveListPane>
         )}
         right={(
@@ -189,20 +184,14 @@ export function MemorySearchPanel({
               </span>
             ))}
           </div>
-          <div className="mb-4 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/60 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-            {t("memory.search.routingNote")}
-          </div>
+          <ArchiveNotice>{t("memory.search.routingNote")}</ArchiveNotice>
           {healthProbeSummary && (
             <ArchiveDiagnosticsCard title={t("memory.diag.healthProbe")} className="mb-4 text-xs">
               <div className="mt-1 text-slate-500 dark:text-slate-400">{healthProbeSummary.provider} / {healthProbeSummary.model}</div>
               <div className="mt-1 text-slate-500 dark:text-slate-400">embeddings: {healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")}</div>
             </ArchiveDiagnosticsCard>
           )}
-          {healthProbeSummary && memoryStatusError && (
-            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
-              {memoryStatusError}
-            </div>
-          )}
+          {healthProbeSummary && memoryStatusError ? <div className="mb-4"><ArchiveNotice tone="error">{memoryStatusError}</ArchiveNotice></div> : null}
           {searchResult?.diagnostics && (
             <ArchiveDiagnosticsCard title={t("memory.diag.search")} className="mb-4 text-xs">
               <div className="mt-1 text-slate-500 dark:text-slate-400">{searchResult.diagnostics.backend} / {searchResult.diagnostics.storeDriver}</div>
@@ -210,13 +199,11 @@ export function MemorySearchPanel({
             </ArchiveDiagnosticsCard>
           )}
           {searchError ? (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
-              {searchError}
-            </div>
+            <ArchiveNotice tone="error">{searchError}</ArchiveNotice>
           ) : searchResult ? (
             <div className="space-y-3">
               {searchResult.results.map((entry) => (
-                <article key={entry.id} className="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white p-4 text-slate-700 shadow-sm transition hover:border-sky-300 hover:shadow-md dark:border-slate-700/80 dark:from-slate-900 dark:to-slate-900 dark:text-slate-300 dark:hover:border-sky-700">
+                <ArchiveResultCard key={entry.id}>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 font-medium text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">{entry.sourceKind}</span>
                     <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">{entry.openTarget}</span>
@@ -238,24 +225,16 @@ export function MemorySearchPanel({
                     {resultRouteLabel(entry.openTarget)}
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
-                </article>
+                </ArchiveResultCard>
               ))}
               {searchResult.results.length === 0 && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-                  {t("memory.search.empty")}
-                </div>
+                <ArchiveNotice>{t("memory.search.empty")}</ArchiveNotice>
               )}
             </div>
           ) : (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
-              {t("memory.search.idle")}
-            </div>
+            <ArchiveNotice>{t("memory.search.idle")}</ArchiveNotice>
           )}
-          {!healthProbeSummary && memoryStatusError && (
-            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
-              {memoryStatusError}
-            </div>
-          )}
+          {!healthProbeSummary && memoryStatusError ? <div className="mt-4"><ArchiveNotice tone="error">{memoryStatusError}</ArchiveNotice></div> : null}
           {searchDetail && (
             <ArchiveDiagnosticsLayout
               title={t("memory.search.detailTitle")}
@@ -270,11 +249,7 @@ export function MemorySearchPanel({
               </ArchiveDiagnosticsCard>
             </ArchiveDiagnosticsLayout>
           )}
-          {searchOpenHint && (
-            <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
-              {searchOpenHint}
-            </div>
-          )}
+          {searchOpenHint ? <div className="mt-4"><ArchiveNotice>{searchOpenHint}</ArchiveNotice></div> : null}
               </>
             )}
           />

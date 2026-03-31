@@ -124,6 +124,55 @@ export function ArchiveDiagnosticsLayout({
   );
 }
 
+export function ArchiveNotice({
+  tone = "info",
+  children,
+}: {
+  tone?: "info" | "error" | "warn";
+  children: ReactNode;
+}) {
+  const toneClass =
+    tone === "error"
+      ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300"
+      : tone === "warn"
+        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-300"
+        : "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300";
+
+  return <div className={`rounded-xl border p-3 text-sm ${toneClass}`}>{children}</div>;
+}
+
+export function ArchiveResultCard({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <article className="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white p-4 text-slate-700 shadow-sm transition hover:border-sky-300 hover:shadow-md dark:border-slate-700/80 dark:from-slate-900 dark:to-slate-900 dark:text-slate-300 dark:hover:border-sky-700">
+      {children}
+    </article>
+  );
+}
+
+export function ArchivePageHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: string;
+  description: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="mb-4 md:mb-5 shrink-0 flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div>
+        <h1 className="text-[20px] md:text-[22px] font-bold tracking-tight text-slate-900 dark:text-slate-100 mb-1">{title}</h1>
+        <p className="text-[13px] md:text-sm text-slate-500 dark:text-slate-400">{description}</p>
+      </div>
+      {actions}
+    </div>
+  );
+}
+
 export function ArchiveDrawer({
   children,
 }: {

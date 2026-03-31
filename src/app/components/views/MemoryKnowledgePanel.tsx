@@ -2,7 +2,7 @@ import { BrainCircuit } from "lucide-react";
 import { motion } from "motion/react";
 import { diagnosticsTone } from "./MemoryDiagnosticsDrawer";
 import type { GatewayAgentMemoryResult } from "../../contexts/OpenClawContext";
-import { ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveInfoBlock, ArchiveSectionCard, ArchiveSplitPanel } from "./memoryArchiveUi";
+import { ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveInfoBlock, ArchiveNotice, ArchiveSectionCard, ArchiveSplitPanel } from "./memoryArchiveUi";
 
 type HealthProbeSummary = {
   provider: string;
@@ -60,7 +60,6 @@ export function MemoryKnowledgePanel({
         columns="lg:grid-cols-[1.1fr_1fr]"
         left={(
           <ArchiveSectionCard>
-            <div className="mb-4 text-sm font-semibold">{t("memory.knowledge.title")}</div>
             <ArchiveDiagnosticsCard title={t("memory.knowledge.summary")} className="mb-4 text-xs">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -105,14 +104,11 @@ export function MemoryKnowledgePanel({
                   <div className="mt-1 text-slate-500 dark:text-slate-400">{memoryResult.diagnostics.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
                 </ArchiveInfoBlock>
               </div>
-            ) : (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-300">{t("memory.knowledge.missing")}</div>
-            )}
+            ) : <ArchiveNotice tone="warn">{t("memory.knowledge.missing")}</ArchiveNotice>}
           </ArchiveSectionCard>
         )}
         right={(
           <ArchiveSectionCard>
-            <div className="mb-4 text-sm font-semibold">{t("memory.knowledge.paths")}</div>
             {externalSources.length > 0 ? (
               <div className="space-y-2">
                 {externalSources.map((source) => (
@@ -121,11 +117,7 @@ export function MemoryKnowledgePanel({
                   </ArchiveInfoBlock>
                 ))}
               </div>
-            ) : memoryResult?.diagnostics ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">{t("memory.knowledge.pathsEmpty")}</div>
-            ) : (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">{t("memory.knowledge.pathsUnavailable")}</div>
-            )}
+            ) : memoryResult?.diagnostics ? <ArchiveNotice>{t("memory.knowledge.pathsEmpty")}</ArchiveNotice> : <ArchiveNotice>{t("memory.knowledge.pathsUnavailable")}</ArchiveNotice>}
           </ArchiveSectionCard>
         )}
       />
@@ -169,9 +161,7 @@ export function MemoryKnowledgePanel({
                     )}
                   </ArchiveDiagnosticsCard>
                 </div>
-              ) : (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">{t("memory.knowledge.diagUnavailable")}</div>
-              )}
+              ) : <ArchiveNotice>{t("memory.knowledge.diagUnavailable")}</ArchiveNotice>}
             </>
           )}
         />
