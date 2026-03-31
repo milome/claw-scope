@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import type { ReactNode } from "react";
 import type { GatewayAgentMemoryTimelineAccessResult, GatewayAgentMemoryTimelineResult } from "../../contexts/OpenClawContext";
 import type { MemoryFootprintGroup } from "./memoryState";
+import { ARCHIVE_SPACING, ArchiveCapsule, ArchiveDiagnosticsCard, ArchiveInfoBlock, ArchiveSectionCard, ArchiveTabFrame } from "./memoryArchiveUi";
 
 type MemoryFootprintsPanelProps = {
   timelineAccess: GatewayAgentMemoryTimelineAccessResult | null;
@@ -58,19 +59,23 @@ export function MemoryFootprintsPanel({
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.2 }}
     >
-      <div className="mx-auto mb-4 max-w-3xl px-2 md:px-0">
+      <ArchiveTabFrame
+        icon={Footprints}
+        title={t("memory.tab.footprints")}
+        description={t("memory.footprints.probeHint")}
+      >
+      <div className="mx-auto mb-4 max-w-6xl px-2 md:px-0">
+        <ArchiveCapsule>
         <div className="grid gap-3 md:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.footprints.accessMode")}</div>
-            <div className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">
+          <ArchiveInfoBlock title={t("memory.footprints.accessMode")}>
+            <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {resolveTimelineModeLabel(timelineAccess, timelineResult)}
             </div>
             <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
               {timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : t("memory.overview.sources.timelineUnknown")}
             </div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.footprints.probePreset")}</div>
+          </ArchiveInfoBlock>
+          <ArchiveInfoBlock title={t("memory.footprints.probePreset")}>
             <div className="mt-2 grid gap-2">
               <input
                 value={timelineProbeRange.startDate}
@@ -95,20 +100,21 @@ export function MemoryFootprintsPanel({
                 ? t("memory.footprints.probe.probing")
                 : timelineProbeState === "done"
                   ? t("memory.footprints.probe.done")
-                  : timelineProbeState === "error"
-                    ? t("memory.footprints.probe.error")
-                    : t("memory.footprints.probe.idle")}
+                : timelineProbeState === "error"
+                  ? t("memory.footprints.probe.error")
+                  : t("memory.footprints.probe.idle")}
             </button>
-          </div>
+          </ArchiveInfoBlock>
         </div>
         {timelineError && (
           <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
             {timelineError}
           </div>
         )}
+        </ArchiveCapsule>
       </div>
-      <div className="mx-auto grid max-w-6xl gap-6 px-2 md:grid-cols-[0.9fr_1.1fr] md:px-0">
-        <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className={`mx-auto grid max-w-6xl px-2 md:grid-cols-[0.9fr_1.1fr] md:px-0 ${ARCHIVE_SPACING.sectionGap}`}>
+        <ArchiveSectionCard>
           {filteredFootprintGroups.length === 0 ? (
             <div className="mx-4 mt-8 flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
@@ -174,8 +180,8 @@ export function MemoryFootprintsPanel({
               ))}
             </div>
           )}
-        </div>
-        <div className="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white p-5 text-slate-700 shadow-sm dark:border-slate-700/80 dark:from-slate-900 dark:to-slate-900 dark:text-slate-300">
+        </ArchiveSectionCard>
+        <ArchiveSectionCard>
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold">{t("memory.footprints.detailTitle")}</div>
@@ -190,24 +196,20 @@ export function MemoryFootprintsPanel({
               {timelineSelectionHint}
             </div>
           )}
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.footprints.selectedDate")}</div>
+          <ArchiveInfoBlock title={t("memory.footprints.selectedDate")}>
             <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
               {selectedTimelineEntryName ? selectedTimelineEntryName.replace(/^memory\//, "").replace(/\.md$/i, "") : t("memory.footprints.noDate")}
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-950/50">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.footprints.sourceMode")}</div>
+              <ArchiveInfoBlock title={t("memory.footprints.sourceMode")}>
                 <div className="mt-1 text-slate-800 dark:text-slate-100">{resolveTimelineModeLabel(timelineAccess, timelineResult)}</div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-950/50">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.footprints.currentEntry")}</div>
+              </ArchiveInfoBlock>
+              <ArchiveInfoBlock title={t("memory.footprints.currentEntry")}>
                 <div className="mt-1 break-all text-slate-800 dark:text-slate-100">{selectedTimelineEntryName || t("memory.search.na")}</div>
-              </div>
+              </ArchiveInfoBlock>
             </div>
-          </div>
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.footprints.body")}</div>
+          </ArchiveInfoBlock>
+          <ArchiveDiagnosticsCard title={t("memory.footprints.body")} className="mt-4 text-sm leading-7 text-slate-800 dark:text-slate-100">
             <div className="text-sm leading-7 text-slate-800 dark:text-slate-100">
               {timelineEntryLoading
                 ? t("memory.footprints.loading")
@@ -215,9 +217,10 @@ export function MemoryFootprintsPanel({
                   ? timelineEntryError
                   : timelineEntryContent || t("memory.footprints.noBody")}
             </div>
-          </div>
-        </div>
+          </ArchiveDiagnosticsCard>
+        </ArchiveSectionCard>
       </div>
+      </ArchiveTabFrame>
     </motion.div>
   );
 }

@@ -1,6 +1,8 @@
+import { BrainCircuit } from "lucide-react";
 import { motion } from "motion/react";
-import { DiagnosticsCard, diagnosticsTone } from "./MemoryDiagnosticsDrawer";
+import { diagnosticsTone } from "./MemoryDiagnosticsDrawer";
 import type { GatewayAgentMemoryResult } from "../../contexts/OpenClawContext";
+import { ARCHIVE_SPACING, ArchiveDiagnosticsCard, ArchiveInfoBlock, ArchiveSectionCard, ArchiveTabFrame } from "./memoryArchiveUi";
 
 type HealthProbeSummary = {
   provider: string;
@@ -51,13 +53,13 @@ export function MemoryKnowledgePanel({
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.2 }}
     >
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <ArchiveTabFrame icon={BrainCircuit} title={t("memory.tab.knowledge")} description={t("memory.knowledge.note")}>
+      <div className={`grid lg:grid-cols-[1.1fr_1fr] ${ARCHIVE_SPACING.sectionGap}`}>
+        <ArchiveSectionCard>
           <div className="mb-4 text-sm font-semibold">{t("memory.knowledge.title")}</div>
-          <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
+          <ArchiveDiagnosticsCard title={t("memory.knowledge.summary")} className="mb-4 text-xs">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="font-semibold">{t("memory.knowledge.summary")}</div>
                 <div className="mt-1">{memoryResult?.diagnostics ? `${memoryResult.diagnostics.backend} / ${memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}` : t("memory.diag.unavailable")}</div>
               </div>
               <button
@@ -67,9 +69,9 @@ export function MemoryKnowledgePanel({
                 Open diagnostics
               </button>
             </div>
-          </div>
+          </ArchiveDiagnosticsCard>
           {healthProbeSummary && (
-            <DiagnosticsCard
+            <ArchiveDiagnosticsCard
               title={t("memory.diag.healthProbe")}
               className={`mb-4 text-xs ${diagnosticsTone(healthProbeSummary)}`}
             >
@@ -80,9 +82,9 @@ export function MemoryKnowledgePanel({
               {healthProbeSummary.embeddingsError && (
                 <div className="mt-1 text-rose-600 dark:text-rose-300">{healthProbeSummary.embeddingsError}</div>
               )}
-            </DiagnosticsCard>
+            </ArchiveDiagnosticsCard>
           )}
-          <DiagnosticsCard title={t("memory.diag.runtimeStatus")} className="mb-4 text-xs">
+          <ArchiveDiagnosticsCard title={t("memory.diag.runtimeStatus")} className="mb-4 text-xs">
             {runtimeStatusSummary ? (
               <div className="space-y-1 text-slate-500 dark:text-slate-400">
                 <div>
@@ -95,23 +97,20 @@ export function MemoryKnowledgePanel({
                 {isLocalGatewaySession ? t("memory.diag.runtimePlaceholder") : t("memory.diag.runtimeRemoteUnavailable")}
               </div>
             )}
-          </DiagnosticsCard>
+          </ArchiveDiagnosticsCard>
           {memoryResult?.diagnostics ? (
             <div className="space-y-3 text-sm">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="font-medium">{t("memory.knowledge.backend")}</div>
+              <ArchiveInfoBlock title={t("memory.knowledge.backend")}>
                 <div className="mt-1 text-slate-500 dark:text-slate-400">
                   {memoryResult.diagnostics.backend} / {memoryResult.diagnostics.provider ?? "no provider"}
                 </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="font-medium">{t("memory.knowledge.store")}</div>
+              </ArchiveInfoBlock>
+              <ArchiveInfoBlock title={t("memory.knowledge.store")}>
                 <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{memoryResult.diagnostics.builtinStorePath}</div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="font-medium">{t("memory.knowledge.sources")}</div>
+              </ArchiveInfoBlock>
+              <ArchiveInfoBlock title={t("memory.knowledge.sources")}>
                 <div className="mt-1 text-slate-500 dark:text-slate-400">{memoryResult.diagnostics.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
-              </div>
+              </ArchiveInfoBlock>
             </div>
           ) : (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-300">
@@ -121,16 +120,15 @@ export function MemoryKnowledgePanel({
           <div className="mt-4 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/60 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
             {t("memory.knowledge.note")}
           </div>
-        </section>
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        </ArchiveSectionCard>
+        <ArchiveSectionCard>
           <div className="mb-4 text-sm font-semibold">{t("memory.knowledge.paths")}</div>
           {externalSources.length > 0 ? (
             <div className="space-y-2">
               {externalSources.map((source) => (
-                <div key={source.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{source.kind}</div>
+                <ArchiveInfoBlock key={source.id} title={source.kind}>
                   <div className="mt-1 break-all text-slate-700 dark:text-slate-200">{source.value}</div>
-                </div>
+                </ArchiveInfoBlock>
               ))}
             </div>
           ) : memoryResult?.diagnostics ? (
@@ -142,17 +140,17 @@ export function MemoryKnowledgePanel({
               {t("memory.knowledge.pathsUnavailable")}
             </div>
           )}
-        </section>
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-2">
+        </ArchiveSectionCard>
+        <ArchiveSectionCard>
           <div className="mb-4 text-sm font-semibold">{t("memory.knowledge.drawerFields")}</div>
           {healthProbeSummary || memoryResult?.diagnostics ? (
             <div className="space-y-3">
-              <DiagnosticsCard title={t("memory.diag.healthProbe")}>
+              <ArchiveDiagnosticsCard title={t("memory.diag.healthProbe")}>
                 <div className="mt-1 text-slate-500 dark:text-slate-400">{healthProbeSummary?.primaryIssue ?? t("memory.diag.noIssue")}</div>
                 <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">provider: {healthProbeSummary?.provider ?? t("memory.diag.unavailable")}</div>
                 <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">embeddings: {healthProbeSummary ? (healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")) : t("memory.diag.unknownShort")}</div>
-              </DiagnosticsCard>
-              <DiagnosticsCard title={t("memory.diag.runtimeStatus")}>
+              </ArchiveDiagnosticsCard>
+              <ArchiveDiagnosticsCard title={t("memory.diag.runtimeStatus")}>
                 {runtimeStatusSummary ? (
                   <div className="space-y-1 text-slate-500 dark:text-slate-400">
                     <div>
@@ -170,8 +168,8 @@ export function MemoryKnowledgePanel({
                     {isLocalGatewaySession ? t("memory.diag.runtimePlaceholder") : t("memory.diag.runtimeRemoteUnavailable")}
                   </div>
                 )}
-              </DiagnosticsCard>
-              <DiagnosticsCard title={t("memory.diag.knowledge")}>
+              </ArchiveDiagnosticsCard>
+              <ArchiveDiagnosticsCard title={t("memory.diag.knowledge")}>
                 {memoryResult?.diagnostics ? (
                   <div className="mt-2 space-y-1 text-xs text-slate-500 dark:text-slate-400">
                     <div>backend: {memoryResult.diagnostics.backend}</div>
@@ -182,15 +180,16 @@ export function MemoryKnowledgePanel({
                 ) : (
                   <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.missing")}</div>
                 )}
-              </DiagnosticsCard>
+              </ArchiveDiagnosticsCard>
             </div>
           ) : (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-400">
               {t("memory.knowledge.diagUnavailable")}
             </div>
           )}
-        </section>
+        </ArchiveSectionCard>
       </div>
+      </ArchiveTabFrame>
     </motion.div>
   );
 }

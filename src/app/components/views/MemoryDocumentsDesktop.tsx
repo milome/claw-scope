@@ -1,6 +1,7 @@
 import { Network, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import type { GatewayAgentFileEntry } from "../../contexts/OpenClawContext";
+import { ARCHIVE_SPACING, ArchiveActionButton, ArchiveCapsule, ArchiveDetailHeader, ArchiveDetailPane, ArchiveEditorPane, ArchiveFormHeader, ArchiveLayerHeader, ArchiveListCard, ArchiveListPane } from "./memoryArchiveUi";
 
 type MemorySearchMatch = {
   start: number;
@@ -69,19 +70,9 @@ export function MemoryDocumentsDesktop({
   return (
     <div className="hidden flex-1 flex-col md:flex bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.88))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,1),rgba(2,6,23,0.92))]">
       <div className="px-5 pt-5">
-        <div className="mb-5 px-2">
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-slate-700" />
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-300">
-              <Network className="h-3.5 w-3.5 text-sky-500 dark:text-sky-300" />
-              {title}
-            </div>
-            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-slate-700" />
-          </div>
-          <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">{description}</p>
-        </div>
+        <ArchiveLayerHeader icon={Network} title={title} description={description} />
 
-        <div className="mb-5 rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(248,250,252,0.82),rgba(255,255,255,0.92))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.88)] dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.3),rgba(2,6,23,0.24))]">
+        <ArchiveCapsule>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
             <div className="min-w-0">
               <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Readable Workspace</div>
@@ -123,14 +114,11 @@ export function MemoryDocumentsDesktop({
               {documentSaveMessage}
             </div>
           )}
-        </div>
+        </ArchiveCapsule>
       </div>
 
-      <div className="grid flex-1 grid-cols-[minmax(420px,1.05fr)_minmax(0,1.35fr)] gap-5 px-5 pb-5 auto-rows-fr">
-        <section className="overflow-auto rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 h-[calc(100vh-280px)] min-h-[720px]">
-          <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Document Directory</div>
-          </div>
+      <div className={`grid flex-1 grid-cols-[minmax(420px,1.05fr)_minmax(0,1.35fr)] px-5 pb-5 auto-rows-fr ${ARCHIVE_SPACING.sectionGap}`}>
+        <ArchiveListPane title="Document Directory" className="h-[calc(100vh-280px)]">
 
           {visibleDocuments.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center p-12 text-center">
@@ -145,13 +133,11 @@ export function MemoryDocumentsDesktop({
               {visibleDocuments.map((item) => {
                 const active = item.name === selectedDocumentName;
                 return (
-                  <button
+                  <ArchiveListCard
                     key={item.name}
-                    type="button"
+                    active={active}
                     onClick={() => onSelectDocument(item.name)}
-                    className={`relative w-full overflow-hidden rounded-2xl border px-4 py-3.5 text-left transition shadow-sm ${active ? "border-sky-300 bg-sky-50/90 shadow-[0_16px_32px_rgba(14,165,233,0.12)] dark:border-sky-700 dark:bg-slate-800" : "border-slate-200/80 bg-white hover:border-sky-200 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 dark:hover:bg-slate-800/70"}`}
                   >
-                    {active && <div className="absolute inset-y-3 left-0 w-1 rounded-full bg-gradient-to-b from-sky-400 via-cyan-400 to-violet-400 dark:from-sky-300 dark:via-cyan-300 dark:to-violet-300" />}
                     <div className="flex items-start justify-between gap-3">
                       <div className={`min-w-0 flex-1 ${active ? "pl-3" : ""}`}>
                         <div className="flex flex-wrap items-center gap-2 text-[11px]">
@@ -174,82 +160,62 @@ export function MemoryDocumentsDesktop({
                         </div>
                       </div>
                     </div>
-                  </button>
+                  </ArchiveListCard>
                 );
               })}
             </div>
           )}
-        </section>
+        </ArchiveListPane>
 
-        <section className="flex min-h-[720px] h-[calc(100vh-280px)] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <ArchiveDetailPane className="h-[calc(100vh-280px)]">
           {selectedDocument && (
-            <div className="flex h-full min-h-0 flex-col px-6 py-5">
-              <div className="mb-3 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-slate-700 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">{selectedDocument.name}</div>
-                    <div className="mt-0.5 break-all text-[12px] leading-5 text-slate-500 dark:text-slate-400">{selectedDocument.path}</div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white px-3 py-1 text-right text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                    <div className="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Updated</div>
-                    <div>{selectedDocumentUpdatedAtLabel}</div>
-                  </div>
-                </div>
-              </div>
-
-              <section className="flex min-h-0 flex-1 flex-col rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">{t("memory.documents.editor")}</div>
-                  <div className="flex items-center gap-2">
+            <ArchiveEditorPane
+              header={(
+                <ArchiveDetailHeader
+                  title={selectedDocument.name}
+                  subtitle={selectedDocument.path}
+                  meta={(
+                    <div className="rounded-2xl border border-slate-200 bg-white px-3 py-1 text-right text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                      <div className="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Updated</div>
+                      <div>{selectedDocumentUpdatedAtLabel}</div>
+                    </div>
+                  )}
+                />
+              )}
+              body={(
+                <>
+                  <ArchiveFormHeader label={t("memory.documents.editor")}>
                     <div className="text-[11px] text-slate-500 dark:text-slate-400">{isEditing ? "editing" : "read only"}</div>
-                    {canEdit && !isEditing && (
-                      <button
-                        type="button"
-                        onClick={onStartEdit}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
-                      >
-                        Edit
-                      </button>
-                    )}
+                    {canEdit && !isEditing && <ArchiveActionButton onClick={onStartEdit}>Edit</ArchiveActionButton>}
                     {canEdit && isEditing && (
                       <>
-                        <button
-                          type="button"
-                          onClick={onCancelEdit}
-                          className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={onSave}
-                          disabled={!documentDirty || documentSaveState === "saving"}
-                          className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
-                        >
+                        <ArchiveActionButton onClick={onCancelEdit}>Cancel</ArchiveActionButton>
+                        <ArchiveActionButton onClick={onSave} disabled={!documentDirty || documentSaveState === "saving"} variant="primary">
                           {documentSaveState === "saving" ? "Saving" : "Save"}
-                        </button>
+                        </ArchiveActionButton>
                       </>
                     )}
+                  </ArchiveFormHeader>
+                  <div className="flex min-h-0 flex-1 rounded-[24px] border border-slate-200/90 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-950/50">
+                    <textarea
+                      value={selectedDocumentContent}
+                      onChange={(event) => onDocumentDraftChange(event.target.value)}
+                      readOnly={!canEdit || !isEditing}
+                      spellCheck={false}
+                      className="min-h-0 flex-1 w-full resize-none rounded-[24px] bg-transparent px-4 py-4 font-mono text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500 overflow-auto"
+                    />
                   </div>
+                </>
+              )}
+              footer={(
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
+                  <span>{footerLabel}</span>
+                  <span>{selectedDocument.name}</span>
                 </div>
-                <div className="flex min-h-0 flex-1 rounded-[24px] border border-slate-200/90 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-950/50">
-                  <textarea
-                    value={selectedDocumentContent}
-                    onChange={(event) => onDocumentDraftChange(event.target.value)}
-                    readOnly={!canEdit || !isEditing}
-                    spellCheck={false}
-                    className="min-h-0 flex-1 w-full resize-none rounded-[24px] bg-transparent px-4 py-4 font-mono text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500 overflow-auto"
-                  />
-                </div>
-              </section>
-
-              <div className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
-                <span>{footerLabel}</span>
-                <span>{selectedDocument.name}</span>
-              </div>
-            </div>
+              )}
+            />
           )}
-        </section>
+        </ArchiveDetailPane>
       </div>
     </div>
   );

@@ -3,7 +3,6 @@ import { Search, Calendar, Network, Cpu, BrainCircuit, Database, ChevronDown, Bo
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { useI18n } from "../../contexts/I18nContext";
-import type { ReactNode } from "react";
 import {
   gatewayAgentMemoryGet,
   gatewayAgentMemorySet,
@@ -55,6 +54,7 @@ import { MemoryFootprintsPanel } from "./MemoryFootprintsPanel";
 import { MemoryKnowledgePanel } from "./MemoryKnowledgePanel";
 import { MemoryDocumentsDesktop } from "./MemoryDocumentsDesktop";
 import { MemoryDocumentsMobile } from "./MemoryDocumentsMobile";
+import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ARCHIVE_TABS, ArchiveCapsule, ArchiveInfoBlock, ArchivePane, ArchiveSectionCard, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
 
 type MemorySection = "overview" | "documents" | "footprints" | "search" | "knowledge";
 
@@ -96,16 +96,6 @@ export type DiagnosticsDrawerState = {
   source: "search" | "knowledge";
 };
 
-type MemoryViewShellProps = {
-  active: boolean;
-  children: ReactNode;
-};
-
-type MemoryViewScrollRegionProps = {
-  className?: string;
-  children: ReactNode;
-};
-
 function sourceTone(source: string) {
   if (source.includes("session")) {
     return "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800/70 dark:bg-violet-950/30 dark:text-violet-300";
@@ -121,24 +111,6 @@ function sourceTone(source: string) {
 
 function normalizeRootMemoryDocumentName(name: string) {
   return name.toLowerCase() === "memory.md" ? "memory.md" : name;
-}
-
-function MemoryViewShell({ active, children }: MemoryViewShellProps) {
-  return (
-    <div
-      className={`rounded-xl md:rounded-lg overflow-hidden flex-1 flex flex-col relative transition-colors duration-500 min-h-[400px] ${
-        active
-          ? "bg-transparent md:bg-white md:dark:bg-slate-900 border-none md:border md:border-slate-200 md:dark:border-slate-800 md:shadow-sm"
-          : "hidden"
-      }`}
-    >
-      {children}
-    </div>
-  );
-}
-
-function MemoryViewScrollRegion({ className = "", children }: MemoryViewScrollRegionProps) {
-  return <div className={`absolute inset-0 overflow-auto ${className}`.trim()}>{children}</div>;
 }
 
 async function copyTextToClipboard(text: string) {
@@ -824,101 +796,102 @@ export function MemoryView() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4 shrink-0 rounded-xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        {([
-          ["overview", t("memory.tab.overview"), BookOpen],
-          ["documents", t("memory.tab.documents"), FileText],
-          ["footprints", t("memory.tab.footprints"), Calendar],
-          ["search", t("memory.tab.search"), Search],
-          ["knowledge", t("memory.tab.knowledge"), BrainCircuit],
-        ] as const).map(([section, label, Icon]) => {
-          const active = activeSection === section;
-          return (
-            <button
-              key={section}
-              onClick={() => setActiveSection(section)}
-              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                active
-                  ? "bg-sky-600 text-white shadow"
-                  : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-            </button>
-          );
-        })}
-      </div>
+      <ArchiveCapsule>
+        <ArchiveTabFrame icon={BookOpen} title={t("memory.title")} description={t("memory.desc")}>
+        <ArchiveTabBar>
+          {([
+            ["overview", t("memory.tab.overview"), BookOpen],
+            ["documents", t("memory.tab.documents"), FileText],
+            ["footprints", t("memory.tab.footprints"), Calendar],
+            ["search", t("memory.tab.search"), Search],
+            ["knowledge", t("memory.tab.knowledge"), BrainCircuit],
+          ] as const).map(([section, label, Icon]) => {
+            const active = activeSection === section;
+            return (
+              <button
+                key={section}
+                onClick={() => setActiveSection(section)}
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition ${
+                  active ? ARCHIVE_TABS.active : ARCHIVE_TABS.idle
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            );
+          })}
+        </ArchiveTabBar>
+        </ArchiveTabFrame>
+      </ArchiveCapsule>
 
       {activeSection === "overview" && (
-        <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <ArchiveTabFrame icon={BookOpen} title={t("memory.tab.overview")} description={t("memory.overview.sources.title")}>
+        <div className={`grid lg:grid-cols-[1.4fr_1fr] ${ARCHIVE_SPACING.sectionGap}`}>
+          <ArchiveSectionCard>
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
               <Network className="w-4 h-4 text-sky-500" />
               {t("memory.overview.agent.title")}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.overview.agent.active")}</div>
-                <div className="mt-2 text-base font-semibold">{activeAgent?.name ?? t("memory.overview.agent.none")}</div>
-                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{selectedAgentId || "-"}</div>
-                  </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.overview.workspace")}</div>
-                <div className="mt-2 break-all text-sm text-slate-700 dark:text-slate-200">{memoryResult?.workspace ?? t("memory.overview.workspaceUnavailable")}</div>
-                  </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.overview.shared")}</div>
-                <div className="mt-2 text-sm font-medium">{hasSharedMemory ? t("memory.overview.sharedYes") : t("memory.overview.sharedNo")}</div>
-                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{memoryResult?.sharedAgents.map((agent) => agent.name).join(", ") || t("memory.overview.sharedAgents.none")}</div>
-                  </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.overview.edit")}</div>
-                <div className="mt-2 text-sm font-medium">{canEdit ? t("memory.overview.edit.writable") : t("memory.overview.edit.readonly")}</div>
-                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">{canEdit ? t("memory.overview.edit.scopeGranted") : t("memory.overview.edit.scopeDenied")}</div>
-                  </div>
+              <ArchiveStatCard
+                label={t("memory.overview.agent.active")}
+                value={activeAgent?.name ?? t("memory.overview.agent.none")}
+                meta={selectedAgentId || "-"}
+              />
+              <ArchiveStatCard
+                label={t("memory.overview.workspace")}
+                value={<span className="break-all text-sm font-medium text-slate-700 dark:text-slate-200">{memoryResult?.workspace ?? t("memory.overview.workspaceUnavailable")}</span>}
+              />
+              <ArchiveStatCard
+                label={t("memory.overview.shared")}
+                value={<span className="text-sm font-medium">{hasSharedMemory ? t("memory.overview.sharedYes") : t("memory.overview.sharedNo")}</span>}
+                meta={memoryResult?.sharedAgents.map((agent) => agent.name).join(", ") || t("memory.overview.sharedAgents.none")}
+              />
+              <ArchiveStatCard
+                label={t("memory.overview.edit")}
+                value={<span className="text-sm font-medium">{canEdit ? t("memory.overview.edit.writable") : t("memory.overview.edit.readonly")}</span>}
+                meta={canEdit ? t("memory.overview.edit.scopeGranted") : t("memory.overview.edit.scopeDenied")}
+              />
             </div>
             {_memoryError && (
               <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
                 {_memoryError}
               </div>
             )}
-          </section>
+          </ArchiveSectionCard>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <ArchiveSectionCard>
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
               <Database className="w-4 h-4 text-sky-500" />
               {t("memory.overview.sources.title")}
             </div>
             <div className="space-y-3 text-sm">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="font-medium">{t("memory.overview.sources.documents")}</div>
-                <div className="mt-1 text-slate-500 dark:text-slate-400">
+              <ArchiveInfoBlock title={t("memory.overview.sources.documents")}>
+                <div className="text-slate-500 dark:text-slate-400">
                   {visibleDocuments.map((document) => document.name).join(", ") || t("memory.overview.sources.documentsEmpty")}
                 </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="font-medium">{t("memory.overview.sources.timeline")}</div>
-                <div className="mt-1 text-slate-500 dark:text-slate-400">
+              </ArchiveInfoBlock>
+              <ArchiveInfoBlock title={t("memory.overview.sources.timeline")}>
+                <div className="text-slate-500 dark:text-slate-400">
                   {timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : t("memory.overview.sources.timelineUnknown")}
                 </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                <div className="font-medium">{t("memory.overview.sources.knowledge")}</div>
-                <div className="mt-1 text-slate-500 dark:text-slate-400">
+              </ArchiveInfoBlock>
+              <ArchiveInfoBlock title={t("memory.overview.sources.knowledge")}>
+                <div className="text-slate-500 dark:text-slate-400">
                   {memoryResult?.diagnostics
                     ? `${memoryResult.diagnostics.backend} / ${memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}`
                     : t("memory.overview.sources.knowledgeMissing")}
                 </div>
-              </div>
+              </ArchiveInfoBlock>
             </div>
             {_timelineError && (
               <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">
                 {_timelineError}
               </div>
             )}
-          </section>
+          </ArchiveSectionCard>
         </div>
+        </ArchiveTabFrame>
       )}
 
       <div className="hidden">
@@ -926,14 +899,7 @@ export function MemoryView() {
         {footprintSummary.all}
       </div>
 
-      <MemoryViewShell
-        active={
-          activeSection === "documents" ||
-          activeSection === "footprints" ||
-          activeSection === "search" ||
-          activeSection === "knowledge"
-        }
-      >
+      <ArchiveTabSwitch active={activeSection !== "overview"}>
         <AnimatePresence mode="wait">
           <MemoryDiagnosticsDrawer
             diagnosticsDrawer={diagnosticsDrawer}
@@ -996,7 +962,7 @@ export function MemoryView() {
           )}
 
           {activeSection === 'footprints' && (
-            <MemoryViewScrollRegion className="bg-transparent md:bg-slate-50/50 md:dark:bg-slate-900/50 md:p-6 hide-scrollbar">
+            <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} hide-scrollbar ${ARCHIVE_SPACING.page}`}>
               <MemoryFootprintsPanel
                 timelineAccess={timelineAccess}
                 timelineResult={timelineResult}
@@ -1018,11 +984,11 @@ export function MemoryView() {
                 onProbeTimelineRange={() => void handleProbeTimelineRange()}
                 onSelectTimelineEntry={setSelectedTimelineEntryName}
               />
-            </MemoryViewScrollRegion>
+            </ArchivePane>
           )}
 
           {activeSection === 'search' && (
-            <MemoryViewScrollRegion className="bg-transparent md:bg-slate-50/50 md:dark:bg-slate-900/50 p-4 md:p-6">
+            <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
               <MemorySearchPanel
                 healthProbeSummary={healthProbeSummary}
                 runtimeStatusSummary={runtimeStatusSummary}
@@ -1049,11 +1015,11 @@ export function MemoryView() {
                 onOpenSearchEntry={(entry) => void handleOpenSearchEntry(entry)}
                 onCloseSearchDetail={() => setSearchDetail(null)}
               />
-            </MemoryViewScrollRegion>
+            </ArchivePane>
           )}
 
           {activeSection === 'knowledge' && (
-            <MemoryViewScrollRegion className="bg-transparent md:bg-slate-50/50 md:dark:bg-slate-900/50 p-4 md:p-6">
+            <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
               <MemoryKnowledgePanel
                 memoryResult={memoryResult}
                 healthProbeSummary={healthProbeSummary}
@@ -1063,10 +1029,10 @@ export function MemoryView() {
                 t={t}
                 onOpenDiagnostics={() => setDiagnosticsDrawer({ open: true, source: "knowledge" })}
               />
-            </MemoryViewScrollRegion>
+            </ArchivePane>
           )}
         </AnimatePresence>
-      </MemoryViewShell>
+      </ArchiveTabSwitch>
       <style>{`
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
