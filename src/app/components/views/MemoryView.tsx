@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Calendar, Network, Cpu, BrainCircuit, Database, ChevronDown, BookOpen, FileText } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { useI18n } from "../../contexts/I18nContext";
+import type { ReactNode } from "react";
 import {
   gatewayAgentMemoryGet,
   gatewayAgentMemorySet,
@@ -771,6 +772,120 @@ export function MemoryView() {
     }
   };
 
+  const memoryPanels: Record<Exclude<MemorySection, "overview">, ReactNode> = {
+    documents: (
+      <>
+        <MemoryDocumentsDesktop
+          title={t("memory.documents.title")}
+          description={documentSearchHint ?? t("memory.documents.desc")}
+          documentQuery={documentQuery}
+          documentMatches={documentMatches}
+          documentMatchIndex={documentMatchIndex}
+          documentDirty={documentDirty}
+          documentSearchSource={documentSearchSource}
+          documentSaveMessage={documentSaveMessage}
+          documentSaveState={documentSaveState}
+          selectedDocument={selectedDocument}
+          selectedDocumentName={selectedDocumentName}
+          selectedDocumentContent={selectedDocumentContent}
+          selectedDocumentUpdatedAtLabel={selectedDocumentUpdatedAtLabel}
+          visibleDocuments={visibleDocuments}
+          canEdit={canEdit}
+          isEditing={isEditingDocument}
+          workspaceLabel={memoryResult?.workspace ?? t("memory.documents.workspaceFallback")}
+          t={t}
+          getAgentBadge={getAgentBadge}
+          selectedAgentId={selectedAgentId}
+          onDocumentQueryChange={setDocumentQuery}
+          onSelectDocument={setSelectedDocumentName}
+          onDocumentDraftChange={handleDocumentDraftChange}
+          onStartEdit={() => setIsEditingDocument(true)}
+          onCancelEdit={handleCancelDocumentEdit}
+          onSave={() => void handleSaveDocument()}
+          footerLabel={t("memory.documents.footer", visibleDocuments.length)}
+        />
+
+        <MemoryDocumentsMobile
+          visibleDocuments={visibleDocuments}
+          selectedDocumentName={selectedDocumentName}
+          selectedAgentId={selectedAgentId}
+          workspaceLabel={memoryResult?.workspace ?? t("memory.documents.workspaceFallback")}
+          t={t}
+          getAgentBadge={getAgentBadge}
+          onSelectDocument={setSelectedDocumentName}
+        />
+      </>
+    ),
+    footprints: (
+      <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} hide-scrollbar ${ARCHIVE_SPACING.page}`}>
+        <MemoryFootprintsPanel
+          timelineAccess={timelineAccess}
+          timelineResult={timelineResult}
+          timelineProbeRange={timelineProbeRange}
+          timelineProbeState={timelineProbeState}
+          timelineError={_timelineError}
+          filteredFootprintGroups={filteredFootprintGroups}
+          selectedTimelineEntryName={selectedTimelineEntryName}
+          selectedTimelineDateLabel={selectedTimelineDateLabel}
+          timelineSelectionHint={timelineSelectionHint}
+          timelineEntryContent={_timelineEntryContent}
+          timelineEntryLoading={_timelineEntryLoading}
+          timelineEntryError={_timelineEntryError}
+          selectedAgentId={selectedAgentId}
+          resolveTimelineModeLabel={(access, result) => resolveTimelineModeLabel(access, result, t)}
+          getAgentBadge={getAgentBadge}
+          t={t}
+          onProbeRangeChange={setTimelineProbeRange}
+          onProbeTimelineRange={() => void handleProbeTimelineRange()}
+          onSelectTimelineEntry={setSelectedTimelineEntryName}
+        />
+      </ArchivePane>
+    ),
+    search: (
+      <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
+        <MemorySearchPanel
+          healthProbeSummary={healthProbeSummary}
+          runtimeStatusSummary={runtimeStatusSummary}
+          isLocalGatewaySession={isLocalGatewaySession}
+          commandGuide={commandGuide}
+          commandGuideDescription={commandGuideDescription}
+          copiedCommandGuide={copiedCommandGuide}
+          searchQuery={searchQuery}
+          searchRunning={searchRunning}
+          searchError={searchError}
+          searchResult={searchResult}
+          searchGroups={searchGroups}
+          searchDetail={searchDetail}
+          searchOpenHint={searchOpenHint}
+          memoryStatusError={memoryStatusError}
+          t={t}
+          sourceTone={sourceTone}
+          resultSubtitle={resultSubtitle}
+          resultRouteLabel={(openTarget) => resultRouteLabel(openTarget, t)}
+          onOpenDiagnostics={() => setDiagnosticsDrawer({ open: true, source: "search" })}
+          onCopyCommandGuide={() => void handleCopyCommandGuide()}
+          onSearchQueryChange={setSearchQuery}
+          onRunSemanticSearch={() => void handleRunSemanticSearch()}
+          onOpenSearchEntry={(entry) => void handleOpenSearchEntry(entry)}
+          onCloseSearchDetail={() => setSearchDetail(null)}
+        />
+      </ArchivePane>
+    ),
+    knowledge: (
+      <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
+        <MemoryKnowledgePanel
+          memoryResult={memoryResult}
+          healthProbeSummary={healthProbeSummary}
+          runtimeStatusSummary={runtimeStatusSummary}
+          externalSources={externalSources}
+          isLocalGatewaySession={isLocalGatewaySession}
+          t={t}
+          onOpenDiagnostics={() => setDiagnosticsDrawer({ open: true, source: "knowledge" })}
+        />
+      </ArchivePane>
+    ),
+  };
+
   return (
     <div className="max-w-[1400px] mx-auto h-full flex flex-col text-slate-900 dark:text-slate-100 transition-colors">
       <div className="mb-4 md:mb-5 shrink-0 flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -911,126 +1026,7 @@ export function MemoryView() {
             onClose={() => setDiagnosticsDrawer((current) => ({ ...current, open: false }))}
           />
 
-          {activeSection === 'documents' && (
-            <motion.div 
-              key="view-table"
-              className="flex flex-1 flex-col"
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2 }}
-            >
-              {/* Documents View */}
-              <MemoryDocumentsDesktop
-                title={t("memory.documents.title")}
-                description={documentSearchHint ?? t("memory.documents.desc")}
-                documentQuery={documentQuery}
-                documentMatches={documentMatches}
-                documentMatchIndex={documentMatchIndex}
-                documentDirty={documentDirty}
-                documentSearchSource={documentSearchSource}
-                documentSaveMessage={documentSaveMessage}
-                documentSaveState={documentSaveState}
-                selectedDocument={selectedDocument}
-                selectedDocumentName={selectedDocumentName}
-                selectedDocumentContent={selectedDocumentContent}
-                selectedDocumentUpdatedAtLabel={selectedDocumentUpdatedAtLabel}
-                visibleDocuments={visibleDocuments}
-                canEdit={canEdit}
-                isEditing={isEditingDocument}
-                workspaceLabel={memoryResult?.workspace ?? t("memory.documents.workspaceFallback")}
-                t={t}
-                getAgentBadge={getAgentBadge}
-                selectedAgentId={selectedAgentId}
-                onDocumentQueryChange={setDocumentQuery}
-                onSelectDocument={setSelectedDocumentName}
-                onDocumentDraftChange={handleDocumentDraftChange}
-                onStartEdit={() => setIsEditingDocument(true)}
-                onCancelEdit={handleCancelDocumentEdit}
-                onSave={() => void handleSaveDocument()}
-                footerLabel={t("memory.documents.footer", visibleDocuments.length)}
-              />
-
-              <MemoryDocumentsMobile
-                visibleDocuments={visibleDocuments}
-                selectedDocumentName={selectedDocumentName}
-                selectedAgentId={selectedAgentId}
-                workspaceLabel={memoryResult?.workspace ?? t("memory.documents.workspaceFallback")}
-                t={t}
-                getAgentBadge={getAgentBadge}
-                onSelectDocument={setSelectedDocumentName}
-              />
-
-            </motion.div>
-          )}
-
-          {activeSection === 'footprints' && (
-            <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} hide-scrollbar ${ARCHIVE_SPACING.page}`}>
-              <MemoryFootprintsPanel
-                timelineAccess={timelineAccess}
-                timelineResult={timelineResult}
-                timelineProbeRange={timelineProbeRange}
-                timelineProbeState={timelineProbeState}
-                timelineError={_timelineError}
-                filteredFootprintGroups={filteredFootprintGroups}
-                selectedTimelineEntryName={selectedTimelineEntryName}
-                selectedTimelineDateLabel={selectedTimelineDateLabel}
-                timelineSelectionHint={timelineSelectionHint}
-                timelineEntryContent={_timelineEntryContent}
-                timelineEntryLoading={_timelineEntryLoading}
-                timelineEntryError={_timelineEntryError}
-                selectedAgentId={selectedAgentId}
-                resolveTimelineModeLabel={(access, result) => resolveTimelineModeLabel(access, result, t)}
-                getAgentBadge={getAgentBadge}
-                t={t}
-                onProbeRangeChange={setTimelineProbeRange}
-                onProbeTimelineRange={() => void handleProbeTimelineRange()}
-                onSelectTimelineEntry={setSelectedTimelineEntryName}
-              />
-            </ArchivePane>
-          )}
-
-          {activeSection === 'search' && (
-            <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
-              <MemorySearchPanel
-                healthProbeSummary={healthProbeSummary}
-                runtimeStatusSummary={runtimeStatusSummary}
-                isLocalGatewaySession={isLocalGatewaySession}
-                commandGuide={commandGuide}
-                commandGuideDescription={commandGuideDescription}
-                copiedCommandGuide={copiedCommandGuide}
-                searchQuery={searchQuery}
-                searchRunning={searchRunning}
-                searchError={searchError}
-                searchResult={searchResult}
-                searchGroups={searchGroups}
-                searchDetail={searchDetail}
-                searchOpenHint={searchOpenHint}
-                memoryStatusError={memoryStatusError}
-                t={t}
-                sourceTone={sourceTone}
-                resultSubtitle={resultSubtitle}
-                resultRouteLabel={(openTarget) => resultRouteLabel(openTarget, t)}
-                onOpenDiagnostics={() => setDiagnosticsDrawer({ open: true, source: "search" })}
-                onCopyCommandGuide={() => void handleCopyCommandGuide()}
-                onSearchQueryChange={setSearchQuery}
-                onRunSemanticSearch={() => void handleRunSemanticSearch()}
-                onOpenSearchEntry={(entry) => void handleOpenSearchEntry(entry)}
-                onCloseSearchDetail={() => setSearchDetail(null)}
-              />
-            </ArchivePane>
-          )}
-
-          {activeSection === 'knowledge' && (
-            <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
-              <MemoryKnowledgePanel
-                memoryResult={memoryResult}
-                healthProbeSummary={healthProbeSummary}
-                runtimeStatusSummary={runtimeStatusSummary}
-                externalSources={externalSources}
-                isLocalGatewaySession={isLocalGatewaySession}
-                t={t}
-                onOpenDiagnostics={() => setDiagnosticsDrawer({ open: true, source: "knowledge" })}
-              />
-            </ArchivePane>
-          )}
+          {activeSection !== "overview" ? memoryPanels[activeSection as Exclude<MemorySection, "overview">] : null}
         </AnimatePresence>
       </ArchiveTabSwitch>
       <style>{`

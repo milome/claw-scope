@@ -124,6 +124,18 @@ export function ArchiveDiagnosticsLayout({
   );
 }
 
+export function ArchiveDrawer({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <div className="absolute inset-y-0 right-0 z-20 w-full max-w-md border-l border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+      {children}
+    </div>
+  );
+}
+
 export function archiveDiagnosticsTone(hasIssue: boolean | null) {
   if (hasIssue == null) {
     return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
@@ -289,6 +301,31 @@ export function ArchiveEditorPane({
       <ArchiveSectionCard>{body}</ArchiveSectionCard>
       {footer ? <div className="mt-4">{footer}</div> : null}
     </div>
+  );
+}
+
+export function ArchiveSplitPanel({
+  icon,
+  title,
+  description,
+  left,
+  right,
+  columns = "lg:grid-cols-[300px_1fr]",
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  left: ReactNode;
+  right: ReactNode;
+  columns?: string;
+}) {
+  return (
+    <ArchiveTabFrame icon={icon} title={title} description={description}>
+      <ArchiveInfoGrid className={columns}>
+        {left}
+        {right}
+      </ArchiveInfoGrid>
+    </ArchiveTabFrame>
   );
 }
 

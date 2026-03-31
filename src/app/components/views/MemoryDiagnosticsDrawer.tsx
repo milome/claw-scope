@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type {
   GatewayAgentMemoryResult,
 } from "../../contexts/OpenClawContext";
-import { ArchiveDiagnosticsCard, ArchiveDiagnosticsLayout, archiveDiagnosticsTone } from "./memoryArchiveUi";
+import { ArchiveDiagnosticsCard, ArchiveDiagnosticsLayout, ArchiveDrawer, archiveDiagnosticsTone } from "./memoryArchiveUi";
 
 type HealthProbeSummary = {
   provider: string;
@@ -69,11 +69,12 @@ export function MemoryDiagnosticsDrawer({
   }
 
   return (
-    <ArchiveDiagnosticsLayout
-      title={t("memory.diag.drawer")}
-      subtitle={t("memory.diag.openedFrom", diagnosticsDrawer.source)}
-      onClose={onClose}
-    >
+    <ArchiveDrawer>
+      <ArchiveDiagnosticsLayout
+        title={t("memory.diag.drawer")}
+        subtitle={t("memory.diag.openedFrom", diagnosticsDrawer.source)}
+        onClose={onClose}
+      >
         {healthProbeSummary && (
           <>
             <DiagnosticsCard
@@ -139,6 +140,7 @@ export function MemoryDiagnosticsDrawer({
             <div className="text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.missing")}</div>
           )}
         </DiagnosticsCard>
-    </ArchiveDiagnosticsLayout>
+      </ArchiveDiagnosticsLayout>
+    </ArchiveDrawer>
   );
 }

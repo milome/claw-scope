@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import type {
   GatewayAgentMemorySearchResult,
 } from "../../contexts/OpenClawContext";
-import { ARCHIVE_SPACING, ArchiveDiagnosticsCard, archiveDiagnosticsTone, ArchiveInfoBlock, ArchiveSectionCard, ArchiveTabFrame } from "./memoryArchiveUi";
+import { ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveDiagnosticsLayout, archiveDiagnosticsTone, ArchiveEditorPane, ArchiveInfoBlock, ArchiveListPane, ArchiveSplitPanel } from "./memoryArchiveUi";
 
 type HealthProbeSummary = {
   provider: string;
@@ -93,9 +93,12 @@ export function MemorySearchPanel({
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.2 }}
     >
-      <ArchiveTabFrame icon={Search} title={t("memory.tab.search")} description={t("memory.search.routingNote")}>
-      <div className={`grid lg:grid-cols-[300px_1fr] ${ARCHIVE_SPACING.sectionGap}`}>
-        <ArchiveSectionCard>
+      <ArchiveSplitPanel
+        icon={Search}
+        title={t("memory.tab.search")}
+        description={t("memory.search.routingNote")}
+        left={(
+        <ArchiveListPane title={t("memory.search.title")}>
           <div className="text-sm font-semibold">{t("memory.search.title")}</div>
           <div className={`mt-3 rounded-2xl border p-3 text-xs shadow-sm ${diagnosticsTone(healthProbeSummary)}`}>
             <div className="flex items-center justify-between gap-3">
@@ -163,24 +166,31 @@ export function MemorySearchPanel({
               {searchError}
             </div>
           )}
-        </ArchiveSectionCard>
-        <ArchiveSectionCard>
-          <div className="mb-4 flex flex-wrap gap-2">
-            {searchGroups.map(({ group, count }) => (
-              <span key={group} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                {t("memory.search.groupCount", group, count)}
-              </span>
-            ))}
-          </div>
-          <div className="mb-4 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/60 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
-            {t("memory.search.routingNote")}
-          </div>
+        </ArchiveListPane>
+        )}
+        right={(
+        <ArchiveDetailPane>
+          <ArchiveEditorPane
+            header={(
+              <div className="mb-4 flex flex-wrap gap-2">
+                {searchGroups.map(({ group, count }) => (
+                  <span key={group} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                    {t("memory.search.groupCount", group, count)}
+                  </span>
+                ))}
+              </div>
+            )}
+            body={(
+              <>
           <div className="mb-4 flex flex-wrap gap-2">
             {(searchResult?.results ?? []).slice(0, 8).map((entry) => (
               <span key={`source-${entry.id}`} className={`rounded-full border px-3 py-1 text-xs font-medium ${sourceTone(entry.sourceKind)}`}>
                 {entry.sourceKind}
               </span>
             ))}
+          </div>
+          <div className="mb-4 rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/60 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
+            {t("memory.search.routingNote")}
           </div>
           {healthProbeSummary && (
             <ArchiveDiagnosticsCard title={t("memory.diag.healthProbe")} className="mb-4 text-xs">
@@ -247,35 +257,30 @@ export function MemorySearchPanel({
             </div>
           )}
           {searchDetail && (
-            <ArchiveSectionCard>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold">{t("memory.search.detailTitle")}</div>
-                  <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{searchDetail.path}</div>
-                </div>
-                <button
-                  onClick={onCloseSearchDetail}
-                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
-                >
-                  Close
-                </button>
-              </div>
+            <ArchiveDiagnosticsLayout
+              title={t("memory.search.detailTitle")}
+              subtitle={searchDetail.path}
+              onClose={onCloseSearchDetail}
+            >
               <div className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 {t("memory.search.detailMeta", searchDetail.sourceKind)}
               </div>
               <ArchiveDiagnosticsCard title={t("memory.search.detailTitle")} className="mt-3 text-sm">
                 {searchDetail.loading ? t("memory.search.detailLoading") : searchDetail.error ? searchDetail.error : searchDetail.content || searchDetail.snippet}
               </ArchiveDiagnosticsCard>
-            </ArchiveSectionCard>
+            </ArchiveDiagnosticsLayout>
           )}
           {searchOpenHint && (
             <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
               {searchOpenHint}
             </div>
           )}
-        </ArchiveSectionCard>
-      </div>
-      </ArchiveTabFrame>
+              </>
+            )}
+          />
+        </ArchiveDetailPane>
+        )}
+      />
     </motion.div>
   );
 }
