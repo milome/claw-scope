@@ -6,6 +6,7 @@ import type { GatewayAgentMemoryTimelineAccessResult, GatewayAgentMemoryTimeline
 import type { MemoryFootprintGroup } from "./memoryState";
 import { ArchiveCapsule, ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveInfoBlock, ArchiveNotice, ArchiveSectionCard, ArchiveSplitPanel } from "./memoryArchiveUi";
 import { EvidenceFocusCard } from "./EvidenceFocusCard";
+import { RichContentRenderer } from "./RichContentRenderer";
 
 type MemoryFootprintsPanelProps = {
   timelineAccess: GatewayAgentMemoryTimelineAccessResult | null;
@@ -107,32 +108,6 @@ export function MemoryFootprintsPanel({
     };
   }, [activeHighlightIndex, selectedHighlightTerm, timelineEntryContent]);
 
-  const highlightedSegments = useMemo(() => {
-    if (!timelineEntryContent || !selectedHighlightTerm) {
-      return [{ text: timelineEntryContent, match: false }];
-    }
-
-    const lowerContent = timelineEntryContent.toLowerCase();
-    const lowerTerm = selectedHighlightTerm.toLowerCase();
-    const segments: { text: string; match: boolean }[] = [];
-    let cursor = 0;
-
-    while (cursor < timelineEntryContent.length) {
-      const index = lowerContent.indexOf(lowerTerm, cursor);
-      if (index === -1) {
-        segments.push({ text: timelineEntryContent.slice(cursor), match: false });
-        break;
-      }
-      if (index > cursor) {
-        segments.push({ text: timelineEntryContent.slice(cursor, index), match: false });
-      }
-      segments.push({ text: timelineEntryContent.slice(index, index + selectedHighlightTerm.length), match: true });
-      cursor = index + selectedHighlightTerm.length;
-    }
-
-    return segments;
-  }, [selectedHighlightTerm, timelineEntryContent]);
-
   useEffect(() => {
     const body = bodyRef.current;
     if (!body || !highlightSelection) {
@@ -196,10 +171,10 @@ export function MemoryFootprintsPanel({
                   </button>
                   <div className="mt-3 space-y-2 text-[11px]">
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
-                      covered: {timelineProbeFeedback.coveredDates.length > 0 ? timelineProbeFeedback.coveredDates.join(", ") : "none"}
+                      {t("memory.footprints.probe.covered")}: {timelineProbeFeedback.coveredDates.length > 0 ? timelineProbeFeedback.coveredDates.join(", ") : t("memory.footprints.probe.none")}
                     </div>
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
-                      <div>missing:</div>
+                      <div>{t("memory.footprints.probe.missing")}:</div>
                       {timelineProbeFeedback.missingDates.length > 0 ? (
                         <div className="mt-2 flex flex-wrap gap-2">
                           {timelineProbeFeedback.missingDates.map((date) => (
@@ -220,11 +195,11 @@ export function MemoryFootprintsPanel({
                           ))}
                         </div>
                       ) : (
-                        <div className="mt-1">none</div>
+                        <div className="mt-1">{t("memory.footprints.probe.none")}</div>
                       )}
                     </div>
                     <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300">
-                      probing: {timelineProbeFeedback.probingDates.length > 0 ? timelineProbeFeedback.probingDates.join(", ") : "idle"}
+                      {t("memory.footprints.probe.probingDays")}: {timelineProbeFeedback.probingDates.length > 0 ? timelineProbeFeedback.probingDates.join(", ") : t("memory.footprints.probe.idleState")}
                     </div>
                   </div>
                 </ArchiveInfoBlock>
@@ -292,7 +267,7 @@ export function MemoryFootprintsPanel({
                     <div className="text-sm font-semibold">{t("memory.footprints.detailTitle")}</div>
                     <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selectedTimelineDateLabel || selectedTimelineEntryName || t("memory.footprints.detailPrompt")}</div>
                   </div>
-                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">read only</span>
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">{t("memory.footprints.readonly")}</span>
                 </div>
               )}
               body={(
@@ -310,40 +285,34 @@ export function MemoryFootprintsPanel({
                     </div>
                   </ArchiveInfoBlock>
                   <ArchiveDiagnosticsCard title={t("memory.footprints.body")} className="mt-4 text-sm leading-7 text-slate-800 dark:text-slate-100">
-                    <div ref={bodyRef} className="max-h-[360px] overflow-auto text-sm leading-7 text-slate-800 dark:text-slate-100">
+                    <div ref={bodyRef} className="max-h-[360px] overflow-auto rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 text-sm leading-7 text-slate-800 shadow-inner dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-100">
                       {timelineEntryLoading
                         ? t("memory.footprints.loading")
                         : timelineEntryError
                           ? timelineEntryError
                           : timelineEntryContent
-                            ? highlightedSegments.map((segment, index) =>
-                                segment.match ? (
-                                  <mark key={index} className="rounded bg-sky-200 px-0.5 text-slate-900 dark:bg-sky-500/40 dark:text-sky-50">
-                                    {segment.text}
-                                  </mark>
-                                ) : (
-                                  <span key={index}>{segment.text}</span>
-                                ),
-                              )
+                            ? (
+                              <RichContentRenderer text={timelineEntryContent} highlightTerm={selectedHighlightTerm} />
+                            )
                             : t("memory.footprints.noBody")}
                     </div>
                   </ArchiveDiagnosticsCard>
                   {selectedSnippet ? (
                     <div className="mt-4">
                       <EvidenceFocusCard
-                        title="Evidence focus"
+                        title={t("memory.evidence.focus")}
                         snippet={selectedSnippet}
                         sourceTitle={selectedTimelineEntryName || null}
                         expanded={evidenceExpanded}
                         onToggle={onToggleEvidenceExpanded}
-                        navigationLabel="Source anchor"
+                        navigationLabel={t("memory.evidence.sourceAnchor")}
                         navigationMeta={selectedTimelineDateLabel || null}
                       >
                         {highlightSelection ? (
                           <div className="flex items-center gap-2">
-                            <button type="button" onClick={onPreviousHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">Prev</button>
+                            <button type="button" onClick={onPreviousHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.prev")}</button>
                             <span className="text-[11px] font-semibold">{Math.max(1, Math.min(activeHighlightIndex + 1, highlightSelection.matches.length))}/{highlightSelection.matches.length}</span>
-                            <button type="button" onClick={onNextHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">Next</button>
+                            <button type="button" onClick={onNextHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.next")}</button>
                           </div>
                         ) : null}
                       </EvidenceFocusCard>

@@ -32,6 +32,12 @@ type MemoryResourcesPanelProps = {
   isLocalGatewaySession: boolean;
   t: (key: string, ...args: (string | number)[]) => string;
   onOpenDiagnostics: () => void;
+  onOpenResource: (resource: {
+    kind: "document" | "timeline" | "external_source" | "runtime_signal";
+    label: string;
+    meta?: string;
+  }) => void;
+  compact?: boolean;
 };
 
 function groupIcon(groupId: string) {
@@ -56,6 +62,8 @@ export function MemoryResourcesPanel({
   isLocalGatewaySession,
   t,
   onOpenDiagnostics,
+  onOpenResource,
+  compact = false,
 }: MemoryResourcesPanelProps) {
   const groups = useMemo(
     () => buildMemoryResourceGroups({
@@ -86,27 +94,27 @@ export function MemoryResourcesPanel({
     >
       <ArchiveSplitPanel
         icon={FolderTree}
-        title="Resources"
-        description="Structural sources, files, diagnostics, and runtime topology live here instead of the semantic mind map."
-        columns="lg:grid-cols-[1.05fr_0.95fr]"
+        title={t("memory.resources.title")}
+        description={t("memory.resources.desc")}
+        columns={compact ? "lg:grid-cols-1" : "lg:grid-cols-[1.05fr_0.95fr]"}
         left={(
           <ArchiveSectionCard>
             <div className="mb-4 flex items-start justify-between gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                   <FolderTree className="h-3.5 w-3.5" />
-                  Structural topology
+                  {t("memory.resources.structuralTopology")}
                 </div>
-                <div className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">This panel is the Phase 1 landing zone for files, paths, and runtime/source topology.</div>
+                <div className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{t("memory.resources.desc")}</div>
                 <div className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">
-                  It intentionally separates structural browsing from the future semantic mind-map pipeline.
+                  {t("memory.resources.phase1OutcomeLine1")}
                 </div>
               </div>
               <button
                 onClick={onOpenDiagnostics}
                 className="shrink-0 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-sky-300 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
               >
-                Open diagnostics
+                {t("memory.resources.openDiagnostics")}
               </button>
             </div>
 
@@ -126,8 +134,8 @@ export function MemoryResourcesPanel({
                           <Icon className="h-4 w-4 text-slate-600 dark:text-slate-300" />
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{group.title}</div>
-                          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{group.description}</div>
+                          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t(group.titleKey)}</div>
+                          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(group.descriptionKey)}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
@@ -145,7 +153,10 @@ export function MemoryResourcesPanel({
                               <button
                                 key={leaf.id}
                                 type="button"
-                                onClick={() => setSelectedLeafId(leaf.id)}
+                                onClick={() => {
+                                  setSelectedLeafId(leaf.id);
+                                  onOpenResource({ kind: leaf.kind, label: leaf.label, meta: leaf.meta });
+                                }}
                                 className={`flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition ${selectedLeafId === leaf.id ? "border-sky-300 bg-sky-50 dark:border-sky-700 dark:bg-slate-800" : "border-slate-200 bg-slate-50 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-slate-700"}`}
                               >
                                 <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-sky-500" />
@@ -165,16 +176,16 @@ export function MemoryResourcesPanel({
             </div>
           </ArchiveSectionCard>
         )}
-        right={(
+        right={compact ? null : (
           <ArchiveSectionCard>
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Selected resource</div>
-              <div className="mt-2 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">{selectedLeaf?.label ?? "No resource selected"}</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{t("memory.resources.selected")}</div>
+              <div className="mt-2 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">{selectedLeaf?.label ?? t("memory.resources.noneSelected")}</div>
               {selectedLeaf?.meta ? <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{selectedLeaf.meta}</div> : null}
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <ArchiveInfoBlock title="Workspace">
+              <ArchiveInfoBlock title={t("memory.resources.workspace")}>
                 <div className="mt-1 break-all text-slate-800 dark:text-slate-100">{memoryResult?.workspace ?? t("memory.diag.unavailable")}</div>
               </ArchiveInfoBlock>
               <ArchiveInfoBlock title={t("memory.diag.runtimeStatus")}>
@@ -192,47 +203,47 @@ export function MemoryResourcesPanel({
             {healthProbeSummary ? (
               <ArchiveDiagnosticsCard title={t("memory.diag.healthProbe")} className={`mt-4 text-xs ${diagnosticsTone(healthProbeSummary)}`}>
                 <div>{healthProbeSummary.provider} / {healthProbeSummary.model}</div>
-                <div className="mt-1">embeddings: {healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")}</div>
+                <div className="mt-1">{t("memory.resources.embeddings")}: {healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")}</div>
               </ArchiveDiagnosticsCard>
             ) : null}
 
-            <ArchiveDiagnosticsCard title="Resource payload" className="mt-4 text-sm leading-7 text-slate-800 dark:text-slate-100">
-              {selectedLeaf?.content ? selectedLeaf.content : "Select a file, path, or runtime signal to inspect its current payload or reference string."}
+            <ArchiveDiagnosticsCard title={t("memory.resources.payload")} className="mt-4 text-sm leading-7 text-slate-800 dark:text-slate-100">
+              {selectedLeaf?.content ? selectedLeaf.content : t("memory.resources.payloadEmpty")}
             </ArchiveDiagnosticsCard>
 
-            <ArchiveDiagnosticsCard title="Phase 1 separation contract" className="mt-4 text-xs">
+            <ArchiveDiagnosticsCard title={t("memory.resources.phase1Contract")} className="mt-4 text-xs">
               <div className="space-y-2 text-slate-500 dark:text-slate-400">
-                <div>This panel owns structural/resource browsing.</div>
-                <div>It is the explicit landing zone for diagnostics, file paths, and source topology.</div>
-                <div>The future semantic `Mind Map` must not reuse this data as its primary semantic graph payload.</div>
+                <div>{t("memory.resources.scopeLine1")}</div>
+                <div>{t("memory.resources.scopeLine2")}</div>
+                <div>{t("memory.resources.scopeLine3")}</div>
               </div>
             </ArchiveDiagnosticsCard>
           </ArchiveSectionCard>
         )}
       />
 
-      <ArchiveDetailPane>
+      {compact ? null : <ArchiveDetailPane>
         <ArchiveEditorPane
-          header={<div className="text-sm font-semibold">Resources split status</div>}
+          header={<div className="text-sm font-semibold">{t("memory.resources.phase1Status")}</div>}
           body={(
             <>
-              <ArchiveDiagnosticsCard title="Phase 1 outcome">
+              <ArchiveDiagnosticsCard title={t("memory.resources.phase1Outcome")}>
                 <div className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
-                  <div>Structural data is now isolated in a dedicated panel path.</div>
-                  <div>The current semantic map path can be replaced in Phase 2 and Phase 3 without reusing resource topology assumptions.</div>
+                  <div>{t("memory.resources.phase1OutcomeLine1")}</div>
+                  <div>{t("memory.resources.phase1OutcomeLine2")}</div>
                 </div>
               </ArchiveDiagnosticsCard>
-              <ArchiveDiagnosticsCard title="Panel scope">
+              <ArchiveDiagnosticsCard title={t("memory.resources.panelScope")}>
                 <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
-                  <div>Documents and timeline entries remain structural resources here.</div>
-                  <div>External paths and runtime signals remain structural resources here.</div>
-                  <div>Semantic concept derivation does not belong in this panel.</div>
+                  <div>{t("memory.resources.scopeLine1")}</div>
+                  <div>{t("memory.resources.scopeLine2")}</div>
+                  <div>{t("memory.resources.scopeLine3")}</div>
                 </div>
               </ArchiveDiagnosticsCard>
             </>
           )}
         />
-      </ArchiveDetailPane>
+      </ArchiveDetailPane>}
     </motion.div>
   );
 }

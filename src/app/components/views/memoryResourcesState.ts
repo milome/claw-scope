@@ -15,8 +15,8 @@ export type MemoryResourceLeaf = {
 
 export type MemoryResourceGroup = {
   id: string;
-  title: string;
-  description: string;
+  titleKey: string;
+  descriptionKey: string;
   leaves: MemoryResourceLeaf[];
 };
 
@@ -86,26 +86,26 @@ export function buildMemoryResourceGroups({
   return [
     {
       id: "resources:documents",
-      title: "Documents",
-      description: "Workspace memory documents and editable files.",
+      titleKey: "memory.tab.documents",
+      descriptionKey: "memory.documents.desc",
       leaves: documentLeaves,
     },
     {
       id: "resources:timeline",
-      title: "Timeline Entries",
-      description: "Daily footprint files and timeline content.",
+      titleKey: "memory.tab.footprints",
+      descriptionKey: "memory.footprints.detailPrompt",
       leaves: timelineLeaves,
     },
     {
       id: "resources:external",
-      title: "External Sources",
-      description: "Extra configured paths and imported source references.",
+      titleKey: "memory.knowledge.sources",
+      descriptionKey: "memory.knowledge.pathsEmpty",
       leaves: externalLeaves,
     },
     {
       id: "resources:runtime",
-      title: "Runtime Signals",
-      description: "Diagnostics, backend, store, and runtime-origin signals.",
+      titleKey: "memory.diag.runtimeStatus",
+      descriptionKey: "memory.diag.runtimePlaceholder",
       leaves: runtimeLeaves,
     },
   ];

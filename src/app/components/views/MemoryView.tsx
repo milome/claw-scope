@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Calendar, Network, Cpu, BrainCircuit, Database, ChevronDown, BookOpen, FileText, FolderTree } from "lucide-react";
+import { Search, Calendar, Network, Cpu, BrainCircuit, ChevronDown, BookOpen, FileText } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { useI18n } from "../../contexts/I18nContext";
@@ -60,11 +60,11 @@ import { MemoryMindMapPanel } from "./MemoryMindMapPanel";
 import { MemoryResourcesPanel } from "./MemoryResourcesPanel";
 import { MemoryDocumentsDesktop } from "./MemoryDocumentsDesktop";
 import { MemoryDocumentsMobile } from "./MemoryDocumentsMobile";
-import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ArchiveCapsule, ArchiveInfoBlock, ArchiveNotice, ArchivePageHeader, ArchivePane, ArchiveSectionCard, ArchiveSegmentedTabButton, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
+import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ArchiveCapsule, ArchiveNotice, ArchivePageHeader, ArchivePane, ArchiveSectionCard, ArchiveSegmentedTabButton, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
 import { buildSemanticMemoryEntries, buildSemanticMindMapModel } from "./memorySemanticState";
 import { buildSemanticCorpusDebug } from "./memorySemanticState";
 
-type MemorySection = "overview" | "documents" | "footprints" | "search" | "knowledge" | "resources";
+type MemorySection = "overview" | "documents" | "footprints" | "search" | "knowledge";
 
 export type SearchDetailState = {
   title: string;
@@ -198,11 +198,19 @@ function sectionDescription(section: MemorySection, t: (key: string, ...args: (s
       return t("memory.search.routingNote");
     case "knowledge":
       return t("memory.knowledge.subtitle");
-    case "resources":
-      return "Structural sources, files, diagnostics, and runtime topology.";
     default:
       return t("memory.desc");
   }
+}
+
+function openTargetForResource(kind: "document" | "timeline" | "external_source" | "runtime_signal") {
+  if (kind === "document") {
+    return "documents" as const;
+  }
+  if (kind === "timeline") {
+    return "footprints" as const;
+  }
+  return "overview" as const;
 }
 
 export function MemoryView() {
@@ -602,6 +610,31 @@ export function MemoryView() {
     setMindMapOpenHint("Could not resolve the evidence target back to documents or footprints.");
   };
 
+  const handleOpenResourceFromOverview = (resource: {
+    kind: "document" | "timeline" | "external_source" | "runtime_signal";
+    label: string;
+    meta?: string;
+  }) => {
+    const target = openTargetForResource(resource.kind);
+    setActiveSection(target);
+
+    if (resource.kind === "document") {
+      const match = visibleDocuments.find((document) => document.name === resource.label);
+      if (match) {
+        setSelectedDocumentName(match.name);
+        setDocumentSearchHint(`Opened from Overview resources: ${match.name}`);
+      }
+    }
+
+    if (resource.kind === "timeline") {
+      const match = (timelineResult?.entries ?? []).find((entry) => entry.name === resource.label);
+      if (match) {
+        setSelectedTimelineEntryName(match.name);
+        setTimelineSelectionHint(`Opened from Overview resources: ${match.name}`);
+      }
+    }
+  };
+
   useEffect(() => {
     setDocumentMatchIndex(documentMatches.length > 0 ? 0 : -1);
   }, [documentMatches.length, selectedDocumentName]);
@@ -917,6 +950,26 @@ export function MemoryView() {
     setDocumentSaveMessage(null);
   };
 
+  const handleReloadDocument = async () => {
+    if (!selectedAgentId) {
+      return;
+    }
+
+    try {
+      const result = await gatewayAgentMemoryGet(selectedAgentId);
+      setMemoryResult(result);
+      setDrafts(createMemoryDrafts(result));
+      setSelectedDocumentName((current) =>
+        resolveSelectedMemoryDocumentName(current, result.documents),
+      );
+      setDocumentSaveState("idle");
+      setDocumentSaveMessage(t("memory.documents.reload"));
+    } catch (error) {
+      setDocumentSaveState("error");
+      setDocumentSaveMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const handleSaveDocument = async () => {
     if (!selectedDocument || !canEdit || !documentDirty) {
       return;
@@ -1013,7 +1066,7 @@ export function MemoryView() {
   const memoryPanels: Record<MemorySection, ReactNode> = {
     overview: (
       <ArchiveTabFrame icon={BookOpen} title={t("memory.tab.overview")} description={t("memory.overview.sources.title")}>
-        <div className={`grid lg:grid-cols-[1.4fr_1fr] ${ARCHIVE_SPACING.sectionGap}`}>
+        <div className={`grid lg:grid-cols-[1.15fr_0.85fr] ${ARCHIVE_SPACING.sectionGap}`}>
           <ArchiveSectionCard>
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
               <Network className="w-4 h-4 text-sky-500" />
@@ -1028,24 +1081,18 @@ export function MemoryView() {
             {_memoryError ? <div className="mt-4"><ArchiveNotice tone="error">{_memoryError}</ArchiveNotice></div> : null}
           </ArchiveSectionCard>
 
-          <ArchiveSectionCard>
-            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-              <Database className="w-4 h-4 text-sky-500" />
-              {t("memory.overview.sources.title")}
-            </div>
-            <div className="space-y-3 text-sm">
-              <ArchiveInfoBlock title={t("memory.overview.sources.documents")}>
-                <div className="text-slate-500 dark:text-slate-400">{visibleDocuments.map((document) => document.name).join(", ") || t("memory.overview.sources.documentsEmpty")}</div>
-              </ArchiveInfoBlock>
-              <ArchiveInfoBlock title={t("memory.overview.sources.timeline")}>
-                <div className="text-slate-500 dark:text-slate-400">{timelineAccess ? `${timelineAccess.mode} / ${timelineAccess.reason}` : t("memory.overview.sources.timelineUnknown")}</div>
-              </ArchiveInfoBlock>
-              <ArchiveInfoBlock title={t("memory.overview.sources.knowledge")}>
-                <div className="text-slate-500 dark:text-slate-400">{memoryResult?.diagnostics ? `${memoryResult.diagnostics.backend} / ${memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}` : t("memory.overview.sources.knowledgeMissing")}</div>
-              </ArchiveInfoBlock>
-            </div>
-            {_timelineError ? <div className="mt-4"><ArchiveNotice tone="error">{_timelineError}</ArchiveNotice></div> : null}
-          </ArchiveSectionCard>
+          <MemoryResourcesPanel
+            memoryResult={memoryResult}
+            timelineResult={timelineResult}
+            externalSources={externalSources}
+            healthProbeSummary={healthProbeSummary}
+            runtimeStatusSummary={runtimeStatusSummary}
+            isLocalGatewaySession={isLocalGatewaySession}
+            t={t}
+            onOpenDiagnostics={() => setDiagnosticsDrawer({ open: true, source: "knowledge" })}
+            onOpenResource={handleOpenResourceFromOverview}
+            compact
+          />
         </div>
       </ArchiveTabFrame>
     ),
@@ -1084,6 +1131,7 @@ export function MemoryView() {
           onDocumentDraftChange={handleDocumentDraftChange}
           onStartEdit={() => setIsEditingDocument(true)}
           onCancelEdit={handleCancelDocumentEdit}
+          onReload={() => void handleReloadDocument()}
           onSave={() => void handleSaveDocument()}
           footerLabel={t("memory.documents.footer", visibleDocuments.length)}
         />
@@ -1177,20 +1225,6 @@ export function MemoryView() {
         </div>
       </ArchivePane>
     ),
-    resources: (
-      <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
-        <MemoryResourcesPanel
-          memoryResult={memoryResult}
-          timelineResult={timelineResult}
-          externalSources={externalSources}
-          healthProbeSummary={healthProbeSummary}
-          runtimeStatusSummary={runtimeStatusSummary}
-          isLocalGatewaySession={isLocalGatewaySession}
-          t={t}
-          onOpenDiagnostics={() => setDiagnosticsDrawer({ open: true, source: "knowledge" })}
-        />
-      </ArchivePane>
-    ),
   };
 
   return (
@@ -1227,9 +1261,7 @@ export function MemoryView() {
                   ? "Daily footprints share the same memory dataset and keep the timeline as a first-class peer mode."
                   : activeSection === "knowledge"
                     ? "Mind Map is now reserved for semantic graph work and should stop carrying structural topology." 
-                    : activeSection === "resources"
-                      ? "Resources is the structural topology lane for files, paths, and diagnostics." 
-                      : "Overview, documents, footprints, search, mind map, and resources stay inside one governed memory shell."}
+                    : "Overview now includes the resource tree, while documents, footprints, search, and mind map stay as the focused working views."}
             </div>
           </div>
           <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
@@ -1243,7 +1275,6 @@ export function MemoryView() {
             ["footprints", t("memory.tab.footprints"), "Daily footprints view for timeline-first browsing.", Calendar],
             ["search", t("memory.tab.search"), "Semantic lookup and routed result inspection.", Search],
             ["knowledge", t("memory.tab.knowledge"), "Reserved semantic mind-map lane backed by memory-content inference.", BrainCircuit],
-            ["resources", "Resources", "Structural source tree for files, paths, and diagnostics.", FolderTree],
           ] as const).map(([section, label, description, Icon]) => {
             const active = activeSection === section;
             return (

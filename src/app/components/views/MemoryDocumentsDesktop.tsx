@@ -43,6 +43,7 @@ type MemoryDocumentsDesktopProps = {
   onDocumentDraftChange: (value: string) => void;
   onStartEdit: () => void;
   onCancelEdit: () => void;
+  onReload: () => void;
   onSave: () => void;
   footerLabel: string;
 };
@@ -80,6 +81,7 @@ export function MemoryDocumentsDesktop({
   onDocumentDraftChange,
   onStartEdit,
   onCancelEdit,
+  onReload,
   onSave,
   footerLabel,
 }: MemoryDocumentsDesktopProps) {
@@ -173,7 +175,7 @@ export function MemoryDocumentsDesktop({
         <ArchiveCapsule>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
             <div className="min-w-0">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Readable Workspace</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">{t("memory.documents.readableWorkspace")}</div>
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
                 <span className="rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                   {t("memory.documents.current", selectedDocument?.name ?? t("memory.documents.none"))}
@@ -216,7 +218,7 @@ export function MemoryDocumentsDesktop({
       </div>
 
       <div className={`grid flex-1 grid-cols-[minmax(420px,1.05fr)_minmax(0,1.35fr)] px-5 pb-5 auto-rows-fr ${ARCHIVE_SPACING.sectionGap}`}>
-        <ArchiveListPane title="Document Directory" className="h-[calc(100vh-280px)]">
+        <ArchiveListPane title={t("memory.documents.directory")} className="h-[calc(100vh-280px)]">
 
           {visibleDocuments.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center p-12 text-center">
@@ -274,7 +276,7 @@ export function MemoryDocumentsDesktop({
                   subtitle={selectedDocument.path}
                   meta={(
                     <div className="rounded-2xl border border-slate-200 bg-white px-3 py-1 text-right text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                      <div className="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Updated</div>
+                      <div className="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.documents.updatedShort")}</div>
                       <div>{selectedDocumentUpdatedAtLabel}</div>
                     </div>
                   )}
@@ -283,13 +285,14 @@ export function MemoryDocumentsDesktop({
               body={(
                 <>
                   <ArchiveFormHeader label={t("memory.documents.editor")}>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">{isEditing ? "editing" : "read only"}</div>
-                    {canEdit && !isEditing && <ArchiveActionButton onClick={onStartEdit}>Edit</ArchiveActionButton>}
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">{isEditing ? t("memory.documents.editing") : t("memory.documents.readonly")}</div>
+                    <ArchiveActionButton onClick={onReload}>{t("memory.documents.reload")}</ArchiveActionButton>
+                    {canEdit && !isEditing && <ArchiveActionButton onClick={onStartEdit}>{t("memory.documents.edit")}</ArchiveActionButton>}
                     {canEdit && isEditing && (
                       <>
-                        <ArchiveActionButton onClick={onCancelEdit}>Cancel</ArchiveActionButton>
+                        <ArchiveActionButton onClick={onCancelEdit}>{t("memory.documents.cancel")}</ArchiveActionButton>
                         <ArchiveActionButton onClick={onSave} disabled={!documentDirty || documentSaveState === "saving"} variant="primary">
-                          {documentSaveState === "saving" ? "Saving" : "Save"}
+                          {documentSaveState === "saving" ? t("memory.documents.saving") : t("memory.documents.save")}
                         </ArchiveActionButton>
                       </>
                     )}
@@ -346,19 +349,19 @@ export function MemoryDocumentsDesktop({
                   {selectedSnippet ? (
                     <div className="mt-4">
                       <EvidenceFocusCard
-                        title="Evidence focus"
+                        title={t("memory.evidence.focus")}
                         snippet={selectedSnippet}
                         sourceTitle={selectedDocument?.name ?? null}
                         expanded={evidenceExpanded}
                         onToggle={onToggleEvidenceExpanded}
-                        navigationLabel="Source anchor"
+                        navigationLabel={t("memory.evidence.sourceAnchor")}
                         navigationMeta={selectedDocument?.path ?? null}
                       >
                         {highlightSelection ? (
                           <div className="flex items-center gap-2">
-                            <button type="button" onClick={onPreviousHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">Prev</button>
+                            <button type="button" onClick={onPreviousHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.prev")}</button>
                             <span className="text-[11px] font-semibold">{Math.max(1, Math.min(activeHighlightIndex + 1, highlightSelection.matches.length))}/{highlightSelection.matches.length}</span>
-                            <button type="button" onClick={onNextHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">Next</button>
+                            <button type="button" onClick={onNextHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.next")}</button>
                           </div>
                         ) : null}
                       </EvidenceFocusCard>
