@@ -114,7 +114,7 @@ export function MemorySearchPanel({
                 className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
               >
                 {searchRunning ? <Search className="w-4 h-4 animate-pulse" /> : <Search className="w-4 h-4" />}
-                {t("memory.search.run")}
+                {searchRunning ? t("memory.search.detailLoading") : t("memory.search.run")}
               </button>
             </div>
           </div>
