@@ -65,7 +65,7 @@ import { buildMemoryConfigStatusSummary, memoryConfigStatusMessageKey, type Memo
 import { MemoryResourcesPanel } from "./MemoryResourcesPanel";
 import { MemoryDocumentsDesktop } from "./MemoryDocumentsDesktop";
 import { MemoryDocumentsMobile } from "./MemoryDocumentsMobile";
-import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ArchiveCapsule, ArchiveNotice, ArchivePageHeader, ArchivePane, ArchiveSectionCard, ArchiveSegmentedTabButton, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
+import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ArchiveNotice, ArchivePageHeader, ArchivePane, ArchiveSectionCard, ArchiveSegmentedTabButton, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
 import { buildSemanticMemoryEntries, buildSemanticMindMapModel } from "./memorySemanticState";
 import { buildSemanticCorpusDebug } from "./memorySemanticState";
 
@@ -1426,29 +1426,30 @@ export function MemoryView() {
         description={t("memory.desc")}
         leadingIcon={<LibraryBig className="h-5 w-5 text-sky-500" />}
         actions={(
-          <div className="relative inline-flex items-center">
-            <select
-              value={selectedAgentId}
-              onChange={(e) => setSelectedAgentId(e.target.value)}
-              className="appearance-none bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2 pl-4 pr-10 rounded-lg shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all cursor-pointer min-w-[200px]"
-            >
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>{a.name} ({a.id.split('-')[0]}-{a.id.split('-')[2]})</option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 pointer-events-none" />
+          <div className="inline-flex items-center gap-2 rounded-[22px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] px-2 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:border-slate-800/80 dark:bg-[linear-gradient(135deg,rgba(15,23,42,0.92),rgba(2,6,23,0.82))] dark:shadow-none">
+            <div className="flex min-w-[112px] flex-col rounded-[16px] bg-[linear-gradient(135deg,rgba(14,165,233,0.14),rgba(56,189,248,0.06))] px-3 py-2 text-slate-700 dark:bg-[linear-gradient(135deg,rgba(14,165,233,0.18),rgba(2,6,23,0.18))] dark:text-slate-200">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-700/80 dark:text-sky-300/80">Agents</span>
+              <span className="mt-1 text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                {agents.length} available
+              </span>
+            </div>
+            <div className="relative inline-flex items-center">
+              <select
+                value={selectedAgentId}
+                onChange={(e) => setSelectedAgentId(e.target.value)}
+                className="min-w-[220px] appearance-none rounded-[16px] border border-slate-300 bg-white/95 py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 shadow-sm transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+              >
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name} ({a.id.split('-')[0]}-{a.id.split('-')[2]})</option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 pointer-events-none" />
+            </div>
           </div>
         )}
       />
 
-      <ArchiveCapsule>
-        <div className="space-y-2">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div />
-          <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-            {agents.length} agent{agents.length === 1 ? "" : "s"} available
-          </div>
-        </div>
+      <div className="mb-2">
         <ArchiveTabBar>
           {([
             ["overview", t("memory.tab.overview"), t("memory.tab.tooltip.overview"), BookOpen],
@@ -1477,8 +1478,7 @@ export function MemoryView() {
             );
           })}
         </ArchiveTabBar>
-        </div>
-      </ArchiveCapsule>
+      </div>
 
       <div className="hidden">
         {selectedDocumentContent}

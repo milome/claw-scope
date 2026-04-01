@@ -13,7 +13,7 @@ export const ARCHIVE_SURFACE = {
 };
 
 export const ARCHIVE_TABS = {
-  container: "flex flex-wrap gap-2 rounded-[24px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.88))] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(2,6,23,0.78))]",
+  container: "flex flex-wrap gap-1 rounded-[20px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.88))] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(2,6,23,0.78))]",
   active:
     "border border-sky-200 bg-[linear-gradient(180deg,rgba(240,249,255,1),rgba(224,242,254,0.92))] text-sky-700 shadow-sm shadow-sky-100/80 dark:border-sky-700 dark:bg-[linear-gradient(180deg,rgba(8,47,73,0.9),rgba(12,74,110,0.52))] dark:text-sky-300 dark:shadow-none",
   idle:
@@ -469,7 +469,7 @@ export function ArchiveSegmentedTabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`group min-w-[150px] flex-1 rounded-[18px] px-3 py-3 text-left transition ${active ? ARCHIVE_TABS.active : ARCHIVE_TABS.idle}`}
+      className={`group min-w-[128px] flex-1 rounded-[15px] px-3 py-2 text-left transition ${active ? ARCHIVE_TABS.active : ARCHIVE_TABS.idle}`}
     >
       <div className="flex items-start gap-3">
         <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border transition ${active ? "border-sky-200 bg-white text-sky-600 dark:border-sky-700 dark:bg-slate-950/60 dark:text-sky-300" : "border-slate-200 bg-white/90 text-slate-500 group-hover:border-slate-300 group-hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:border-slate-600 dark:group-hover:text-slate-100"}`}>
