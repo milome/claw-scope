@@ -9,10 +9,12 @@ import {
   canReloadMemoryDocument,
   canSaveMemoryDocument,
   collectTextSearchMatches,
+  clampActiveSearchMatchIndex,
   filterMemoryFootprintGroups,
   hasSharedWorkspaceMemory,
   isMemoryDocumentDirty,
   moveActiveSearchMatchIndex,
+  resolveInitialSearchMatchIndex,
   resolveFirstTimelineEntryNameFromGroups,
   resolveExternalMemorySources,
   resolveMemoryDocumentContent,
@@ -102,6 +104,31 @@ describe("moveActiveSearchMatchIndex", () => {
 
   it("returns -1 when there are no matches", () => {
     expect(moveActiveSearchMatchIndex(0, 0, 1)).toBe(-1);
+  });
+});
+
+describe("resolveInitialSearchMatchIndex", () => {
+  it("starts from the first match when results exist", () => {
+    expect(resolveInitialSearchMatchIndex(3)).toBe(0);
+  });
+
+  it("returns -1 when there are no matches", () => {
+    expect(resolveInitialSearchMatchIndex(0)).toBe(-1);
+  });
+});
+
+describe("clampActiveSearchMatchIndex", () => {
+  it("keeps an in-range index unchanged", () => {
+    expect(clampActiveSearchMatchIndex(1, 3)).toBe(1);
+  });
+
+  it("clamps missing or overflow indexes into the available range", () => {
+    expect(clampActiveSearchMatchIndex(-1, 3)).toBe(0);
+    expect(clampActiveSearchMatchIndex(9, 3)).toBe(2);
+  });
+
+  it("returns -1 when there are no matches", () => {
+    expect(clampActiveSearchMatchIndex(2, 0)).toBe(-1);
   });
 });
 

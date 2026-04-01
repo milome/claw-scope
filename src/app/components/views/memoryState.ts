@@ -679,6 +679,29 @@ export function moveActiveSearchMatchIndex(
   return (currentIndex + direction + totalMatches) % totalMatches;
 }
 
+export function resolveInitialSearchMatchIndex(totalMatches: number) {
+  return totalMatches > 0 ? 0 : -1;
+}
+
+export function clampActiveSearchMatchIndex(
+  currentIndex: number,
+  totalMatches: number,
+) {
+  if (totalMatches <= 0) {
+    return -1;
+  }
+
+  if (currentIndex < 0) {
+    return 0;
+  }
+
+  if (currentIndex >= totalMatches) {
+    return totalMatches - 1;
+  }
+
+  return currentIndex;
+}
+
 export function buildHighlightedTextSegments(
   text: string,
   matches: MemorySearchMatch[],

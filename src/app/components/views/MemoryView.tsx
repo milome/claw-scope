@@ -31,16 +31,19 @@ import {
   buildMemoryFootprintGroups,
   canEditMemory,
   canLoadLocalTimeline,
+  clampActiveSearchMatchIndex,
   collectTimelineEntryCoveredDates,
   collectTextSearchMatches,
   createMemoryDrafts,
   filterMemoryFootprintGroups,
   hasSharedWorkspaceMemory,
   isMemoryDocumentDirty,
+  moveActiveSearchMatchIndex,
   mergeTimelineProbeResults,
   resolveExternalMemorySources,
   resolveMemoryDocumentContent,
   resolveMemoryRootDocument,
+  resolveInitialSearchMatchIndex,
   resolveSelectedMemoryAgentId,
   resolveSelectedMemoryDocumentName,
   resolveSelectedTimelineEntryName,
@@ -706,8 +709,10 @@ export function MemoryView() {
   };
 
   useEffect(() => {
-    setDocumentMatchIndex(documentMatches.length > 0 ? 0 : -1);
-  }, [documentMatches.length, selectedDocumentName]);
+    setDocumentMatchIndex((current) =>
+      clampActiveSearchMatchIndex(current, documentMatches.length),
+    );
+  }, [documentMatches.length, selectedDocumentName, selectedDocumentContent]);
 
   useEffect(() => {
     setDocumentSearchInput(documentQuery);
@@ -1041,8 +1046,13 @@ export function MemoryView() {
 
   const handleRunDocumentSearch = () => {
     const nextQuery = documentSearchInput.trim();
+    const nextMatches = collectTextSearchMatches(selectedDocumentContent, nextQuery);
     setDocumentQuery(nextQuery);
     setDocumentSearchSource("manual");
+    setDocumentMatchIndex(resolveInitialSearchMatchIndex(nextMatches.length));
+    setDocumentEvidenceTerm(nextQuery || null);
+    setDocumentEvidenceMatchIndex(0);
+    setDocumentEvidenceSnippet(null);
     setDocumentSearchHint(nextQuery ? t("memory.documents.searchRun", nextQuery) : t("memory.documents.searchCleared"));
   };
 
@@ -1123,6 +1133,8 @@ export function MemoryView() {
       setSelectedDocumentName(entry.canonicalDocumentName ?? entry.path.split("/").pop() ?? "");
       const derivedQuery = entry.snippet.trim().split(/\s+/).find((token) => token.length >= 3) ?? entry.snippet.slice(0, 24).trim();
       setDocumentQuery(derivedQuery);
+      setDocumentSearchInput(derivedQuery);
+      setDocumentMatchIndex(-1);
       setDocumentSearchSource("search_result");
       setDocumentSearchHint(t("memory.search.hint.documents", entry.path));
       setTimelineSelectionHint(null);
@@ -1248,8 +1260,8 @@ export function MemoryView() {
           selectedAgentId={selectedAgentId}
           onDocumentSearchInputChange={setDocumentSearchInput}
           onRunDocumentSearch={handleRunDocumentSearch}
-          onPreviousHighlight={() => setDocumentEvidenceMatchIndex((current) => Math.max(0, current - 1))}
-          onNextHighlight={() => setDocumentEvidenceMatchIndex((current) => current + 1)}
+          onPreviousHighlight={() => setDocumentMatchIndex((current) => moveActiveSearchMatchIndex(current, documentMatches.length, -1))}
+          onNextHighlight={() => setDocumentMatchIndex((current) => moveActiveSearchMatchIndex(current, documentMatches.length, 1))}
           onSelectDocument={setSelectedDocumentName}
           onDocumentDraftChange={handleDocumentDraftChange}
           onStartEdit={() => setIsEditingDocument(true)}

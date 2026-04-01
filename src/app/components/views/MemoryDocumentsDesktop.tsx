@@ -2,7 +2,7 @@ import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import type { GatewayAgentFileEntry } from "../../contexts/OpenClawContext";
-import { ARCHIVE_SPACING, ArchiveActionButton, ArchiveCapsule, ArchiveDetailHeader, ArchiveDetailPane, ArchiveEditorPane, ArchiveFormHeader, ArchiveListCard, ArchiveListPane } from "./memoryArchiveUi";
+import { ARCHIVE_SPACING, ArchiveActionButton, ArchiveCapsule, ArchiveDetailHeader, ArchiveDetailPane, ArchiveEditorPane, ArchiveFormHeader, ArchiveLayerHeader, ArchiveListCard, ArchiveListPane } from "./memoryArchiveUi";
 import { EvidenceFocusCard } from "./EvidenceFocusCard";
 import { RichContentRenderer } from "./RichContentRenderer";
 
@@ -94,14 +94,17 @@ export function MemoryDocumentsDesktop({
 }: MemoryDocumentsDesktopProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const lastScrolledMatchIndexRef = useRef<number | null>(null);
+
+  const activeHighlightTerm = selectedHighlightTerm ?? (documentSearchInput.trim() || null);
 
   const highlightSelection = useMemo(() => {
-    if (!selectedDocumentContent || !selectedHighlightTerm) {
+    if (!selectedDocumentContent || !activeHighlightTerm) {
       return null;
     }
 
     const lowerContent = selectedDocumentContent.toLowerCase();
-    const lowerTerm = selectedHighlightTerm.toLowerCase();
+    const lowerTerm = activeHighlightTerm.toLowerCase();
     const matches: { start: number; end: number }[] = [];
     let cursor = 0;
 
@@ -110,8 +113,8 @@ export function MemoryDocumentsDesktop({
       if (start === -1) {
         break;
       }
-      matches.push({ start, end: start + selectedHighlightTerm.length });
-      cursor = start + selectedHighlightTerm.length;
+      matches.push({ start, end: start + activeHighlightTerm.length });
+      cursor = start + activeHighlightTerm.length;
     }
 
     if (matches.length === 0) {
@@ -122,12 +125,17 @@ export function MemoryDocumentsDesktop({
       matches,
       current: matches[Math.max(0, Math.min(activeHighlightIndex, matches.length - 1))],
     };
-  }, [selectedDocumentContent, selectedHighlightTerm]);
+  }, [activeHighlightIndex, activeHighlightTerm, selectedDocumentContent]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
     const overlay = overlayRef.current;
     if ((!textarea && !overlay) || !highlightSelection) {
+      lastScrolledMatchIndexRef.current = null;
+      return;
+    }
+
+    if (lastScrolledMatchIndexRef.current === activeHighlightIndex) {
       return;
     }
 
@@ -146,15 +154,16 @@ export function MemoryDocumentsDesktop({
     if (overlay) {
       overlay.scrollTop = scrollTop;
     }
-  }, [highlightSelection, isEditing, selectedDocumentContent]);
+    lastScrolledMatchIndexRef.current = activeHighlightIndex;
+  }, [activeHighlightIndex, highlightSelection, isEditing, selectedDocumentContent]);
 
   const highlightedSegments = useMemo(() => {
-    if (!selectedDocumentContent || !selectedHighlightTerm) {
+    if (!selectedDocumentContent || !activeHighlightTerm) {
       return [{ text: selectedDocumentContent, match: false }];
     }
 
     const lowerContent = selectedDocumentContent.toLowerCase();
-    const lowerTerm = selectedHighlightTerm.toLowerCase();
+    const lowerTerm = activeHighlightTerm.toLowerCase();
     const segments: { text: string; match: boolean }[] = [];
     let cursor = 0;
 
@@ -167,16 +176,17 @@ export function MemoryDocumentsDesktop({
       if (index > cursor) {
         segments.push({ text: selectedDocumentContent.slice(cursor, index), match: false });
       }
-      segments.push({ text: selectedDocumentContent.slice(index, index + selectedHighlightTerm.length), match: true });
-      cursor = index + selectedHighlightTerm.length;
+      segments.push({ text: selectedDocumentContent.slice(index, index + activeHighlightTerm.length), match: true });
+      cursor = index + activeHighlightTerm.length;
     }
 
     return segments;
-  }, [selectedDocumentContent, selectedHighlightTerm]);
+  }, [activeHighlightTerm, selectedDocumentContent]);
 
   return (
     <div className="hidden flex-1 flex-col md:flex bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.88))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,1),rgba(2,6,23,0.92))]">
       <div className="px-5 pt-5">
+        <ArchiveLayerHeader title={t("memory.tab.documents")} description={t("memory.documents.desc")} icon={Search} />
         <ArchiveCapsule>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
             <div className="min-w-0">
@@ -349,7 +359,7 @@ export function MemoryDocumentsDesktop({
                         className="min-h-0 flex-1 overflow-auto rounded-[24px] px-4 py-4 text-[13px] leading-6 text-slate-800 dark:text-slate-100"
                         style={{ maxHeight: "calc(100vh - 440px)" }}
                       >
-                        <RichContentRenderer text={selectedDocumentContent} highlightTerm={selectedHighlightTerm} />
+                        <RichContentRenderer text={selectedDocumentContent} highlightTerm={activeHighlightTerm} />
                       </div>
                     )}
                   </div>
