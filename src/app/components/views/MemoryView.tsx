@@ -1298,9 +1298,7 @@ export function MemoryView() {
         {footprintSummary.all}
       </div>
 
-      {activeSection === "overview" ? memoryPanels.overview : null}
-
-      <ArchiveTabSwitch active={activeSection !== "overview"}>
+      <ArchiveTabSwitch active={true}>
         <AnimatePresence mode="wait">
           <MemoryDiagnosticsDrawer
             diagnosticsDrawer={diagnosticsDrawer}
@@ -1312,7 +1310,11 @@ export function MemoryView() {
             onClose={() => setDiagnosticsDrawer((current) => ({ ...current, open: false }))}
           />
 
-          {memoryPanels[activeSection]}
+          {activeSection === "overview" && selectedAgentId && isConnected && !memoryResult && !timelineResult ? (
+            <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
+              <ArchiveNotice>Overview 正在等待 agent 解析与首批记忆数据初始化。</ArchiveNotice>
+            </ArchivePane>
+          ) : memoryPanels[activeSection]}
         </AnimatePresence>
       </ArchiveTabSwitch>
       <style>{`
