@@ -33,8 +33,6 @@ type MemoryDocumentsDesktopProps = {
   selectedDocumentContent: string;
   selectedDocumentUpdatedAtLabel: string;
   selectedSnippet: string | null;
-  selectedHighlightTerm: string | null;
-  activeHighlightIndex: number;
   evidenceExpanded: boolean;
   onToggleEvidenceExpanded: () => void;
   visibleDocuments: GatewayAgentFileEntry[];
@@ -77,8 +75,6 @@ export function MemoryDocumentsDesktop({
   selectedDocumentContent,
   selectedDocumentUpdatedAtLabel,
   selectedSnippet,
-  selectedHighlightTerm,
-  activeHighlightIndex,
   evidenceExpanded,
   onToggleEvidenceExpanded,
   visibleDocuments,
@@ -105,8 +101,8 @@ export function MemoryDocumentsDesktop({
   const lastScrolledMatchIndexRef = useRef<number | null>(null);
   const navigationDirectionRef = useRef<"prev" | "next" | null>(null);
 
-  const activeHighlightTerm = selectedHighlightTerm ?? (documentQuery.trim() || null);
-  const activeMatchCursor = selectedHighlightTerm ? activeHighlightIndex : documentMatchIndex;
+  const activeHighlightTerm = documentQuery.trim() || null;
+  const activeMatchCursor = documentMatchIndex;
 
   const scrollToMatchIndex = (matchIndex: number) => {
     const textarea = textareaRef.current;
@@ -405,6 +401,21 @@ export function MemoryDocumentsDesktop({
                   <div className="flex min-h-0 flex-1 rounded-[24px] border border-slate-200/90 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-950/50">
                     {canEdit && isEditing ? (
                       <div className="relative min-h-0 flex-1">
+                        {documentMatches.length > 0 ? (
+                          <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50/95 px-4 py-2 text-xs text-amber-900 backdrop-blur dark:border-amber-900/60 dark:bg-amber-950/80 dark:text-amber-100">
+                            <div className="font-medium">
+                              {t("memory.documents.searchNavigationHint", documentMatchIndex + 1, documentMatches.length)}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <ArchiveActionButton onClick={handlePreviousHighlight}>
+                                {t("memory.highlight.prev")}
+                              </ArchiveActionButton>
+                              <ArchiveActionButton onClick={handleNextHighlight}>
+                                {t("memory.highlight.next")}
+                              </ArchiveActionButton>
+                            </div>
+                          </div>
+                        ) : null}
                         <div
                           ref={overlayRef}
                           aria-hidden="true"
@@ -440,6 +451,21 @@ export function MemoryDocumentsDesktop({
                         className="min-h-0 flex-1 overflow-auto rounded-[24px] px-4 py-4 text-[13px] leading-6 text-slate-800 dark:text-slate-100"
                         style={{ maxHeight: "calc(100vh - 440px)" }}
                       >
+                        {documentMatches.length > 0 ? (
+                          <div className="sticky top-0 z-20 -mx-4 mb-4 flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50/95 px-4 py-3 text-xs text-amber-900 backdrop-blur dark:border-amber-900/60 dark:bg-amber-950/85 dark:text-amber-100">
+                            <div className="font-medium">
+                              {t("memory.documents.searchNavigationHint", documentMatchIndex + 1, documentMatches.length)}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <ArchiveActionButton onClick={handlePreviousHighlight}>
+                                {t("memory.highlight.prev")}
+                              </ArchiveActionButton>
+                              <ArchiveActionButton onClick={handleNextHighlight}>
+                                {t("memory.highlight.next")}
+                              </ArchiveActionButton>
+                            </div>
+                          </div>
+                        ) : null}
                         <RichContentRenderer text={selectedDocumentContent} highlightTerm={activeHighlightTerm} activeMatchIndex={activeMatchCursor} matchIdPrefix="memory-document-match" />
                       </div>
                     )}
@@ -458,7 +484,7 @@ export function MemoryDocumentsDesktop({
                         {highlightSelection ? (
                           <div className="flex items-center gap-2">
                             <button type="button" onClick={handlePreviousHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.prev")}</button>
-                            <span className="text-[11px] font-semibold">{Math.max(1, Math.min(activeHighlightIndex + 1, highlightSelection.matches.length))}/{highlightSelection.matches.length}</span>
+                            <span className="text-[11px] font-semibold">{Math.max(1, Math.min(documentMatchIndex + 1, highlightSelection.matches.length))}/{highlightSelection.matches.length}</span>
                             <button type="button" onClick={handleNextHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.next")}</button>
                           </div>
                         ) : null}

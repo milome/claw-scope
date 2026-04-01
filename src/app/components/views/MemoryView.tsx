@@ -309,9 +309,6 @@ export function MemoryView() {
   const [documentSearchFeedbackState, setDocumentSearchFeedbackState] = useState<"idle" | "matched" | "empty">("idle");
   const [documentSearchSource, setDocumentSearchSource] = useState<"manual" | "search_result">("manual");
   const [documentSearchHint, setDocumentSearchHint] = useState<string | null>(null);
-  const [documentEvidenceSnippet, setDocumentEvidenceSnippet] = useState<string | null>(null);
-  const [documentEvidenceTerm, setDocumentEvidenceTerm] = useState<string | null>(null);
-  const [documentEvidenceMatchIndex, setDocumentEvidenceMatchIndex] = useState(0);
   const [documentEvidenceExpanded, setDocumentEvidenceExpanded] = useState(false);
   const [documentSaveState, setDocumentSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [documentSaveMessage, setDocumentSaveMessage] = useState<string | null>(null);
@@ -631,17 +628,14 @@ export function MemoryView() {
       const targetDocument = visibleDocuments.find(
         (document) => normalizeRootMemoryDocumentName(document.name) === normalizedTitle,
       );
-      if (targetDocument) {
-        setSelectedDocumentName(targetDocument.name);
-        setDocumentQuery(evidence.matchedTerms?.[0] ?? evidence.snippet.split(" ")[0] ?? "");
-        setDocumentSearchSource("search_result");
-        setDocumentSearchHint(`Mind Map evidence opened ${targetDocument.name}.`);
-        setDocumentEvidenceSnippet(evidence.snippet);
-        setDocumentEvidenceTerm(evidence.matchedTerms[0] ?? null);
-        setDocumentEvidenceMatchIndex(0);
-        setDocumentEvidenceExpanded(true);
-        setActiveSection("documents");
-        setMindMapOpenHint(`Opened evidence in Documents: ${targetDocument.name}`);
+        if (targetDocument) {
+          setSelectedDocumentName(targetDocument.name);
+          setDocumentQuery(evidence.matchedTerms?.[0] ?? evidence.snippet.split(" ")[0] ?? "");
+          setDocumentSearchSource("search_result");
+          setDocumentSearchHint(`Mind Map evidence opened ${targetDocument.name}.`);
+          setDocumentEvidenceExpanded(true);
+          setActiveSection("documents");
+          setMindMapOpenHint(`Opened evidence in Documents: ${targetDocument.name}`);
         return;
       }
     }
@@ -721,8 +715,6 @@ export function MemoryView() {
       setDocumentMatchIndex(-1);
       setDocumentSearchFeedbackState("idle");
       setDocumentSearchHint(t("memory.documents.searchCleared"));
-      setDocumentEvidenceTerm(null);
-      setDocumentEvidenceSnippet(null);
     }
   }, [documentQuery, documentSearchInput, t]);
 
@@ -1071,9 +1063,6 @@ export function MemoryView() {
     setDocumentQuery(nextQuery);
     setDocumentSearchSource("manual");
     setDocumentMatchIndex(resolveInitialSearchMatchIndex(nextMatches.length));
-    setDocumentEvidenceTerm(nextQuery || null);
-    setDocumentEvidenceMatchIndex(0);
-    setDocumentEvidenceSnippet(null);
     setDocumentSearchHint(nextQuery ? t("memory.documents.searchRun", nextQuery) : t("memory.documents.searchCleared"));
   };
 
@@ -1268,13 +1257,11 @@ export function MemoryView() {
           documentIndexRefreshDescription={documentIndexRefreshDescription}
           selectedDocument={selectedDocument}
           selectedDocumentName={selectedDocumentName}
-          selectedDocumentContent={selectedDocumentContent}
-          selectedDocumentUpdatedAtLabel={selectedDocumentUpdatedAtLabel}
-          selectedSnippet={documentEvidenceSnippet}
-          selectedHighlightTerm={documentEvidenceTerm}
-          activeHighlightIndex={documentEvidenceMatchIndex}
-          evidenceExpanded={documentEvidenceExpanded}
-          onToggleEvidenceExpanded={() => setDocumentEvidenceExpanded((current) => !current)}
+            selectedDocumentContent={selectedDocumentContent}
+            selectedDocumentUpdatedAtLabel={selectedDocumentUpdatedAtLabel}
+            selectedSnippet={null}
+            evidenceExpanded={documentEvidenceExpanded}
+            onToggleEvidenceExpanded={() => setDocumentEvidenceExpanded((current) => !current)}
           visibleDocuments={visibleDocuments}
           canEdit={canEdit}
           isEditing={isEditingDocument}
