@@ -123,6 +123,7 @@ export function MemoryKnowledgePanel({
     memoryStatus,
     runtimeStatus,
   });
+  const autoReindexEnabled = statusSummary.reindexMode === "auto";
   const externalEntryCount = knowledgeModel.sections.reduce((count, section) => count + section.entries.length, 0);
 
   useEffect(() => {
@@ -199,7 +200,7 @@ export function MemoryKnowledgePanel({
   };
 
   const runPostConfigReindex = async () => {
-    if (!statusSummary.localWritable || !selectedAgentId) {
+    if (!autoReindexEnabled || !statusSummary.localWritable || !selectedAgentId) {
       return;
     }
 
@@ -505,7 +506,7 @@ export function MemoryKnowledgePanel({
                 <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("memory.knowledge.reindexCard")}</div>
                 <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(statusSummary.commandDescriptionKey)}</div>
                 <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(memoryReindexModeMessageKey(statusSummary.reindexMode))}</div>
-                {statusSummary.localWritable ? <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.reindexAutoHint")}</div> : null}
+                {autoReindexEnabled ? <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.reindexAutoHint")}</div> : null}
               </div>
               {statusSummary.localWritable ? (
                 <ArchiveActionButton

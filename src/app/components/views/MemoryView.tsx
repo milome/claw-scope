@@ -834,9 +834,10 @@ export function MemoryView() {
     memoryStatus,
     runtimeStatus: memoryRuntimeStatus,
   });
-  const searchPrimaryReason = memoryStatus?.embeddingsError
-    ? t(memoryConfigStatus.providerAvailabilityReasonKey)
-    : t(memoryConfigStatus.searchAvailabilityReasonKey);
+  const searchPrimaryReasonKey = memoryStatus?.embeddingsError
+    ? memoryConfigStatus.providerAvailabilityReasonKey
+    : memoryConfigStatus.searchAvailabilityReasonKey;
+  const searchPrimaryReason = t(searchPrimaryReasonKey);
 
   const getAgentBadge = (agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
