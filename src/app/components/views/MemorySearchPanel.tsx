@@ -6,6 +6,14 @@ import type {
 import { ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveDiagnosticsLayout, archiveDiagnosticsTone, ArchiveEditorPane, ArchiveInfoBlock, ArchiveListPane, ArchiveNotice, ArchiveResultCard, ArchiveSplitPanel } from "./memoryArchiveUi";
 import { openTargetLabel, sourceKindLabel } from "./memoryDisplayLabels";
 
+function renderNoticeContent(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  return <span className="whitespace-pre-wrap break-words">{value}</span>;
+}
+
 type HealthProbeSummary = {
   provider: string;
   model: string;
@@ -164,7 +172,7 @@ export function MemorySearchPanel({
               {copiedCommandGuide ? t("memory.search.commands.copied") : t("memory.search.commands.copy")}
             </button>
           </ArchiveDiagnosticsCard>
-          {searchError ? <div className="mt-4"><ArchiveNotice tone="error">{searchError}</ArchiveNotice></div> : null}
+          {searchError ? <div className="mt-4"><ArchiveNotice tone="error">{renderNoticeContent(searchError)}</ArchiveNotice></div> : null}
         </ArchiveListPane>
         )}
         right={(
@@ -195,7 +203,7 @@ export function MemorySearchPanel({
                     <div className="mt-1 text-slate-500 dark:text-slate-400">{t("memory.search.embeddings")}: {healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")}</div>
                   </ArchiveDiagnosticsCard>
                 )}
-                {healthProbeSummary && memoryStatusError ? <ArchiveNotice tone="error">{memoryStatusError}</ArchiveNotice> : null}
+                {healthProbeSummary && memoryStatusError ? <ArchiveNotice tone="error">{renderNoticeContent(memoryStatusError)}</ArchiveNotice> : null}
                 {searchResult?.diagnostics && (
                   <ArchiveDiagnosticsCard title={t("memory.diag.search")} className="text-xs">
                     <div className="mt-1 text-slate-500 dark:text-slate-400">{searchResult.diagnostics.backend} / {searchResult.diagnostics.storeDriver}</div>
@@ -203,7 +211,7 @@ export function MemorySearchPanel({
                   </ArchiveDiagnosticsCard>
                 )}
                 {searchError ? (
-                  <ArchiveNotice tone="error">{searchError}</ArchiveNotice>
+                  <ArchiveNotice tone="error">{renderNoticeContent(searchError)}</ArchiveNotice>
                 ) : searchResult ? (
                   <div className="space-y-3">
                     {searchResult.results.map((entry) => (
@@ -253,7 +261,7 @@ export function MemorySearchPanel({
                 ) : (
                   <ArchiveNotice>{t("memory.search.idle")}</ArchiveNotice>
                 )}
-                {!healthProbeSummary && memoryStatusError ? <ArchiveNotice tone="error">{memoryStatusError}</ArchiveNotice> : null}
+                {!healthProbeSummary && memoryStatusError ? <ArchiveNotice tone="error">{renderNoticeContent(memoryStatusError)}</ArchiveNotice> : null}
                 {searchDetail && (
                   <ArchiveDiagnosticsLayout
                     title={t("memory.search.detailTitle")}

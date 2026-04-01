@@ -207,6 +207,32 @@ function buildErrorTextFragments(...values: Array<string | null | undefined>) {
     .filter(Boolean);
 }
 
+function detectOllamaContext(options: {
+  healthProbeSummary: HealthProbeSummary | null;
+  memoryStatus: GatewayAgentMemoryStatusResult | null;
+  runtimeStatusSummary: RuntimeStatusSummary | null;
+  memoryResult: GatewayAgentMemoryResult | null;
+}) {
+  const { healthProbeSummary, memoryStatus, runtimeStatusSummary, memoryResult } = options;
+  const hints = buildErrorTextFragments(
+    healthProbeSummary?.provider,
+    healthProbeSummary?.model,
+    memoryStatus?.provider,
+    memoryStatus?.requestedProvider,
+    memoryStatus?.embeddingsError,
+    runtimeStatusSummary?.provider,
+    runtimeStatusSummary?.model,
+    runtimeStatusSummary?.embeddingError,
+    memoryResult?.diagnostics?.provider,
+    memoryResult?.diagnostics?.embeddingModel,
+    memoryResult?.diagnostics?.backend,
+    ...(memoryResult?.diagnostics?.sources ?? []),
+    ...(memoryResult?.diagnostics?.extraPaths ?? []),
+  );
+
+  return hints.some((value) => value.includes("ollama"));
+}
+
 function resolveTimelineModeLabel(
   access: GatewayAgentMemoryTimelineAccessResult | null,
   result: GatewayAgentMemoryTimelineResult | null,
@@ -737,6 +763,12 @@ export function MemoryView() {
       rawPayload: memoryRuntimeStatus.rawPayload,
     };
   }, [memoryRuntimeStatus]);
+  const isOllamaProvider = detectOllamaContext({
+    healthProbeSummary,
+    memoryStatus,
+    runtimeStatusSummary,
+    memoryResult,
+  });
   const providerHints = buildErrorTextFragments(
     healthProbeSummary?.provider,
     healthProbeSummary?.model,
@@ -748,8 +780,9 @@ export function MemoryView() {
     memoryStatus?.embeddingsError,
     memoryRuntimeStatus?.embeddingError,
     memoryRuntimeStatus?.rawPayload,
+    memoryResult?.diagnostics?.provider,
+    memoryResult?.diagnostics?.embeddingModel,
   );
-  const isOllamaProvider = providerHints.some((value) => value.includes("ollama"));
   const isHostedProvider = providerHints.some(
     (value) =>
       value.includes("openai") ||
