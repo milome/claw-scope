@@ -21,6 +21,7 @@ type MemoryDocumentsDesktopProps = {
   documentSearchSource: "manual" | "search_result";
   documentSaveMessage: string | null;
   documentSaveState: "idle" | "saving" | "saved" | "error";
+  documentIndexRefreshState: "idle" | "done" | "error";
   selectedDocument: GatewayAgentFileEntry | null;
   selectedDocumentName: string;
   selectedDocumentContent: string;
@@ -59,6 +60,7 @@ export function MemoryDocumentsDesktop({
   documentSearchSource,
   documentSaveMessage,
   documentSaveState,
+  documentIndexRefreshState,
   selectedDocument,
   selectedDocumentName,
   selectedDocumentContent,
@@ -215,6 +217,11 @@ export function MemoryDocumentsDesktop({
               {documentSaveMessage}
             </div>
           )}
+          {documentIndexRefreshState !== "idle" ? (
+            <div className={`mt-3 rounded-2xl border px-3 py-2 text-xs ${documentIndexRefreshState === "error" ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300" : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300"}`}>
+              {documentSaveMessage}
+            </div>
+          ) : null}
         </ArchiveCapsule>
       </div>
 
@@ -334,6 +341,7 @@ export function MemoryDocumentsDesktop({
                       <div
                         ref={overlayRef}
                         className="min-h-0 flex-1 overflow-auto rounded-[24px] px-4 py-4 text-[13px] leading-6 text-slate-800 dark:text-slate-100"
+                        style={{ maxHeight: "calc(100vh - 440px)" }}
                       >
                         <RichContentRenderer text={selectedDocumentContent} highlightTerm={selectedHighlightTerm} />
                       </div>
