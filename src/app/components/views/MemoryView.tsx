@@ -57,7 +57,8 @@ import {
 import { MemoryDiagnosticsDrawer } from "./MemoryDiagnosticsDrawer";
 import { MemorySearchPanel } from "./MemorySearchPanel";
 import { MemoryFootprintsPanel } from "./MemoryFootprintsPanel";
-import { MemoryMindMapPanel } from "./MemoryMindMapPanel";
+import { MemoryKnowledgePanel } from "./MemoryKnowledgePanel";
+import { buildMemoryConfigStatusSummary, type MemoryIndexStrategy } from "./memoryConfigStatus";
 import { MemoryResourcesPanel } from "./MemoryResourcesPanel";
 import { MemoryDocumentsDesktop } from "./MemoryDocumentsDesktop";
 import { MemoryDocumentsMobile } from "./MemoryDocumentsMobile";
@@ -106,8 +107,6 @@ export type DiagnosticsDrawerState = {
 };
 
 type DocumentIndexRefreshState = "idle" | "done" | "error";
-
-type MemoryIndexStrategy = "incremental" | "full";
 
 function sourceTone(source: string) {
   if (source.includes("session")) {
@@ -703,6 +702,25 @@ export function MemoryView() {
     }
   };
 
+  const handleRefreshKnowledge = async () => {
+    if (!selectedAgentId || !isConnected) {
+      return;
+    }
+
+    const [memory, status, runtime] = await Promise.all([
+      gatewayAgentMemoryGet(selectedAgentId),
+      gatewayAgentMemoryStatus(selectedAgentId).catch(() => null),
+      isLocalGatewaySession
+        ? gatewayAgentMemoryRuntimeStatus(selectedAgentId).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
+    setMemoryResult(memory);
+    setDrafts(createMemoryDrafts(memory));
+    setMemoryStatus(status);
+    setMemoryRuntimeStatus(runtime);
+  };
+
   useEffect(() => {
     setDocumentMatchIndex(documentMatches.length > 0 ? 0 : -1);
   }, [documentMatches.length, selectedDocumentName]);
@@ -769,27 +787,6 @@ export function MemoryView() {
     runtimeStatusSummary,
     memoryResult,
   });
-  const providerHints = buildErrorTextFragments(
-    healthProbeSummary?.provider,
-    healthProbeSummary?.model,
-    memoryStatus?.provider,
-    memoryStatus?.requestedProvider,
-    memoryRuntimeStatus?.status.provider,
-    memoryRuntimeStatus?.status.requestedProvider,
-    healthProbeSummary?.embeddingsError,
-    memoryStatus?.embeddingsError,
-    memoryRuntimeStatus?.embeddingError,
-    memoryRuntimeStatus?.rawPayload,
-    memoryResult?.diagnostics?.provider,
-    memoryResult?.diagnostics?.embeddingModel,
-  );
-  const isHostedProvider = providerHints.some(
-    (value) =>
-      value.includes("openai") ||
-      value.includes("anthropic") ||
-      value.includes("gemini") ||
-      value.includes("azure"),
-  );
   const shouldForceReindex = (runtimeStatusSummary?.indexedFiles ?? 0) === 0;
   const resolvedIndexStrategy: MemoryIndexStrategy = shouldForceReindex ? "full" : "incremental";
   const resolvedAgentIdForGuide = selectedAgentId || "<agent-id>";
@@ -817,21 +814,6 @@ export function MemoryView() {
       statusCommand,
     ].join("\n");
   }, [isOllamaProvider, resolvedAgentIdForGuide, resolvedIndexStrategy]);
-  const commandGuideDescription = useMemo(() => {
-    if (isOllamaProvider) {
-      return t("memory.search.commands.ollama");
-    }
-    if (isLocalGatewaySession) {
-      if (resolvedIndexStrategy === "full") {
-        return t("memory.search.commands.localForce");
-      }
-      return t("memory.search.commands.localIncremental");
-    }
-    if (isHostedProvider) {
-      return t("memory.search.commands.openai");
-    }
-    return t("memory.search.commands.generic");
-  }, [isHostedProvider, isLocalGatewaySession, isOllamaProvider, resolvedIndexStrategy, t]);
   const documentIndexRefreshDescription = useMemo(() => {
     if (documentIndexRefreshState === "idle") {
       return null;
@@ -845,6 +827,13 @@ export function MemoryView() {
       ? t("memory.documents.index.full")
       : t("memory.documents.index.incremental");
   }, [documentIndexRefreshState, isLocalGatewaySession, resolvedIndexStrategy, t]);
+  const memoryConfigStatus = buildMemoryConfigStatusSummary({
+    selectedAgentId,
+    isLocalGatewaySession,
+    memoryResult,
+    memoryStatus,
+    runtimeStatus: memoryRuntimeStatus,
+  });
 
   const getAgentBadge = (agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
@@ -1319,8 +1308,9 @@ export function MemoryView() {
           healthProbeSummary={healthProbeSummary}
           runtimeStatusSummary={runtimeStatusSummary}
           isLocalGatewaySession={isLocalGatewaySession}
-          commandGuide={commandGuide}
-          commandGuideDescription={commandGuideDescription}
+          commandGuide={memoryConfigStatus.commandGuide}
+          commandGuideDescription={t(memoryConfigStatus.commandDescriptionKey)}
+          configStatusMessage={t(`memory.knowledge.summary.${memoryConfigStatus.statusKey}`)}
           copiedCommandGuide={copiedCommandGuide}
           searchQuery={searchQuery}
           searchRunning={searchRunning}
@@ -1345,16 +1335,21 @@ export function MemoryView() {
     ),
     knowledge: (
       <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
-        <div className="space-y-4">
-          {mindMapOpenHint ? <ArchiveNotice>{mindMapOpenHint}</ArchiveNotice> : null}
-          <MemoryMindMapPanel
-            model={semanticMindMapModel}
-            t={t}
-            showDebug={mindMapDebugVisible}
-            onToggleDebug={() => setMindMapDebugVisible((current) => !current)}
-            onOpenEvidence={openMindMapEvidence}
-          />
-        </div>
+        <MemoryKnowledgePanel
+          memoryResult={memoryResult}
+          memoryStatus={memoryStatus}
+          runtimeStatus={memoryRuntimeStatus}
+          externalSources={externalSources}
+          isLocalGatewaySession={isLocalGatewaySession}
+          selectedAgentId={selectedAgentId}
+          model={semanticMindMapModel}
+          t={t}
+          showDebug={mindMapDebugVisible}
+          onToggleDebug={() => setMindMapDebugVisible((current) => !current)}
+          onOpenEvidence={openMindMapEvidence}
+          openHint={mindMapOpenHint}
+          onRefreshKnowledge={handleRefreshKnowledge}
+        />
       </ArchivePane>
     ),
   };
@@ -1436,6 +1431,7 @@ export function MemoryView() {
             memoryResult={memoryResult}
             runtimeStatusSummary={runtimeStatusSummary}
             isLocalGatewaySession={isLocalGatewaySession}
+            selectedAgentId={selectedAgentId}
             t={t}
             onClose={() => setDiagnosticsDrawer((current) => ({ ...current, open: false }))}
           />

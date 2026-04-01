@@ -48,6 +48,7 @@ use crate::gateway::{
         GatewayAgentMemoryTimelineProbeSummary, GatewayAgentMemoryTimelineResult,
         GatewayAgentMemoryTimelineSource,
         GatewayAgentSettingsResult, GatewayAgentsListResult, GatewayConnectConfig,
+        GatewayConfigSetResult,
         GatewayConnectionPhase, GatewayMemorySharedAgentSummary, GatewayStatusSnapshot,
     },
 };
@@ -842,6 +843,60 @@ pub async fn agent_settings_get(
         agent_id: agent_id.to_string(),
         workspace: normalize_optional_string(Some(workspace.workspace)),
         model: resolve_agent_model(&config, agent_id, &agents.default_id),
+    })
+}
+
+pub async fn config_set_local(
+    state: GatewayAppState,
+    key: &str,
+    value: &str,
+) -> Result<GatewayConfigSetResult, GatewayError> {
+    let endpoint = state
+        .session()
+        .await
+        .map(|session| session.endpoint.transport)
+        .ok_or_else(|| GatewayError::Transport {
+            message: "gateway not connected".to_string(),
+        })?;
+    if endpoint != GatewayTransportKind::LocalLoopback {
+        return Err(GatewayError::NotImplemented {
+            feature: "local-only config.set bridge for remote gateway sessions".to_string(),
+        });
+    }
+
+    let trimmed_key = key.trim();
+    if trimmed_key.is_empty() {
+        return Err(GatewayError::Protocol {
+            message: "config key cannot be empty".to_string(),
+        });
+    }
+
+    let output = Command::new("openclaw")
+        .args(["config", "set", trimmed_key, value])
+        .output()
+        .map_err(|error| GatewayError::Transport {
+            message: format!("failed to run local openclaw CLI: {error}"),
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(GatewayError::Transport {
+            message: if stderr.is_empty() {
+                format!("local openclaw CLI exited with status {}", output.status)
+            } else {
+                format!("local openclaw CLI failed: {stderr}")
+            },
+        });
+    }
+
+    let stdout = String::from_utf8(output.stdout).map_err(|error| GatewayError::Protocol {
+        message: format!("failed decoding local openclaw CLI output: {error}"),
+    })?;
+
+    Ok(GatewayConfigSetResult {
+        key: trimmed_key.to_string(),
+        value: value.to_string(),
+        stdout: stdout.trim().to_string(),
     })
 }
 

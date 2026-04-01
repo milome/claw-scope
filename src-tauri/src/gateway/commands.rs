@@ -16,7 +16,7 @@ use crate::gateway::{
         GatewayAgentMemoryRuntimeStatusResult, GatewayAgentMemorySearchResult,
         GatewayAgentMemoryStatusResult,
         GatewayAgentMemoryTimelineAccessResult, GatewayAgentMemoryTimelineResult,
-        GatewayAgentSettingsResult, GatewayAgentsListResult, GatewayConnectConfig,
+        GatewayAgentSettingsResult, GatewayAgentsListResult, GatewayConfigSetResult, GatewayConnectConfig,
         GatewayStatusSnapshot,
     },
 };
@@ -239,6 +239,17 @@ pub async fn gateway_agent_settings_get(
     agent_id: String,
 ) -> Result<GatewayAgentSettingsResult, GatewayErrorSummary> {
     connector::agent_settings_get(state.inner().clone(), &agent_id)
+        .await
+        .map_err(|error| GatewayErrorSummary::from_error(&error))
+}
+
+#[tauri::command]
+pub async fn gateway_config_set_local(
+    state: State<'_, GatewayAppState>,
+    key: String,
+    value: String,
+) -> Result<GatewayConfigSetResult, GatewayErrorSummary> {
+    connector::config_set_local(state.inner().clone(), &key, &value)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }

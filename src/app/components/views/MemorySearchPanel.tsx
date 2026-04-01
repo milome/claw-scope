@@ -47,6 +47,7 @@ type MemorySearchPanelProps = {
   isLocalGatewaySession: boolean;
   commandGuide: string;
   commandGuideDescription: string;
+  configStatusMessage: string;
   copiedCommandGuide: boolean;
   searchQuery: string;
   searchRunning: boolean;
@@ -74,6 +75,7 @@ export function MemorySearchPanel({
   isLocalGatewaySession,
   commandGuide,
   commandGuideDescription,
+  configStatusMessage,
   copiedCommandGuide,
   searchQuery,
   searchRunning,
@@ -163,6 +165,8 @@ export function MemorySearchPanel({
             <div className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
               {healthProbeSummary?.embeddingsReady ? t("memory.search.commands.providerReady") : t("memory.search.commands.providerMissing")}
             </div>
+            <div className="mt-2 text-slate-500 dark:text-slate-400">{configStatusMessage}</div>
+            <div className="text-slate-500 dark:text-slate-400">{isLocalGatewaySession ? t("memory.knowledge.bridgeStatus.local") : t("memory.knowledge.bridgeStatus.remote")}</div>
             <div className="text-slate-500 dark:text-slate-400">{commandGuideDescription}</div>
             <pre className="mt-3 overflow-auto rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">{commandGuide}</pre>
             <button

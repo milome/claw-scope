@@ -200,6 +200,12 @@ export interface GatewayAgentMemoryIndexResult {
   stdout: string;
 }
 
+export interface GatewayConfigSetResult {
+  key: string;
+  value: string;
+  stdout: string;
+}
+
 export interface GatewayAgentMemorySearchEntry {
   id: string;
   path: string;
@@ -640,6 +646,13 @@ export async function gatewayAgentMemoryIndex(agentId: string, force = false) {
   return invokeGateway<GatewayAgentMemoryIndexResult>('gateway_agent_memory_index', {
     agentId,
     force,
+  });
+}
+
+export async function gatewayConfigSetLocal(key: string, value: string) {
+  return invokeGateway<GatewayConfigSetResult>('gateway_config_set_local', {
+    key,
+    value,
   });
 }
 

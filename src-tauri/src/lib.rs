@@ -32,6 +32,7 @@ pub fn run() {
             gateway::commands::gateway_agent_memory_timeline_entry_read,
             gateway::commands::gateway_agent_workspace_identity_get,
             gateway::commands::gateway_agent_settings_get,
+            gateway::commands::gateway_config_set_local,
             gateway::commands::gateway_agent_memory_set,
             gateway::commands::gateway_agent_memory_index,
             gateway::commands::gateway_agent_workspace_identity_set,

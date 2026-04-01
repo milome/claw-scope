@@ -412,6 +412,14 @@ pub struct GatewayAgentSettingsResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct GatewayConfigSetResult {
+    pub key: String,
+    pub value: String,
+    pub stdout: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct GatewayAgentsListResult {
     pub default_id: String,
     pub main_key: String,

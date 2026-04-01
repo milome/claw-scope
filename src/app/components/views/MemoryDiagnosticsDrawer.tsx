@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
 import type {
+  GatewayAgentMemoryRuntimeStatusResult,
   GatewayAgentMemoryResult,
 } from "../../contexts/OpenClawContext";
 import { ArchiveDiagnosticsCard, ArchiveDiagnosticsLayout, ArchiveDrawer, archiveDiagnosticsTone } from "./memoryArchiveUi";
+import { buildMemoryConfigStatusSummary } from "./memoryConfigStatus";
+import { buildExternalKnowledgeViewModel } from "./memoryKnowledgeState";
 
 type HealthProbeSummary = {
   provider: string;
@@ -14,10 +17,16 @@ type HealthProbeSummary = {
 };
 
 type RuntimeStatusSummary = {
+  agentId: string;
+  provider: string;
+  model: string | null;
+  embeddingOk: boolean;
+  embeddingError: string | null;
   indexedFiles: number;
   totalFiles: number | null;
   chunks: number;
   bySource: { source: string; files: number; chunks: number }[];
+  rawPayload: string;
 };
 
 type DiagnosticsDrawerState = {
@@ -51,6 +60,7 @@ type MemoryDiagnosticsDrawerProps = {
   memoryResult: GatewayAgentMemoryResult | null;
   runtimeStatusSummary: RuntimeStatusSummary | null;
   isLocalGatewaySession: boolean;
+  selectedAgentId: string;
   t: (key: string, ...args: (string | number)[]) => string;
   onClose: () => void;
 };
@@ -61,12 +71,63 @@ export function MemoryDiagnosticsDrawer({
   memoryResult,
   runtimeStatusSummary,
   isLocalGatewaySession,
+  selectedAgentId,
   t,
   onClose,
 }: MemoryDiagnosticsDrawerProps) {
-  if (!diagnosticsDrawer.open || (!healthProbeSummary && !memoryResult?.diagnostics)) {
+  if (!diagnosticsDrawer.open || (!healthProbeSummary && !memoryResult && !runtimeStatusSummary)) {
     return null;
   }
+
+  const runtimeStatus = runtimeStatusSummary
+    ? ({
+        agentId: runtimeStatusSummary.agentId,
+        embeddingOk: runtimeStatusSummary.embeddingOk,
+        embeddingError: runtimeStatusSummary.embeddingError,
+        vectorOk: runtimeStatusSummary.embeddingOk,
+        status: {
+          backend: memoryResult?.diagnostics?.backend ?? "unknown",
+          files: runtimeStatusSummary.indexedFiles,
+          totalFiles: runtimeStatusSummary.totalFiles,
+          chunks: runtimeStatusSummary.chunks,
+          dirty: false,
+          workspaceDir: null,
+          dbPath: null,
+          provider: runtimeStatusSummary.provider,
+          model: runtimeStatusSummary.model,
+          requestedProvider: runtimeStatusSummary.provider,
+          sources: memoryResult?.diagnostics?.sources ?? [],
+          extraPaths: memoryResult?.diagnostics?.extraPaths ?? [],
+          sourceCounts: runtimeStatusSummary.bySource,
+        },
+        rawPayload: runtimeStatusSummary.rawPayload,
+      } satisfies GatewayAgentMemoryRuntimeStatusResult)
+    : null;
+
+  const configStatus = buildMemoryConfigStatusSummary({
+    selectedAgentId,
+    isLocalGatewaySession,
+    memoryResult,
+    memoryStatus: null,
+    runtimeStatus,
+  });
+  const knowledgeModel = buildExternalKnowledgeViewModel({
+    diagnostics: memoryResult?.diagnostics,
+    externalSources: [
+      ...(memoryResult?.diagnostics?.extraPaths ?? []).map((value) => ({
+        id: `extra:${value}`,
+        kind: "extra_path" as const,
+        value,
+      })),
+      ...(memoryResult?.diagnostics?.qmdPaths ?? []).map((value) => ({
+        id: `qmd:${value}`,
+        kind: "qmd_path" as const,
+        value,
+      })),
+    ],
+    runtimeStatus,
+    isLocalGatewaySession,
+  });
 
   return (
     <ArchiveDrawer>
@@ -129,16 +190,23 @@ export function MemoryDiagnosticsDrawer({
           )}
         </DiagnosticsCard>
         <DiagnosticsCard title={t("memory.diag.knowledge")}>
-          {memoryResult?.diagnostics ? (
-            <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
-              <div>backend: {memoryResult.diagnostics.backend}</div>
-              <div>provider: {memoryResult.diagnostics.provider ?? t("memory.knowledge.providerFallback")}</div>
-              <div>store: {memoryResult.diagnostics.builtinStorePath}</div>
-              <div>sources: {memoryResult.diagnostics.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
+          <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
+            <div>{t(`memory.knowledge.summary.${configStatus.statusKey}`)}</div>
+            <div>{configStatus.localWritable ? t("memory.knowledge.bridgeStatus.local") : t("memory.knowledge.bridgeStatus.remote")}</div>
+            <div>diagnostics: {knowledgeModel.diagnosticsAvailable ? t("memory.diag.ready") : t("memory.diag.unavailableShort")}</div>
+            <div>backend: {knowledgeModel.backend ?? t("memory.diag.unavailable")}</div>
+            <div>provider: {knowledgeModel.provider ?? t("memory.knowledge.providerFallback")}</div>
+            <div>sources: {knowledgeModel.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
+            <div>extra paths: {knowledgeModel.extraPaths.join(", ") || t("memory.knowledge.none")}</div>
+            <div>qmd paths: {knowledgeModel.qmdPaths.join(", ") || t("memory.knowledge.none")}</div>
+            <div>session memory: {knowledgeModel.sessionMemoryEnabled ? t("memory.diag.ready") : t("memory.diag.unavailableShort")}</div>
+            <div>
+              runtime: {knowledgeModel.runtimeAvailable
+                ? `${knowledgeModel.runtimeSummary?.files ?? 0} files · ${knowledgeModel.runtimeSummary?.chunks ?? 0} chunks`
+                : t(isLocalGatewaySession ? "memory.diag.runtimePlaceholder" : "memory.diag.runtimeRemoteUnavailable")}
             </div>
-          ) : (
-            <div className="text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.missing")}</div>
-          )}
+            {!knowledgeModel.diagnosticsAvailable ? <div>{t("memory.knowledge.missing")}</div> : null}
+          </div>
         </DiagnosticsCard>
       </ArchiveDiagnosticsLayout>
     </ArchiveDrawer>
