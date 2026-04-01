@@ -1,8 +1,8 @@
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import type { GatewayAgentFileEntry } from "../../contexts/OpenClawContext";
-import { ARCHIVE_SPACING, ArchiveActionButton, ArchiveCapsule, ArchiveDetailHeader, ArchiveDetailPane, ArchiveEditorPane, ArchiveFormHeader, ArchiveLayerHeader, ArchiveListCard, ArchiveListPane } from "./memoryArchiveUi";
+import { ARCHIVE_SPACING, ArchiveActionButton, ArchiveCapsule, ArchiveDetailPane, ArchiveLayerHeader, ArchiveListCard, ArchiveListPane } from "./memoryArchiveUi";
 import { EvidenceFocusCard } from "./EvidenceFocusCard";
 import { RichContentRenderer } from "./RichContentRenderer";
 
@@ -31,7 +31,6 @@ type MemoryDocumentsDesktopProps = {
   selectedDocument: GatewayAgentFileEntry | null;
   selectedDocumentName: string;
   selectedDocumentContent: string;
-  selectedDocumentUpdatedAtLabel: string;
   selectedSnippet: string | null;
   evidenceExpanded: boolean;
   onToggleEvidenceExpanded: () => void;
@@ -44,6 +43,7 @@ type MemoryDocumentsDesktopProps = {
   selectedAgentId: string;
   onDocumentSearchInputChange: (value: string) => void;
   onRunDocumentSearch: () => void;
+  onClearDocumentSearch: () => void;
   onPreviousHighlight: () => void;
   onNextHighlight: () => void;
   onSelectDocument: (name: string) => void;
@@ -73,7 +73,6 @@ export function MemoryDocumentsDesktop({
   selectedDocument,
   selectedDocumentName,
   selectedDocumentContent,
-  selectedDocumentUpdatedAtLabel,
   selectedSnippet,
   evidenceExpanded,
   onToggleEvidenceExpanded,
@@ -86,6 +85,7 @@ export function MemoryDocumentsDesktop({
   selectedAgentId,
   onDocumentSearchInputChange,
   onRunDocumentSearch,
+  onClearDocumentSearch,
   onPreviousHighlight,
   onNextHighlight,
   onSelectDocument,
@@ -98,8 +98,10 @@ export function MemoryDocumentsDesktop({
 }: MemoryDocumentsDesktopProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const stickySearchInputRef = useRef<HTMLInputElement | null>(null);
   const lastScrolledMatchIndexRef = useRef<number | null>(null);
   const navigationDirectionRef = useRef<"prev" | "next" | null>(null);
+  const highlightPulseTimerRef = useRef<number | null>(null);
 
   const activeHighlightTerm = documentQuery.trim() || null;
   const activeMatchCursor = documentMatchIndex;
@@ -114,6 +116,13 @@ export function MemoryDocumentsDesktop({
     const activeNode = overlay?.querySelector<HTMLElement>(`#memory-document-match-${matchIndex}`) ?? null;
     if (overlay && activeNode) {
       activeNode.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+      activeNode.dataset.pulse = "true";
+      if (highlightPulseTimerRef.current) {
+        window.clearTimeout(highlightPulseTimerRef.current);
+      }
+      highlightPulseTimerRef.current = window.setTimeout(() => {
+        delete activeNode.dataset.pulse;
+      }, 900);
       lastScrolledMatchIndexRef.current = matchIndex;
       return;
     }
@@ -173,6 +182,14 @@ export function MemoryDocumentsDesktop({
   }, [activeHighlightTerm, activeMatchCursor, selectedDocumentContent]);
 
   useEffect(() => {
+    return () => {
+      if (highlightPulseTimerRef.current) {
+        window.clearTimeout(highlightPulseTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!highlightSelection) {
       lastScrolledMatchIndexRef.current = null;
       return;
@@ -197,6 +214,71 @@ export function MemoryDocumentsDesktop({
     navigationDirectionRef.current = "next";
     onNextHighlight();
   };
+
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (event.shiftKey) {
+        handlePreviousHighlight();
+      } else if (documentSearchInput.trim() !== documentQuery.trim()) {
+        onRunDocumentSearch();
+      } else {
+        handleNextHighlight();
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClearDocumentSearch();
+    }
+  };
+
+  const renderSearchToolbar = () => (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-xs text-amber-900 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/85 dark:text-amber-100">
+      <div className="flex flex-wrap items-center gap-2">
+        <ArchiveActionButton onClick={onClearDocumentSearch} disabled={!documentSearchInput && !documentQuery}>
+          <X className="mr-1 inline h-3.5 w-3.5" />
+          {t("memory.documents.searchClear")}
+        </ArchiveActionButton>
+        <span className="rounded-full border border-amber-300 bg-white/90 px-3 py-1 font-medium text-amber-900 dark:border-amber-700 dark:bg-slate-950/80 dark:text-amber-100">
+          {documentMatches.length > 0 ? `${documentMatchIndex + 1}/${documentMatches.length}` : "0/0"}
+        </span>
+        <div className="basis-full font-medium">
+          {documentMatches.length > 0
+            ? t("memory.documents.searchNavigationHint", documentMatchIndex + 1, documentMatches.length)
+            : documentSearchHint ?? t("memory.documents.searchIdleHint")}
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-xl border border-amber-300 bg-white/90 px-3 py-2 dark:border-amber-700 dark:bg-slate-950/80">
+          <Search className="h-3.5 w-3.5 shrink-0" />
+          <input
+            ref={stickySearchInputRef}
+            value={documentSearchInput}
+            onChange={(event) => onDocumentSearchInputChange(event.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            placeholder={t("memory.documents.searchPlaceholder")}
+            className="min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
+          />
+        </div>
+        <ArchiveActionButton onClick={onRunDocumentSearch} variant="primary">
+          {documentSearchFeedbackState === "matched"
+            ? t("memory.documents.searchState.matched", documentMatches.length)
+            : documentSearchFeedbackState === "empty"
+              ? t("memory.documents.searchState.empty")
+              : t("memory.documents.searchAction")}
+        </ArchiveActionButton>
+        <ArchiveActionButton onClick={handlePreviousHighlight} disabled={documentMatches.length <= 0}>
+          {t("memory.highlight.prev")}
+        </ArchiveActionButton>
+        <ArchiveActionButton onClick={handleNextHighlight} disabled={documentMatches.length <= 0}>
+          {t("memory.highlight.next")}
+        </ArchiveActionButton>
+      </div>
+    </div>
+  );
 
   useEffect(() => {
     if (!navigationDirectionRef.current || activeMatchCursor < 0) {
@@ -261,46 +343,13 @@ export function MemoryDocumentsDesktop({
               </div>
             </div>
 
-            <div className="flex flex-col gap-3">
-              <input
-                value={documentSearchInput}
-                onChange={(event) => onDocumentSearchInputChange(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    onRunDocumentSearch();
-                  }
-                }}
-                placeholder={t("memory.documents.searchPlaceholder")}
-                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-sky-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500"
-              />
-              <div className="flex flex-wrap items-center gap-2">
-                <ArchiveActionButton onClick={onRunDocumentSearch} variant="primary">
-                  <Search className="mr-1 inline h-3.5 w-3.5" />
-                  {documentSearchFeedbackState === "matched"
-                    ? t("memory.documents.searchState.matched", documentMatches.length)
-                    : documentSearchFeedbackState === "empty"
-                      ? t("memory.documents.searchState.empty")
-                      : t("memory.documents.searchAction")}
-                </ArchiveActionButton>
-                <ArchiveActionButton onClick={handlePreviousHighlight} disabled={documentMatches.length <= 0}>
-                  {t("memory.highlight.prev")}
-                </ArchiveActionButton>
-                <ArchiveActionButton onClick={handleNextHighlight} disabled={documentMatches.length <= 0}>
-                  {t("memory.highlight.next")}
-                </ArchiveActionButton>
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                  {documentMatches.length > 0 ? `${documentMatchIndex + 1}/${documentMatches.length}` : "0/0"}
-                </span>
+            <div className="flex flex-col gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+                {documentSearchHint ?? t("memory.documents.searchIdleHint")}
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex flex-wrap items-center gap-2">
                 <span>{t("memory.documents.matches", documentMatches.length)}</span>
                 <span>{documentSearchSource === "search_result" ? t("memory.documents.searchSource.search") : t("memory.documents.searchSource.manual")}</span>
-              </div>
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-                {documentMatches.length > 0
-                  ? t("memory.documents.searchNavigationHint", documentMatchIndex + 1, documentMatches.length)
-                  : documentSearchHint ?? t("memory.documents.searchIdleHint")}
               </div>
             </div>
           </div>
@@ -370,23 +419,10 @@ export function MemoryDocumentsDesktop({
 
         <ArchiveDetailPane className="h-[calc(100vh-280px)]">
           {selectedDocument && (
-            <ArchiveEditorPane
-              header={(
-                <ArchiveDetailHeader
-                  title={selectedDocument.name}
-                  subtitle={selectedDocument.path}
-                  meta={(
-                    <div className="rounded-2xl border border-slate-200 bg-white px-3 py-1 text-right text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                      <div className="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.documents.updatedShort")}</div>
-                      <div>{selectedDocumentUpdatedAtLabel}</div>
-                    </div>
-                  )}
-                />
-              )}
-              body={(
-                <>
-                  <ArchiveFormHeader label={t("memory.documents.editor")}>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">{isEditing ? t("memory.documents.editingMode") : t("memory.documents.readonlyMode")}</div>
+            <div className="flex h-full min-h-0 flex-col px-6 py-5">
+              <div className="mb-4 shrink-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <ArchiveActionButton onClick={onReload}>{t("memory.documents.reload")}</ArchiveActionButton>
                     {canEdit && !isEditing && <ArchiveActionButton onClick={onStartEdit}>{t("memory.documents.edit")}</ArchiveActionButton>}
                     {canEdit && isEditing && (
@@ -397,109 +433,84 @@ export function MemoryDocumentsDesktop({
                         </ArchiveActionButton>
                       </>
                     )}
-                  </ArchiveFormHeader>
-                  <div className="flex min-h-0 flex-1 rounded-[24px] border border-slate-200/90 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-950/50">
-                    {canEdit && isEditing ? (
-                      <div className="relative min-h-0 flex-1">
-                        {documentMatches.length > 0 ? (
-                          <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50/95 px-4 py-2 text-xs text-amber-900 backdrop-blur dark:border-amber-900/60 dark:bg-amber-950/80 dark:text-amber-100">
-                            <div className="font-medium">
-                              {t("memory.documents.searchNavigationHint", documentMatchIndex + 1, documentMatches.length)}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <ArchiveActionButton onClick={handlePreviousHighlight}>
-                                {t("memory.highlight.prev")}
-                              </ArchiveActionButton>
-                              <ArchiveActionButton onClick={handleNextHighlight}>
-                                {t("memory.highlight.next")}
-                              </ArchiveActionButton>
-                            </div>
-                          </div>
-                        ) : null}
-                        <div
-                          ref={overlayRef}
-                          aria-hidden="true"
-                          className="pointer-events-none absolute inset-0 overflow-auto whitespace-pre-wrap rounded-[24px] px-4 py-4 font-mono text-[13px] leading-6 text-transparent"
-                        >
-                          {highlightedSegments.map((segment, index) =>
-                            segment.match ? (
-                              <mark key={index} className="rounded bg-yellow-200 px-0.5 text-transparent dark:bg-yellow-300/80">
-                                {segment.text}
-                              </mark>
-                            ) : (
-                              <span key={index}>{segment.text}</span>
-                            ),
-                          )}
-                        </div>
-                        <textarea
-                          ref={textareaRef}
-                          value={selectedDocumentContent}
-                          onChange={(event) => onDocumentDraftChange(event.target.value)}
-                          onScroll={(event) => {
-                            if (overlayRef.current) {
-                              overlayRef.current.scrollTop = event.currentTarget.scrollTop;
-                            }
-                          }}
-                          readOnly={false}
-                          spellCheck={false}
-                          className="relative min-h-0 flex-1 w-full resize-none rounded-[24px] bg-transparent px-4 py-4 font-mono text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500 overflow-auto"
-                        />
-                      </div>
-                    ) : (
-                      <div
-                        ref={overlayRef}
-                        className="min-h-0 flex-1 overflow-auto rounded-[24px] px-4 py-4 text-[13px] leading-6 text-slate-800 dark:text-slate-100"
-                        style={{ maxHeight: "calc(100vh - 440px)" }}
-                      >
-                        {documentMatches.length > 0 ? (
-                          <div className="sticky top-0 z-20 -mx-4 mb-4 flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50/95 px-4 py-3 text-xs text-amber-900 backdrop-blur dark:border-amber-900/60 dark:bg-amber-950/85 dark:text-amber-100">
-                            <div className="font-medium">
-                              {t("memory.documents.searchNavigationHint", documentMatchIndex + 1, documentMatches.length)}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <ArchiveActionButton onClick={handlePreviousHighlight}>
-                                {t("memory.highlight.prev")}
-                              </ArchiveActionButton>
-                              <ArchiveActionButton onClick={handleNextHighlight}>
-                                {t("memory.highlight.next")}
-                              </ArchiveActionButton>
-                            </div>
-                          </div>
-                        ) : null}
-                        <RichContentRenderer text={selectedDocumentContent} highlightTerm={activeHighlightTerm} activeMatchIndex={activeMatchCursor} matchIdPrefix="memory-document-match" />
-                      </div>
-                    )}
                   </div>
-                  {selectedSnippet ? (
-                    <div className="mt-4">
-                      <EvidenceFocusCard
-                        title={t("memory.evidence.focus")}
-                        snippet={selectedSnippet}
-                        sourceTitle={selectedDocument?.name ?? null}
-                        expanded={evidenceExpanded}
-                        onToggle={onToggleEvidenceExpanded}
-                        navigationLabel={t("memory.evidence.sourceAnchor")}
-                        navigationMeta={selectedDocument?.path ?? null}
-                      >
-                        {highlightSelection ? (
-                          <div className="flex items-center gap-2">
-                            <button type="button" onClick={handlePreviousHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.prev")}</button>
-                            <span className="text-[11px] font-semibold">{Math.max(1, Math.min(documentMatchIndex + 1, highlightSelection.matches.length))}/{highlightSelection.matches.length}</span>
-                            <button type="button" onClick={handleNextHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.next")}</button>
-                          </div>
-                        ) : null}
-                      </EvidenceFocusCard>
-                    </div>
-                  ) : null}
-                </>
-              )}
-              footer={(
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
-                  <span>{footerLabel}</span>
-                  <span>{selectedDocument.name}</span>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{isEditing ? t("memory.documents.editingMode") : t("memory.documents.readonlyMode")}</div>
                 </div>
-              )}
-            />
+              </div>
+
+              <div className="mb-4 shrink-0">
+                {renderSearchToolbar()}
+              </div>
+
+              <div className="min-h-0 flex-1 rounded-[24px] border border-slate-200/90 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-950/50">
+                {canEdit && isEditing ? (
+                  <div className="relative h-full min-h-0 flex-1">
+                    <div
+                      ref={overlayRef}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 overflow-auto whitespace-pre-wrap rounded-[24px] px-4 py-6 font-mono text-[13px] leading-6 text-transparent"
+                    >
+                      {highlightedSegments.map((segment, index) =>
+                        segment.match ? (
+                          <mark key={index} className="rounded bg-yellow-200 px-0.5 text-transparent dark:bg-yellow-300/80">
+                            {segment.text}
+                          </mark>
+                        ) : (
+                          <span key={index}>{segment.text}</span>
+                        ),
+                      )}
+                    </div>
+                    <textarea
+                      ref={textareaRef}
+                      value={selectedDocumentContent}
+                      onChange={(event) => onDocumentDraftChange(event.target.value)}
+                      onScroll={(event) => {
+                        if (overlayRef.current) {
+                          overlayRef.current.scrollTop = event.currentTarget.scrollTop;
+                        }
+                      }}
+                      readOnly={false}
+                      spellCheck={false}
+                      className="h-full min-h-0 w-full resize-none rounded-[24px] bg-transparent px-4 py-6 font-mono text-[13px] leading-6 text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500 overflow-auto"
+                    />
+                  </div>
+                ) : (
+                  <div
+                    ref={overlayRef}
+                    className="h-full min-h-0 overflow-auto rounded-[24px] px-4 py-6 text-[13px] leading-6 text-slate-800 dark:text-slate-100"
+                  >
+                    <RichContentRenderer text={selectedDocumentContent} highlightTerm={activeHighlightTerm} activeMatchIndex={activeMatchCursor} matchIdPrefix="memory-document-match" />
+                  </div>
+                )}
+              </div>
+
+              {selectedSnippet ? (
+                <div className="mt-4 shrink-0">
+                  <EvidenceFocusCard
+                    title={t("memory.evidence.focus")}
+                    snippet={selectedSnippet}
+                    sourceTitle={selectedDocument?.name ?? null}
+                    expanded={evidenceExpanded}
+                    onToggle={onToggleEvidenceExpanded}
+                    navigationLabel={t("memory.evidence.sourceAnchor")}
+                    navigationMeta={selectedDocument?.path ?? null}
+                  >
+                    {highlightSelection ? (
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={handlePreviousHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.prev")}</button>
+                        <span className="text-[11px] font-semibold">{Math.max(1, Math.min(documentMatchIndex + 1, highlightSelection.matches.length))}/{highlightSelection.matches.length}</span>
+                        <button type="button" onClick={handleNextHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.next")}</button>
+                      </div>
+                    ) : null}
+                  </EvidenceFocusCard>
+                </div>
+              ) : null}
+
+              <div className="mt-4 shrink-0 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
+                <span>{footerLabel}</span>
+                <span>{selectedDocument.name}</span>
+              </div>
+            </div>
           )}
         </ArchiveDetailPane>
       </div>

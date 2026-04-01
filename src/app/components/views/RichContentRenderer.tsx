@@ -66,8 +66,8 @@ export function RichContentRenderer({
           id={`${matchIdPrefix}-${globalMatchIndex}`}
           data-memory-match-index={globalMatchIndex}
           className={isActive
-            ? "rounded bg-amber-300 px-0.5 text-slate-950 ring-2 ring-amber-500 dark:bg-amber-300 dark:text-slate-950 dark:ring-amber-200"
-            : "rounded bg-yellow-200 px-0.5 text-slate-950 dark:bg-yellow-300/80 dark:text-slate-950"
+            ? "rounded bg-amber-300 px-0.5 text-slate-950 ring-2 ring-amber-500 transition-all duration-300 data-[pulse=true]:scale-[1.08] data-[pulse=true]:shadow-[0_0_0_4px_rgba(251,191,36,0.24)] dark:bg-amber-300 dark:text-slate-950 dark:ring-amber-200 dark:data-[pulse=true]:shadow-[0_0_0_4px_rgba(253,230,138,0.22)]"
+            : "rounded bg-yellow-200 px-0.5 text-slate-950 transition-colors duration-200 dark:bg-yellow-300/80 dark:text-slate-950"
           }
         >
           {part.text}

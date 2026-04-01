@@ -111,6 +111,17 @@ export type DiagnosticsDrawerState = {
 
 type DocumentIndexRefreshState = "idle" | "done" | "error";
 
+type DocumentSearchOrigin = "manual" | "search_result" | "mind_map";
+
+type DocumentSearchState = {
+  query: string;
+  input: string;
+  matchIndex: number;
+  feedbackState: "idle" | "matched" | "empty";
+  source: DocumentSearchOrigin;
+  hint: string | null;
+};
+
 function sourceTone(source: string) {
   if (source.includes("session")) {
     return "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800/70 dark:bg-violet-950/30 dark:text-violet-300";
@@ -303,13 +314,14 @@ export function MemoryView() {
   const [mindMapOpenHint, setMindMapOpenHint] = useState<string | null>(null);
   const [selectedDocumentName, setSelectedDocumentName] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [documentQuery, setDocumentQuery] = useState("");
-  const [documentSearchInput, setDocumentSearchInput] = useState("");
-  const [documentMatchIndex, setDocumentMatchIndex] = useState(-1);
-  const [documentSearchFeedbackState, setDocumentSearchFeedbackState] = useState<"idle" | "matched" | "empty">("idle");
-  const [documentSearchSource, setDocumentSearchSource] = useState<"manual" | "search_result">("manual");
-  const [documentSearchHint, setDocumentSearchHint] = useState<string | null>(null);
-  const [documentEvidenceExpanded, setDocumentEvidenceExpanded] = useState(false);
+  const [documentSearchState, setDocumentSearchState] = useState<DocumentSearchState>({
+    query: "",
+    input: "",
+    matchIndex: -1,
+    feedbackState: "idle",
+    source: "manual",
+    hint: null,
+  });
   const [documentSaveState, setDocumentSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [documentSaveMessage, setDocumentSaveMessage] = useState<string | null>(null);
   const [documentIndexRefreshState, setDocumentIndexRefreshState] = useState<DocumentIndexRefreshState>("idle");
@@ -527,10 +539,6 @@ export function MemoryView() {
 
     return Array.from(canonical.values());
   }, [memoryResult]);
-  const selectedDocumentUpdatedAtLabel = useMemo(
-    () => (selectedDocument?.updatedAtMs ? new Date(selectedDocument.updatedAtMs).toLocaleString() : "-"),
-    [selectedDocument],
-  );
   const selectedDocumentContent = useMemo(() => {
     if (!selectedDocument) {
       return "";
@@ -538,8 +546,8 @@ export function MemoryView() {
     return drafts[selectedDocument.name] ?? resolveMemoryDocumentContent(selectedDocument);
   }, [drafts, selectedDocument]);
   const documentMatches = useMemo(
-    () => collectTextSearchMatches(selectedDocumentContent, documentQuery),
-    [selectedDocumentContent, documentQuery],
+    () => collectTextSearchMatches(selectedDocumentContent, documentSearchState.query),
+    [selectedDocumentContent, documentSearchState.query],
   );
   const documentDirty = useMemo(
     () =>
@@ -630,13 +638,19 @@ export function MemoryView() {
       );
         if (targetDocument) {
           setSelectedDocumentName(targetDocument.name);
-          setDocumentQuery(evidence.matchedTerms?.[0] ?? evidence.snippet.split(" ")[0] ?? "");
-          setDocumentSearchSource("search_result");
-          setDocumentSearchHint(`Mind Map evidence opened ${targetDocument.name}.`);
-          setDocumentEvidenceExpanded(true);
+          const nextQuery = evidence.matchedTerms?.[0] ?? evidence.snippet.split(" ")[0] ?? "";
+          const nextMatches = collectTextSearchMatches(resolveMemoryDocumentContent(targetDocument), nextQuery);
+          setDocumentSearchState({
+            query: nextQuery,
+            input: nextQuery,
+            matchIndex: resolveInitialSearchMatchIndex(nextMatches.length),
+            feedbackState: nextQuery ? (nextMatches.length > 0 ? "matched" : "empty") : "idle",
+            source: "mind_map",
+            hint: `Mind Map evidence opened ${targetDocument.name}.`,
+          });
           setActiveSection("documents");
           setMindMapOpenHint(`Opened evidence in Documents: ${targetDocument.name}`);
-        return;
+          return;
       }
     }
 
@@ -671,8 +685,11 @@ export function MemoryView() {
       const match = visibleDocuments.find((document) => document.name === resource.label);
       if (match) {
         setSelectedDocumentName(match.name);
-        setDocumentSearchHint(`Opened from Overview resources: ${match.name}`);
-      }
+          setDocumentSearchState((current) => ({
+            ...current,
+            hint: `Opened from Overview resources: ${match.name}`,
+          }));
+        }
     }
 
     if (resource.kind === "timeline") {
@@ -704,32 +721,34 @@ export function MemoryView() {
   };
 
   useEffect(() => {
-    setDocumentMatchIndex((current) =>
-      clampActiveSearchMatchIndex(current, documentMatches.length),
-    );
+    setDocumentSearchState((current) => ({
+      ...current,
+      matchIndex: clampActiveSearchMatchIndex(current.matchIndex, documentMatches.length),
+    }));
   }, [documentMatches.length, selectedDocumentName, selectedDocumentContent]);
 
   useEffect(() => {
-    if (!documentSearchInput.trim() && documentQuery) {
-      setDocumentQuery("");
-      setDocumentMatchIndex(-1);
-      setDocumentSearchFeedbackState("idle");
-      setDocumentSearchHint(t("memory.documents.searchCleared"));
+    if (!documentSearchState.input.trim() && documentSearchState.query) {
+      setDocumentSearchState((current) => ({
+        ...current,
+        query: "",
+        matchIndex: -1,
+        feedbackState: "idle",
+        hint: t("memory.documents.searchCleared"),
+      }));
     }
-  }, [documentQuery, documentSearchInput, t]);
+  }, [documentSearchState.input, documentSearchState.query, t]);
 
   useEffect(() => {
-    if (!documentQuery.trim()) {
-      setDocumentSearchFeedbackState("idle");
-      return;
-    }
-
-    setDocumentSearchFeedbackState(documentMatches.length > 0 ? "matched" : "empty");
-  }, [documentMatches.length, documentQuery]);
-
-  useEffect(() => {
-    setDocumentSearchInput(documentQuery);
-  }, [documentQuery]);
+    setDocumentSearchState((current) => ({
+      ...current,
+      feedbackState: !current.query.trim()
+        ? "idle"
+        : documentMatches.length > 0
+          ? "matched"
+          : "empty",
+    }));
+  }, [documentMatches.length]);
 
   useEffect(() => {
     if (!selectedTimelineEntryName) {
@@ -1058,12 +1077,16 @@ export function MemoryView() {
   };
 
   const handleRunDocumentSearch = () => {
-    const nextQuery = documentSearchInput.trim();
+    const nextQuery = documentSearchState.input.trim();
     const nextMatches = collectTextSearchMatches(selectedDocumentContent, nextQuery);
-    setDocumentQuery(nextQuery);
-    setDocumentSearchSource("manual");
-    setDocumentMatchIndex(resolveInitialSearchMatchIndex(nextMatches.length));
-    setDocumentSearchHint(nextQuery ? t("memory.documents.searchRun", nextQuery) : t("memory.documents.searchCleared"));
+    setDocumentSearchState((current) => ({
+      ...current,
+      query: nextQuery,
+      source: "manual",
+      matchIndex: resolveInitialSearchMatchIndex(nextMatches.length),
+      feedbackState: nextQuery ? (nextMatches.length > 0 ? "matched" : "empty") : "idle",
+      hint: nextQuery ? t("memory.documents.searchRun", nextQuery) : t("memory.documents.searchCleared"),
+    }));
   };
 
   const handleCancelDocumentEdit = () => {
@@ -1140,16 +1163,19 @@ export function MemoryView() {
 
   const handleOpenSearchEntry = async (entry: NonNullable<GatewayAgentMemorySearchResult>["results"][number]) => {
     if (entry.openTarget === "documents") {
-      setSelectedDocumentName(entry.canonicalDocumentName ?? entry.path.split("/").pop() ?? "");
-      const derivedQuery = entry.snippet.trim().split(/\s+/).find((token) => token.length >= 3) ?? entry.snippet.slice(0, 24).trim();
-      setDocumentQuery(derivedQuery);
-      setDocumentSearchInput(derivedQuery);
-      setDocumentMatchIndex(-1);
-      setDocumentSearchSource("search_result");
-      setDocumentSearchHint(t("memory.search.hint.documents", entry.path));
-      setTimelineSelectionHint(null);
-      setSearchOpenHint(t("memory.search.opened.documents", entry.path));
-      setActiveSection("documents");
+        setSelectedDocumentName(entry.canonicalDocumentName ?? entry.path.split("/").pop() ?? "");
+        const derivedQuery = entry.snippet.trim().split(/\s+/).find((token) => token.length >= 3) ?? entry.snippet.slice(0, 24).trim();
+        setDocumentSearchState({
+          query: derivedQuery,
+          input: derivedQuery,
+          matchIndex: -1,
+          feedbackState: derivedQuery ? "matched" : "idle",
+          source: "search_result",
+          hint: t("memory.search.hint.documents", entry.path),
+        });
+        setTimelineSelectionHint(null);
+        setSearchOpenHint(t("memory.search.opened.documents", entry.path));
+        setActiveSection("documents");
       return;
     }
 
@@ -1160,10 +1186,13 @@ export function MemoryView() {
         ?? "";
       setSelectedTimelineDateLabel(derivedDate);
       setTimelineSelectionHint(t("memory.search.hint.footprints", derivedDate));
-      setDocumentSearchHint(null);
-      setSearchOpenHint(t("memory.search.opened.footprints", entry.path));
-      setActiveSection("footprints");
-      return;
+        setDocumentSearchState((current) => ({
+          ...current,
+          hint: null,
+        }));
+        setSearchOpenHint(t("memory.search.opened.footprints", entry.path));
+        setActiveSection("footprints");
+        return;
     }
 
     setSearchOpenHint(t("memory.search.opened.detail", entry.path));
@@ -1242,26 +1271,25 @@ export function MemoryView() {
       <>
         <MemoryDocumentsDesktop
           title={t("memory.documents.title")}
-          description={documentSearchHint ?? t("memory.documents.desc")}
-          documentSearchInput={documentSearchInput}
-          documentQuery={documentQuery}
+          description={documentSearchState.hint ?? t("memory.documents.desc")}
+          documentSearchInput={documentSearchState.input}
+          documentQuery={documentSearchState.query}
           documentMatches={documentMatches}
-          documentMatchIndex={documentMatchIndex}
-          documentSearchFeedbackState={documentSearchFeedbackState}
-          documentSearchHint={documentSearchHint}
+          documentMatchIndex={documentSearchState.matchIndex}
+          documentSearchFeedbackState={documentSearchState.feedbackState}
+          documentSearchHint={documentSearchState.hint}
           documentDirty={documentDirty}
-          documentSearchSource={documentSearchSource}
+          documentSearchSource={documentSearchState.source === "mind_map" ? "search_result" : documentSearchState.source}
           documentSaveMessage={documentSaveMessage}
           documentSaveState={documentSaveState}
           documentIndexRefreshState={documentIndexRefreshState}
           documentIndexRefreshDescription={documentIndexRefreshDescription}
           selectedDocument={selectedDocument}
           selectedDocumentName={selectedDocumentName}
-            selectedDocumentContent={selectedDocumentContent}
-            selectedDocumentUpdatedAtLabel={selectedDocumentUpdatedAtLabel}
-            selectedSnippet={null}
-            evidenceExpanded={documentEvidenceExpanded}
-            onToggleEvidenceExpanded={() => setDocumentEvidenceExpanded((current) => !current)}
+          selectedDocumentContent={selectedDocumentContent}
+          selectedSnippet={null}
+          evidenceExpanded={false}
+          onToggleEvidenceExpanded={() => undefined}
           visibleDocuments={visibleDocuments}
           canEdit={canEdit}
           isEditing={isEditingDocument}
@@ -1269,10 +1297,19 @@ export function MemoryView() {
           t={t}
           getAgentBadge={getAgentBadge}
           selectedAgentId={selectedAgentId}
-          onDocumentSearchInputChange={setDocumentSearchInput}
+          onDocumentSearchInputChange={(value) => setDocumentSearchState((current) => ({ ...current, input: value }))}
           onRunDocumentSearch={handleRunDocumentSearch}
-          onPreviousHighlight={() => setDocumentMatchIndex((current) => moveActiveSearchMatchIndex(current, documentMatches.length, -1))}
-          onNextHighlight={() => setDocumentMatchIndex((current) => moveActiveSearchMatchIndex(current, documentMatches.length, 1))}
+          onClearDocumentSearch={() => setDocumentSearchState((current) => ({
+            ...current,
+            query: "",
+            input: "",
+            matchIndex: -1,
+            feedbackState: "idle",
+            source: "manual",
+            hint: t("memory.documents.searchCleared"),
+          }))}
+          onPreviousHighlight={() => setDocumentSearchState((current) => ({ ...current, matchIndex: moveActiveSearchMatchIndex(current.matchIndex, documentMatches.length, -1) }))}
+          onNextHighlight={() => setDocumentSearchState((current) => ({ ...current, matchIndex: moveActiveSearchMatchIndex(current.matchIndex, documentMatches.length, 1) }))}
           onSelectDocument={setSelectedDocumentName}
           onDocumentDraftChange={handleDocumentDraftChange}
           onStartEdit={() => setIsEditingDocument(true)}

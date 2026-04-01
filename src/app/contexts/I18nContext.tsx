@@ -1455,6 +1455,8 @@ const DICT: Record<string, string[]> = {
     "在目前選中的根文件裡搜尋",
   ],
   "memory.documents.searchAction": ["Search", "搜索", "搜尋"],
+  "memory.documents.searchToolbar": ["Search Navigator", "搜索导航", "搜尋導覽"],
+  "memory.documents.searchClear": ["Clear", "清除", "清除"],
   "memory.documents.searchRun": ["Searching current document for: {0}", "正在当前文档内搜索：{0}", "正在目前文件內搜尋：{0}"],
   "memory.documents.searchCleared": ["Document text search cleared.", "已清除文档文本搜索。", "已清除文件文字搜尋。"],
   "memory.documents.searchState.matched": ["{0} matches", "已命中 {0} 处", "已命中 {0} 處"],
