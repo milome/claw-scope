@@ -2,9 +2,10 @@ import { Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import type { GatewayAgentFileEntry } from "../../contexts/OpenClawContext";
-import { ARCHIVE_SPACING, ArchiveActionButton, ArchiveCapsule, ArchiveDetailPane, ArchiveLayerHeader, ArchiveListCard, ArchiveListPane } from "./memoryArchiveUi";
+import { ARCHIVE_SPACING, ArchiveActionButton, ArchiveCapsule, ArchiveDetailPane, ArchiveLayerHeader, ArchiveListCard, ArchiveListPane, type ArchiveTone } from "./memoryArchiveUi";
 import { EvidenceFocusCard } from "./EvidenceFocusCard";
 import { RichContentRenderer } from "./RichContentRenderer";
+import { resolveInputTone, resolveSelectedToneSurface, resolveViewToneClasses } from "./viewTone";
 
 type MemorySearchMatch = {
   start: number;
@@ -14,6 +15,7 @@ type MemorySearchMatch = {
 type DocumentSearchFeedbackState = "idle" | "searching" | "matched" | "empty";
 
 type MemoryDocumentsDesktopProps = {
+  tone?: ArchiveTone;
   title: string;
   description: string;
   documentSearchInput: string;
@@ -56,6 +58,7 @@ type MemoryDocumentsDesktopProps = {
 };
 
 export function MemoryDocumentsDesktop({
+  tone = "sky",
   title: _title,
   description: _description,
   documentSearchInput,
@@ -96,6 +99,13 @@ export function MemoryDocumentsDesktop({
   onSave,
   footerLabel,
 }: MemoryDocumentsDesktopProps) {
+  const tonePalette = resolveViewToneClasses(tone);
+  const toneClasses = {
+    workspace: tonePalette.softBadge,
+    selectedKind: `${tonePalette.softBadge} bg-white dark:bg-slate-900`,
+    selectedCard: resolveSelectedToneSurface(tone),
+    search: resolveInputTone(tone),
+  };
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const stickySearchInputRef = useRef<HTMLInputElement | null>(null);
@@ -237,7 +247,7 @@ export function MemoryDocumentsDesktop({
   const renderSearchToolbar = () => (
     <div className="rounded-2xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-xs text-amber-900 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/85 dark:text-amber-100">
       <div className="flex flex-wrap items-center gap-2">
-        <ArchiveActionButton onClick={onClearDocumentSearch} disabled={!documentSearchInput && !documentQuery}>
+        <ArchiveActionButton tone={tone} onClick={onClearDocumentSearch} disabled={!documentSearchInput && !documentQuery}>
           <X className="mr-1 inline h-3.5 w-3.5" />
           {t("memory.documents.searchClear")}
         </ArchiveActionButton>
@@ -260,20 +270,20 @@ export function MemoryDocumentsDesktop({
             onChange={(event) => onDocumentSearchInputChange(event.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder={t("memory.documents.searchPlaceholder")}
-            className="min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
+            className={`min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500 ${toneClasses.search}`}
           />
         </div>
-        <ArchiveActionButton onClick={onRunDocumentSearch} variant="primary">
+        <ArchiveActionButton tone={tone} onClick={onRunDocumentSearch} variant="primary">
           {documentSearchFeedbackState === "matched"
             ? t("memory.documents.searchState.matched", documentMatches.length)
             : documentSearchFeedbackState === "empty"
               ? t("memory.documents.searchState.empty")
               : t("memory.documents.searchAction")}
         </ArchiveActionButton>
-        <ArchiveActionButton onClick={handlePreviousHighlight} disabled={documentMatches.length <= 0}>
+        <ArchiveActionButton tone={tone} onClick={handlePreviousHighlight} disabled={documentMatches.length <= 0}>
           {t("memory.highlight.prev")}
         </ArchiveActionButton>
-        <ArchiveActionButton onClick={handleNextHighlight} disabled={documentMatches.length <= 0}>
+        <ArchiveActionButton tone={tone} onClick={handleNextHighlight} disabled={documentMatches.length <= 0}>
           {t("memory.highlight.next")}
         </ArchiveActionButton>
       </div>
@@ -320,7 +330,7 @@ export function MemoryDocumentsDesktop({
   return (
     <div className="hidden flex-1 flex-col md:flex bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.88))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,1),rgba(2,6,23,0.92))]">
       <div className="px-5 pt-5">
-        <ArchiveLayerHeader title={t("memory.tab.documents")} description={t("memory.documents.desc")} icon={Search} />
+        <ArchiveLayerHeader title={t("memory.tab.documents")} description={t("memory.documents.desc")} icon={Search} tone={tone} />
         <ArchiveCapsule>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
             <div className="min-w-0">
@@ -334,7 +344,7 @@ export function MemoryDocumentsDesktop({
                     {t("memory.documents.readonlyScope")}
                   </span>
                 )}
-                <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 font-medium text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300">
+                <span className={`rounded-full border px-3 py-1 font-medium ${toneClasses.workspace}`}>
                   {workspaceLabel}
                 </span>
                 <span className="rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
@@ -391,10 +401,10 @@ export function MemoryDocumentsDesktop({
                     <div className="flex items-start justify-between gap-3">
                       <div className={`min-w-0 flex-1 ${active ? "pl-3" : ""}`}>
                         <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                          <span className={`rounded-full border px-2 py-0.5 font-semibold ${active ? "border-sky-200 bg-white text-sky-700 dark:border-sky-700 dark:bg-slate-900 dark:text-sky-300" : "border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-300"}`}>
+                          <span className={`rounded-full border px-2 py-0.5 font-semibold ${active ? toneClasses.selectedKind : "border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-300"}`}>
                             {t("memory.documents.kind")}
                           </span>
-                          <span className={`rounded-full border px-2 py-0.5 font-semibold ${active ? "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-700/50 dark:bg-cyan-900/20 dark:text-cyan-300" : "border-cyan-100 bg-cyan-50/70 text-cyan-600 dark:border-cyan-800/50 dark:bg-cyan-900/20 dark:text-cyan-300"}`}>
+                          <span className={`rounded-full border px-2 py-0.5 font-semibold ${active ? toneClasses.workspace : "border-cyan-100 bg-cyan-50/70 text-cyan-600 dark:border-cyan-800/50 dark:bg-cyan-900/20 dark:text-cyan-300"}`}>
                             {workspaceLabel}
                           </span>
                         </div>
@@ -423,12 +433,12 @@ export function MemoryDocumentsDesktop({
               <div className="mb-4 shrink-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <ArchiveActionButton onClick={onReload}>{t("memory.documents.reload")}</ArchiveActionButton>
-                    {canEdit && !isEditing && <ArchiveActionButton onClick={onStartEdit}>{t("memory.documents.edit")}</ArchiveActionButton>}
+                    <ArchiveActionButton tone={tone} onClick={onReload}>{t("memory.documents.reload")}</ArchiveActionButton>
+                    {canEdit && !isEditing && <ArchiveActionButton tone={tone} onClick={onStartEdit}>{t("memory.documents.edit")}</ArchiveActionButton>}
                     {canEdit && isEditing && (
                       <>
-                        <ArchiveActionButton onClick={onCancelEdit}>{t("memory.documents.cancel")}</ArchiveActionButton>
-                        <ArchiveActionButton onClick={onSave} disabled={!documentDirty || documentSaveState === "saving"} variant="primary">
+                        <ArchiveActionButton tone={tone} onClick={onCancelEdit}>{t("memory.documents.cancel")}</ArchiveActionButton>
+                        <ArchiveActionButton tone={tone} onClick={onSave} disabled={!documentDirty || documentSaveState === "saving"} variant="primary">
                           {documentSaveState === "saving" ? t("memory.documents.saving") : t("memory.documents.save")}
                         </ArchiveActionButton>
                       </>

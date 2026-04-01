@@ -34,6 +34,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
       - name: Cargo check
         run: cargo check
         working-directory: src-tauri
@@ -46,3 +49,15 @@ jobs:
         run: npm run tauri build
         env:
           CI: true
+
+      - name: Visual baseline regression
+        run: npm run visual:ci
+        env:
+          CI: true
+          VISUAL_BASELINE_NAME: ci-baseline
+
+      - name: Upload visual baseline artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-baseline
+          path: artifacts/visual-regression/ci-baseline

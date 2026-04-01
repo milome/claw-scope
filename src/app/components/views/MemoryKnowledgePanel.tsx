@@ -19,7 +19,8 @@ import {
   type MemoryKnowledgeActionKind,
 } from "./memoryKnowledgeActions";
 import { MemoryMindMapPanel } from "./MemoryMindMapPanel";
-import { ArchiveActionButton, ArchiveNotice, ArchiveSectionCard, ArchiveStatCard } from "./memoryArchiveUi";
+import { ArchiveActionButton, ArchiveNotice, ArchiveSectionCard, ArchiveStatCard, type ArchiveTone } from "./memoryArchiveUi";
+import { resolveInputTone, resolveViewToneClasses } from "./viewTone";
 
 type FieldErrorState = {
   extraPath?: string | null;
@@ -29,6 +30,7 @@ type FieldErrorState = {
 };
 
 type MemoryKnowledgePanelProps = {
+  tone?: ArchiveTone;
   memoryResult: GatewayAgentMemoryResult | null;
   memoryStatus: GatewayAgentMemoryStatusResult | null;
   runtimeStatus: GatewayAgentMemoryRuntimeStatusResult | null;
@@ -52,6 +54,7 @@ type MemoryKnowledgePanelProps = {
 };
 
 export function MemoryKnowledgePanel({
+  tone = "sky",
   memoryResult,
   memoryStatus,
   runtimeStatus,
@@ -66,6 +69,14 @@ export function MemoryKnowledgePanel({
   openHint,
   onRefreshKnowledge,
 }: MemoryKnowledgePanelProps) {
+  const tonePalette = resolveViewToneClasses(tone);
+  const toneClasses = {
+    icon: tonePalette.iconText,
+    soft: tonePalette.softBadge,
+    chip: tonePalette.softBadge,
+    input: resolveInputTone(tone),
+    checkbox: tone === "violet" ? "text-violet-600" : tone === "emerald" ? "text-emerald-600" : tone === "amber" ? "text-amber-600" : tone === "rose" ? "text-rose-600" : "text-sky-600",
+  };
   const knowledgeModel = buildExternalKnowledgeViewModel({
     diagnostics: memoryResult?.diagnostics,
     externalSources,
@@ -292,6 +303,7 @@ export function MemoryKnowledgePanel({
       {openHint ? <ArchiveNotice>{openHint}</ArchiveNotice> : null}
 
       <MemoryMindMapPanel
+        tone={tone}
         model={model}
         t={t}
         showDebug={showDebug}
@@ -299,9 +311,9 @@ export function MemoryKnowledgePanel({
         onOpenEvidence={onOpenEvidence}
       />
 
-      <ArchiveSectionCard>
+      <ArchiveSectionCard tone={tone}>
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          <FolderTree className="w-4 h-4 text-sky-500" />
+          <FolderTree className={`w-4 h-4 ${toneClasses.icon}`} />
           {t("memory.knowledge.title")}
         </div>
 
@@ -359,9 +371,9 @@ export function MemoryKnowledgePanel({
           />
         </div>
 
-        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+        <div className={`mt-3 rounded-2xl border p-4 ${toneClasses.soft}`}>
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-            <Activity className="h-4 w-4 text-sky-500" />
+            <Activity className={`h-4 w-4 ${toneClasses.icon}`} />
             {t("memory.knowledge.runtimeCard")}
           </div>
           <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{t("memory.knowledge.runtimeHint")}</div>
@@ -385,25 +397,25 @@ export function MemoryKnowledgePanel({
         </div>
 
         <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+          <div className={`rounded-2xl border px-4 py-3 ${toneClasses.soft}`}>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-              <Link2 className="h-3.5 w-3.5 text-sky-500" />
+              <Link2 className={`h-3.5 w-3.5 ${toneClasses.icon}`} />
               {t("memory.knowledge.sources")}
             </div>
             <div className="mt-2 text-sm text-slate-700 dark:text-slate-200">
               {memoryResult?.diagnostics?.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+          <div className={`rounded-2xl border px-4 py-3 ${toneClasses.soft}`}>
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-              <ShieldCheck className="h-3.5 w-3.5 text-sky-500" />
+              <ShieldCheck className={`h-3.5 w-3.5 ${toneClasses.icon}`} />
               {t("memory.knowledge.guardrail")}
             </div>
             <div className="mt-2 text-sm text-slate-700 dark:text-slate-200">{t("memory.knowledge.guardrailDesc")}</div>
           </div>
         </div>
         <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-          <ShieldCheck className="h-4 w-4 text-sky-500" />
+          <ShieldCheck className={`h-4 w-4 ${toneClasses.icon}`} />
           {t("memory.knowledge.configActions")}
         </div>
         <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
@@ -425,6 +437,7 @@ export function MemoryKnowledgePanel({
             </div>
             {statusSummary.localWritable ? (
               <ArchiveActionButton
+                tone={tone}
                 onClick={() => void handleRunReindex()}
                 disabled={savingAction !== null}
                 variant="primary"
@@ -433,7 +446,7 @@ export function MemoryKnowledgePanel({
                 {t("memory.knowledge.reindexNow")}
               </ArchiveActionButton>
             ) : (
-              <ArchiveActionButton onClick={() => void handleCopyRemoteGuide()} disabled={savingAction !== null}>
+              <ArchiveActionButton tone={tone} onClick={() => void handleCopyRemoteGuide()} disabled={savingAction !== null}>
                 <Copy className="mr-1 inline h-3.5 w-3.5" />
                 {t("memory.knowledge.copyRemoteGuide")}
               </ArchiveActionButton>
@@ -457,9 +470,10 @@ export function MemoryKnowledgePanel({
                 onChange={(event) => setNewExtraPath(event.target.value)}
                 disabled={!knowledgeModel.localWritable || savingAction !== null}
                 placeholder={t("memory.knowledge.pathPlaceholder")}
-                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                className={`min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 ${toneClasses.input}`}
               />
               <ArchiveActionButton
+                tone={tone}
                 onClick={() => void handleAddExtraPath()}
                 disabled={!knowledgeModel.localWritable || savingAction !== null}
                 variant="primary"
@@ -474,6 +488,7 @@ export function MemoryKnowledgePanel({
                   <div key={path} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/40">
                     <div className="min-w-0 break-all text-sm text-slate-700 dark:text-slate-200">{path}</div>
                     <ArchiveActionButton
+                      tone={tone}
                       onClick={() => void handleRemoveExtraPath(path)}
                       disabled={!knowledgeModel.localWritable || savingAction !== null}
                     >
@@ -501,7 +516,7 @@ export function MemoryKnowledgePanel({
                   checked={knowledgeModel.sessionMemoryEnabled}
                   onChange={(event) => void handleToggleSessionMemory(event.target.checked)}
                   disabled={!knowledgeModel.localWritable || savingAction !== null}
-                  className="h-4 w-4 rounded border-slate-300 text-sky-600"
+                  className={`h-4 w-4 rounded border-slate-300 ${toneClasses.checkbox}`}
                 />
               </label>
 
@@ -516,7 +531,7 @@ export function MemoryKnowledgePanel({
                     checked={knowledgeModel.sources.includes(source)}
                     onChange={() => void handleToggleSource(source)}
                     disabled={!knowledgeModel.localWritable || savingAction !== null}
-                    className="h-4 w-4 rounded border-slate-300 text-sky-600"
+                    className={`h-4 w-4 rounded border-slate-300 ${toneClasses.checkbox}`}
                   />
                 </label>
               ))}

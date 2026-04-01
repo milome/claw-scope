@@ -19,6 +19,32 @@ npm run tauri dev
 npm run tauri build
 ```
 
+## Visual Regression
+
+本仓库内置一套基于 Playwright 的明 / 暗主题截图回归流程，用于对 `Profile`、`Memory`、`Config`、`Evolution` 四个主页面做逐页基线采样。
+
+本地已有预览服务时：
+
+```bash
+npm run build
+npm run preview -- --host 127.0.0.1 --port 4173
+npm run visual:baseline
+```
+
+一键本地 / CI 方式：
+
+```bash
+npm run visual:ci
+```
+
+可选环境变量：
+
+- `VISUAL_BASELINE_NAME`：指定输出目录名，默认取当天日期或 CI 中的 `ci-baseline`
+- `VISUAL_BASE_URL`：指定已有预览地址
+- `VISUAL_PORT` / `VISUAL_HOST`：用于 `visual:ci` 自动拉起预览服务时指定监听地址
+
+截图产物默认输出到 `artifacts/visual-regression/<baseline-name>/`，目录规范与人工审查方式见 [artifacts/visual-regression/README.md](artifacts/visual-regression/README.md)。
+
 ## 技术栈
 
 - **前端:** React + TypeScript + Vite

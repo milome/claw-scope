@@ -1,6 +1,149 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
+export type ArchiveTone = "sky" | "violet" | "emerald" | "amber" | "rose";
+
+type ArchiveToneClasses = {
+  headerChip: string;
+  headerIcon: string;
+  sectionAccent: string;
+  actionPrimary: string;
+  actionSecondary: string;
+  tabActive: string;
+  tabIconActive: string;
+  tabIconIdle: string;
+  tabLabelActive: string;
+  tabDescriptionActive: string;
+  tabIdleHover: string;
+  diagnostics: string;
+};
+
+export function resolveArchiveToneClasses(tone: ArchiveTone = "sky"): ArchiveToneClasses {
+  switch (tone) {
+    case "violet":
+      return {
+        headerChip:
+          "border-violet-200 bg-violet-50/90 text-violet-700 dark:border-violet-800/70 dark:bg-violet-950/40 dark:text-violet-300",
+        headerIcon: "text-violet-500 dark:text-violet-300",
+        sectionAccent:
+          "before:bg-violet-400/85 after:bg-violet-400/95 dark:before:bg-violet-300/80 dark:after:bg-violet-300/85",
+        actionPrimary:
+          "bg-violet-600 hover:bg-violet-500 dark:bg-violet-500 dark:hover:bg-violet-400",
+        actionSecondary:
+          "hover:border-violet-300 hover:text-violet-700 dark:hover:border-violet-700 dark:hover:text-violet-300",
+        tabActive:
+          "border border-violet-200 bg-[linear-gradient(180deg,rgba(245,243,255,1),rgba(237,233,254,0.92))] text-violet-700 shadow-sm shadow-violet-100/80 dark:border-violet-700 dark:bg-[linear-gradient(180deg,rgba(76,29,149,0.42),rgba(46,16,101,0.28))] dark:text-violet-300 dark:shadow-none",
+        tabIconActive:
+          "border-violet-200 bg-white text-violet-600 dark:border-violet-700 dark:bg-slate-950/60 dark:text-violet-300",
+        tabIconIdle:
+          "border-violet-100 bg-violet-50/80 text-violet-500 group-hover:border-violet-200 group-hover:text-violet-600 dark:border-violet-900/60 dark:bg-violet-950/20 dark:text-violet-300 dark:group-hover:border-violet-700 dark:group-hover:text-violet-200",
+        tabLabelActive: "text-violet-900 dark:text-violet-100",
+        tabDescriptionActive: "text-violet-700/90 dark:text-violet-200/80",
+        tabIdleHover:
+          "hover:border-violet-200/80 hover:bg-violet-50/70 hover:text-violet-900 dark:hover:border-violet-800 dark:hover:bg-violet-950/20 dark:hover:text-violet-100",
+        diagnostics:
+          "border-violet-200 bg-violet-50/80 dark:border-violet-900/60 dark:bg-violet-950/25",
+      };
+    case "emerald":
+      return {
+        headerChip:
+          "border-emerald-200 bg-emerald-50/90 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/35 dark:text-emerald-300",
+        headerIcon: "text-emerald-500 dark:text-emerald-300",
+        sectionAccent:
+          "before:bg-emerald-400/85 after:bg-emerald-400/95 dark:before:bg-emerald-300/80 dark:after:bg-emerald-300/85",
+        actionPrimary:
+          "bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400",
+        actionSecondary:
+          "hover:border-emerald-300 hover:text-emerald-700 dark:hover:border-emerald-700 dark:hover:text-emerald-300",
+        tabActive:
+          "border border-emerald-200 bg-[linear-gradient(180deg,rgba(236,253,245,1),rgba(209,250,229,0.9))] text-emerald-700 shadow-sm shadow-emerald-100/80 dark:border-emerald-700 dark:bg-[linear-gradient(180deg,rgba(6,78,59,0.45),rgba(2,44,34,0.28))] dark:text-emerald-300 dark:shadow-none",
+        tabIconActive:
+          "border-emerald-200 bg-white text-emerald-600 dark:border-emerald-700 dark:bg-slate-950/60 dark:text-emerald-300",
+        tabIconIdle:
+          "border-emerald-100 bg-emerald-50/80 text-emerald-500 group-hover:border-emerald-200 group-hover:text-emerald-600 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-300 dark:group-hover:border-emerald-700 dark:group-hover:text-emerald-200",
+        tabLabelActive: "text-emerald-900 dark:text-emerald-100",
+        tabDescriptionActive: "text-emerald-700/90 dark:text-emerald-200/80",
+        tabIdleHover:
+          "hover:border-emerald-200/80 hover:bg-emerald-50/70 hover:text-emerald-900 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/20 dark:hover:text-emerald-100",
+        diagnostics:
+          "border-emerald-200 bg-emerald-50/80 dark:border-emerald-900/60 dark:bg-emerald-950/25",
+      };
+    case "amber":
+      return {
+        headerChip:
+          "border-amber-200 bg-amber-50/90 text-amber-700 dark:border-amber-800/70 dark:bg-amber-950/35 dark:text-amber-300",
+        headerIcon: "text-amber-500 dark:text-amber-300",
+        sectionAccent:
+          "before:bg-amber-400/85 after:bg-amber-400/95 dark:before:bg-amber-300/80 dark:after:bg-amber-300/85",
+        actionPrimary:
+          "bg-amber-500 hover:bg-amber-400 text-slate-950 dark:bg-amber-500 dark:hover:bg-amber-400 dark:text-slate-950",
+        actionSecondary:
+          "hover:border-amber-300 hover:text-amber-700 dark:hover:border-amber-700 dark:hover:text-amber-300",
+        tabActive:
+          "border border-amber-200 bg-[linear-gradient(180deg,rgba(255,251,235,1),rgba(254,243,199,0.92))] text-amber-700 shadow-sm shadow-amber-100/80 dark:border-amber-700 dark:bg-[linear-gradient(180deg,rgba(120,53,15,0.42),rgba(69,26,3,0.28))] dark:text-amber-300 dark:shadow-none",
+        tabIconActive:
+          "border-amber-200 bg-white text-amber-600 dark:border-amber-700 dark:bg-slate-950/60 dark:text-amber-300",
+        tabIconIdle:
+          "border-amber-100 bg-amber-50/85 text-amber-500 group-hover:border-amber-200 group-hover:text-amber-600 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-300 dark:group-hover:border-amber-700 dark:group-hover:text-amber-200",
+        tabLabelActive: "text-amber-900 dark:text-amber-100",
+        tabDescriptionActive: "text-amber-700/90 dark:text-amber-200/80",
+        tabIdleHover:
+          "hover:border-amber-200/80 hover:bg-amber-50/70 hover:text-amber-900 dark:hover:border-amber-800 dark:hover:bg-amber-950/20 dark:hover:text-amber-100",
+        diagnostics:
+          "border-amber-200 bg-amber-50/80 dark:border-amber-900/60 dark:bg-amber-950/25",
+      };
+    case "rose":
+      return {
+        headerChip:
+          "border-rose-200 bg-rose-50/90 text-rose-700 dark:border-rose-800/70 dark:bg-rose-950/35 dark:text-rose-300",
+        headerIcon: "text-rose-500 dark:text-rose-300",
+        sectionAccent:
+          "before:bg-rose-400/85 after:bg-rose-400/95 dark:before:bg-rose-300/80 dark:after:bg-rose-300/85",
+        actionPrimary:
+          "bg-rose-600 hover:bg-rose-500 dark:bg-rose-500 dark:hover:bg-rose-400",
+        actionSecondary:
+          "hover:border-rose-300 hover:text-rose-700 dark:hover:border-rose-700 dark:hover:text-rose-300",
+        tabActive:
+          "border border-rose-200 bg-[linear-gradient(180deg,rgba(255,241,242,1),rgba(255,228,230,0.92))] text-rose-700 shadow-sm shadow-rose-100/80 dark:border-rose-700 dark:bg-[linear-gradient(180deg,rgba(136,19,55,0.4),rgba(76,5,25,0.26))] dark:text-rose-300 dark:shadow-none",
+        tabIconActive:
+          "border-rose-200 bg-white text-rose-600 dark:border-rose-700 dark:bg-slate-950/60 dark:text-rose-300",
+        tabIconIdle:
+          "border-rose-100 bg-rose-50/85 text-rose-500 group-hover:border-rose-200 group-hover:text-rose-600 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-300 dark:group-hover:border-rose-700 dark:group-hover:text-rose-200",
+        tabLabelActive: "text-rose-900 dark:text-rose-100",
+        tabDescriptionActive: "text-rose-700/90 dark:text-rose-200/80",
+        tabIdleHover:
+          "hover:border-rose-200/80 hover:bg-rose-50/70 hover:text-rose-900 dark:hover:border-rose-800 dark:hover:bg-rose-950/20 dark:hover:text-rose-100",
+        diagnostics:
+          "border-rose-200 bg-rose-50/80 dark:border-rose-900/60 dark:bg-rose-950/25",
+      };
+    case "sky":
+    default:
+      return {
+        headerChip:
+          "border-sky-200 bg-sky-50/90 text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/35 dark:text-sky-300",
+        headerIcon: "text-sky-500 dark:text-sky-300",
+        sectionAccent:
+          "before:bg-sky-400/85 after:bg-sky-400/95 dark:before:bg-sky-300/80 dark:after:bg-sky-300/85",
+        actionPrimary:
+          "bg-sky-600 hover:bg-sky-500 dark:bg-sky-600 dark:hover:bg-sky-500",
+        actionSecondary:
+          "hover:border-sky-300 hover:text-sky-700 dark:hover:border-sky-700 dark:hover:text-sky-300",
+        tabActive:
+          "border border-sky-200 bg-[linear-gradient(180deg,rgba(240,249,255,1),rgba(224,242,254,0.92))] text-sky-700 shadow-sm shadow-sky-100/80 dark:border-sky-700 dark:bg-[linear-gradient(180deg,rgba(8,47,73,0.9),rgba(12,74,110,0.52))] dark:text-sky-300 dark:shadow-none",
+        tabIconActive:
+          "border-sky-200 bg-white text-sky-600 dark:border-sky-700 dark:bg-slate-950/60 dark:text-sky-300",
+        tabIconIdle:
+          "border-sky-100 bg-sky-50/85 text-sky-500 group-hover:border-sky-200 group-hover:text-sky-600 dark:border-sky-900/60 dark:bg-sky-950/20 dark:text-sky-300 dark:group-hover:border-sky-700 dark:group-hover:text-sky-200",
+        tabLabelActive: "text-sky-900 dark:text-sky-100",
+        tabDescriptionActive: "text-sky-700/90 dark:text-sky-200/80",
+        tabIdleHover:
+          "hover:border-sky-200/80 hover:bg-sky-50/70 hover:text-sky-900 dark:hover:border-sky-800 dark:hover:bg-sky-950/20 dark:hover:text-sky-100",
+        diagnostics:
+          "border-sky-200 bg-sky-50/80 dark:border-sky-900/60 dark:bg-sky-950/25",
+      };
+  }
+}
+
 export const ARCHIVE_SPACING = {
   page: "p-4 md:p-6",
   sectionGap: "gap-4",
@@ -14,27 +157,29 @@ export const ARCHIVE_SURFACE = {
 
 export const ARCHIVE_TABS = {
   container: "flex flex-wrap gap-1 rounded-[20px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.88))] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(2,6,23,0.78))]",
-  active:
-    "border border-sky-200 bg-[linear-gradient(180deg,rgba(240,249,255,1),rgba(224,242,254,0.92))] text-sky-700 shadow-sm shadow-sky-100/80 dark:border-sky-700 dark:bg-[linear-gradient(180deg,rgba(8,47,73,0.9),rgba(12,74,110,0.52))] dark:text-sky-300 dark:shadow-none",
-  idle:
-    "border border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white/90 hover:text-slate-900 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-900/80 dark:hover:text-slate-100",
+  idleBase:
+    "border border-transparent bg-transparent text-slate-600 dark:text-slate-300",
 };
 
 export function ArchiveLayerHeader({
   icon: Icon,
   title,
   description,
+  tone = "sky",
 }: {
   icon: LucideIcon;
   title: string;
   description: string;
+  tone?: ArchiveTone;
 }) {
+  const toneClasses = resolveArchiveToneClasses(tone);
+
   return (
     <div className="mb-5 px-2">
       <div className="flex items-center gap-3">
         <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-slate-700" />
-        <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-300">
-          <Icon className="h-3.5 w-3.5 text-sky-500 dark:text-sky-300" />
+        <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] shadow-sm ${toneClasses.headerChip}`}>
+          <Icon className={`h-3.5 w-3.5 ${toneClasses.headerIcon}`} />
           {title}
         </div>
         <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-slate-700" />
@@ -81,13 +226,17 @@ export function ArchiveDiagnosticsCard({
   title,
   children,
   className = "",
+  tone,
 }: {
   title: string;
   children: ReactNode;
   className?: string;
+  tone?: ArchiveTone;
 }) {
+  const toneClasses = tone ? resolveArchiveToneClasses(tone) : null;
+
   return (
-    <div className={`rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60 ${className}`.trim()}>
+    <div className={`rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-950/60 ${toneClasses?.diagnostics ?? ""} ${className}`.trim()}>
       <div className="font-medium">{title}</div>
       <div className="mt-2">{children}</div>
     </div>
@@ -344,15 +493,17 @@ export function ArchiveEditorPane({
   header,
   body,
   footer,
+  tone = "sky",
 }: {
   header: ReactNode;
   body: ReactNode;
   footer?: ReactNode;
+  tone?: ArchiveTone;
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col px-6 py-5">
       {header}
-      <ArchiveSectionCard>{body}</ArchiveSectionCard>
+      <ArchiveSectionCard tone={tone}>{body}</ArchiveSectionCard>
       {footer ? <div className="mt-4">{footer}</div> : null}
     </div>
   );
@@ -365,6 +516,7 @@ export function ArchiveSplitPanel({
   left,
   right,
   columns = "lg:grid-cols-[300px_1fr]",
+  tone = "sky",
 }: {
   icon: LucideIcon;
   title: string;
@@ -372,9 +524,10 @@ export function ArchiveSplitPanel({
   left: ReactNode;
   right: ReactNode;
   columns?: string;
+  tone?: ArchiveTone;
 }) {
   return (
-    <ArchiveTabFrame icon={icon} title={title} description={description}>
+    <ArchiveTabFrame icon={icon} title={title} description={description} tone={tone}>
       <ArchiveInfoGrid className={columns}>
         {left}
         {right}
@@ -403,16 +556,19 @@ export function ArchiveActionButton({
   onClick,
   disabled = false,
   variant = "secondary",
+  tone = "sky",
 }: {
   children: ReactNode;
   onClick: () => void;
   disabled?: boolean;
   variant?: "secondary" | "primary";
+  tone?: ArchiveTone;
 }) {
+  const toneClasses = resolveArchiveToneClasses(tone);
   const className =
     variant === "primary"
-      ? "rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-600 dark:hover:bg-sky-500"
-      : "rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300";
+      ? `rounded-full px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${toneClasses.actionPrimary}`
+      : `rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 ${toneClasses.actionSecondary}`;
 
   return (
     <button type="button" onClick={onClick} disabled={disabled} className={className}>
@@ -421,9 +577,17 @@ export function ArchiveActionButton({
   );
 }
 
-export function ArchiveSectionCard({ children }: { children: ReactNode }) {
+export function ArchiveSectionCard({
+  children,
+  tone = "sky",
+}: {
+  children: ReactNode;
+  tone?: ArchiveTone;
+}) {
+  const toneClasses = resolveArchiveToneClasses(tone);
+
   return (
-    <div className={`relative overflow-hidden rounded-[26px] border border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.05)] transition-colors before:pointer-events-none before:absolute before:inset-x-6 before:top-0 before:h-0.5 before:rounded-full before:bg-sky-400/85 after:pointer-events-none after:absolute after:inset-y-5 after:left-0 after:w-1 after:rounded-r-full after:bg-sky-400/95 dark:border-slate-800 dark:bg-slate-950/80 dark:before:bg-sky-300/80 dark:after:bg-sky-300/85 ${ARCHIVE_SPACING.cardBody}`}>
+    <div className={`relative overflow-hidden rounded-[26px] border border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.05)] transition-colors dark:border-slate-800 dark:bg-slate-950/80 ${toneClasses.sectionAccent} before:pointer-events-none before:absolute before:inset-x-6 before:top-0 before:h-0.5 before:rounded-full after:pointer-events-none after:absolute after:inset-y-5 after:left-0 after:w-1 after:rounded-r-full ${ARCHIVE_SPACING.cardBody}`}>
       {children}
     </div>
   );
@@ -434,15 +598,17 @@ export function ArchiveTabFrame({
   title,
   description,
   children,
+  tone = "sky",
 }: {
   icon: LucideIcon;
   title: string;
   description: string;
   children: ReactNode;
+  tone?: ArchiveTone;
 }) {
   return (
     <div className={ARCHIVE_SPACING.page}>
-      <ArchiveLayerHeader icon={icon} title={title} description={description} />
+      <ArchiveLayerHeader icon={icon} title={title} description={description} tone={tone} />
       {children}
     </div>
   );
@@ -458,28 +624,33 @@ export function ArchiveSegmentedTabButton({
   label,
   description,
   onClick,
+  tone = "sky",
 }: {
   active: boolean;
   icon: LucideIcon;
   label: string;
   description: string;
   onClick: () => void;
+  tone?: ArchiveTone;
 }) {
+  const toneClasses = resolveArchiveToneClasses(tone);
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`group min-w-[128px] flex-1 rounded-[15px] px-3 py-2 text-left transition ${active ? ARCHIVE_TABS.active : ARCHIVE_TABS.idle}`}
+      data-tone={tone}
+      className={`group min-w-[128px] flex-1 rounded-[15px] px-3 py-2 text-left transition ${active ? toneClasses.tabActive : `${ARCHIVE_TABS.idleBase} ${toneClasses.tabIdleHover}`}`}
     >
       <div className="flex items-start gap-3">
-        <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border transition ${active ? "border-sky-200 bg-white text-sky-600 dark:border-sky-700 dark:bg-slate-950/60 dark:text-sky-300" : "border-slate-200 bg-white/90 text-slate-500 group-hover:border-slate-300 group-hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:group-hover:border-slate-600 dark:group-hover:text-slate-100"}`}>
+        <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border transition ${active ? toneClasses.tabIconActive : toneClasses.tabIconIdle}`}>
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0">
-          <div className={`text-sm font-semibold tracking-tight ${active ? "text-sky-900 dark:text-sky-100" : "text-slate-800 dark:text-slate-100"}`}>
+          <div className={`text-sm font-semibold tracking-tight ${active ? toneClasses.tabLabelActive : "text-slate-800 dark:text-slate-100"}`}>
             {label}
           </div>
-          <div className={`mt-1 text-xs leading-5 ${active ? "text-sky-700/90 dark:text-sky-200/80" : "text-slate-500 dark:text-slate-400"}`}>
+          <div className={`mt-1 text-xs leading-5 ${active ? toneClasses.tabDescriptionActive : "text-slate-500 dark:text-slate-400"}`}>
             {description}
           </div>
         </div>

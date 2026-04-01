@@ -65,7 +65,7 @@ import { buildMemoryConfigStatusSummary, memoryConfigStatusMessageKey, type Memo
 import { MemoryResourcesPanel } from "./MemoryResourcesPanel";
 import { MemoryDocumentsDesktop } from "./MemoryDocumentsDesktop";
 import { MemoryDocumentsMobile } from "./MemoryDocumentsMobile";
-import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ArchiveNotice, ArchivePageHeader, ArchivePane, ArchiveSectionCard, ArchiveSegmentedTabButton, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch } from "./memoryArchiveUi";
+import { ARCHIVE_SPACING, ARCHIVE_SURFACE, ArchiveNotice, ArchivePageHeader, ArchivePane, ArchiveSectionCard, ArchiveSegmentedTabButton, ArchiveStatCard, ArchiveTabBar, ArchiveTabFrame, ArchiveTabSwitch, type ArchiveTone } from "./memoryArchiveUi";
 import { buildSemanticMemoryEntries, buildSemanticMindMapModel } from "./memorySemanticState";
 import { buildSemanticCorpusDebug } from "./memorySemanticState";
 
@@ -120,6 +120,14 @@ type DocumentSearchState = {
   feedbackState: "idle" | "matched" | "empty";
   source: DocumentSearchOrigin;
   hint: string | null;
+};
+
+const MEMORY_SECTION_TONES: Record<MemorySection, ArchiveTone> = {
+  overview: "sky",
+  documents: "violet",
+  footprints: "emerald",
+  search: "amber",
+  knowledge: "rose",
 };
 
 function sourceTone(source: string) {
@@ -1236,9 +1244,9 @@ export function MemoryView() {
 
   const memoryPanels: Record<MemorySection, ReactNode> = {
     overview: (
-      <ArchiveTabFrame icon={BookOpen} title={t("memory.tab.overview")} description={t("memory.overview.sources.title")}>
+      <ArchiveTabFrame icon={BookOpen} title={t("memory.tab.overview")} description={t("memory.overview.sources.title")} tone={MEMORY_SECTION_TONES.overview}>
         <div className={`grid lg:grid-cols-[1.15fr_0.85fr] ${ARCHIVE_SPACING.sectionGap}`}>
-          <ArchiveSectionCard>
+          <ArchiveSectionCard tone={MEMORY_SECTION_TONES.overview}>
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
               <Network className="w-4 h-4 text-sky-500" />
               {t("memory.overview.agent.title")}
@@ -1270,6 +1278,7 @@ export function MemoryView() {
     documents: (
       <>
         <MemoryDocumentsDesktop
+          tone={MEMORY_SECTION_TONES.documents}
           title={t("memory.documents.title")}
           description={documentSearchState.hint ?? t("memory.documents.desc")}
           documentSearchInput={documentSearchState.input}
@@ -1320,6 +1329,7 @@ export function MemoryView() {
         />
 
         <MemoryDocumentsMobile
+          tone={MEMORY_SECTION_TONES.documents}
           visibleDocuments={visibleDocuments}
           selectedDocumentName={selectedDocumentName}
           selectedAgentId={selectedAgentId}
@@ -1333,6 +1343,7 @@ export function MemoryView() {
     footprints: (
       <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} hide-scrollbar ${ARCHIVE_SPACING.page}`}>
         <MemoryFootprintsPanel
+          tone={MEMORY_SECTION_TONES.footprints}
           timelineAccess={timelineAccess}
           timelineResult={timelineResult}
           timelineProbeRange={timelineProbeRange}
@@ -1367,6 +1378,7 @@ export function MemoryView() {
     search: (
       <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
         <MemorySearchPanel
+          tone={MEMORY_SECTION_TONES.search}
           healthProbeSummary={healthProbeSummary}
           runtimeStatusSummary={runtimeStatusSummary}
           isLocalGatewaySession={isLocalGatewaySession}
@@ -1401,6 +1413,7 @@ export function MemoryView() {
     knowledge: (
       <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
         <MemoryKnowledgePanel
+          tone={MEMORY_SECTION_TONES.knowledge}
           memoryResult={memoryResult}
           memoryStatus={memoryStatus}
           runtimeStatus={memoryRuntimeStatus}
@@ -1452,24 +1465,35 @@ export function MemoryView() {
       <div className="mb-2">
         <ArchiveTabBar>
           {([
-            ["overview", t("memory.tab.overview"), t("memory.tab.tooltip.overview"), BookOpen],
-            ["documents", t("memory.tab.documents"), t("memory.tab.tooltip.documents"), FileText],
-            ["footprints", t("memory.tab.footprints"), t("memory.tab.tooltip.footprints"), Calendar],
-            ["search", t("memory.tab.search"), t("memory.tab.tooltip.search"), Search],
-            ["knowledge", t("memory.tab.knowledge"), t("memory.tab.tooltip.knowledge"), BrainCircuit],
-          ] as const).map(([section, label, description, Icon]) => {
+            { section: "overview", label: t("memory.tab.overview"), description: t("memory.tab.tooltip.overview"), icon: BookOpen, tone: MEMORY_SECTION_TONES.overview },
+            { section: "documents", label: t("memory.tab.documents"), description: t("memory.tab.tooltip.documents"), icon: FileText, tone: MEMORY_SECTION_TONES.documents },
+            { section: "footprints", label: t("memory.tab.footprints"), description: t("memory.tab.tooltip.footprints"), icon: Calendar, tone: MEMORY_SECTION_TONES.footprints },
+            { section: "search", label: t("memory.tab.search"), description: t("memory.tab.tooltip.search"), icon: Search, tone: MEMORY_SECTION_TONES.search },
+            { section: "knowledge", label: t("memory.tab.knowledge"), description: t("memory.tab.tooltip.knowledge"), icon: BrainCircuit, tone: MEMORY_SECTION_TONES.knowledge },
+          ] as const).map(({ section, label, description, icon: Icon, tone }) => {
             const active = activeSection === section;
             return (
               <div key={section} className="group relative">
                 <ArchiveSegmentedTabButton
                   active={active}
                   icon={Icon}
+                  tone={tone}
                   label={label}
                   description=""
                   onClick={() => setActiveSection(section)}
                 />
                 <div className="pointer-events-none absolute right-3 top-3 z-10">
-                  <Info className="h-3.5 w-3.5 text-slate-400 transition group-hover:text-sky-500 dark:text-slate-500 dark:group-hover:text-sky-400" />
+                  <Info className={`h-3.5 w-3.5 text-slate-400 transition dark:text-slate-500 ${
+                    tone === "violet"
+                      ? "group-hover:text-violet-500 dark:group-hover:text-violet-400"
+                      : tone === "emerald"
+                        ? "group-hover:text-emerald-500 dark:group-hover:text-emerald-400"
+                        : tone === "amber"
+                          ? "group-hover:text-amber-500 dark:group-hover:text-amber-400"
+                          : tone === "rose"
+                            ? "group-hover:text-rose-500 dark:group-hover:text-rose-400"
+                            : "group-hover:text-sky-500 dark:group-hover:text-sky-400"
+                  }`} />
                 </div>
                 <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600 shadow-lg group-hover:block dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                   {description}

@@ -1,9 +1,11 @@
 import { FileDigit, Network, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import type { GatewayAgentFileEntry } from "../../contexts/OpenClawContext";
-import { ArchiveCapsule, ArchiveLayerHeader } from "./memoryArchiveUi";
+import { ArchiveCapsule, ArchiveLayerHeader, type ArchiveTone } from "./memoryArchiveUi";
+import { resolveSelectedToneSurface, resolveViewToneClasses } from "./viewTone";
 
 type MemoryDocumentsMobileProps = {
+  tone?: ArchiveTone;
   visibleDocuments: GatewayAgentFileEntry[];
   selectedDocumentName: string;
   selectedAgentId: string;
@@ -14,6 +16,7 @@ type MemoryDocumentsMobileProps = {
 };
 
 export function MemoryDocumentsMobile({
+  tone = "sky",
   visibleDocuments,
   selectedDocumentName,
   selectedAgentId,
@@ -22,13 +25,19 @@ export function MemoryDocumentsMobile({
   getAgentBadge,
   onSelectDocument,
 }: MemoryDocumentsMobileProps) {
+  const tonePalette = resolveViewToneClasses(tone);
+  const toneClasses = {
+    selected: resolveSelectedToneSurface(tone),
+    focus: tone === "violet" ? "focus:ring-violet-500" : tone === "emerald" ? "focus:ring-emerald-500" : tone === "amber" ? "focus:ring-amber-500" : tone === "rose" ? "focus:ring-rose-500" : "focus:ring-sky-500",
+    chip: tonePalette.softBadge,
+  };
   return (
     <div className="md:hidden flex-1 overflow-auto hide-scrollbar px-4 pb-4">
-      <ArchiveLayerHeader icon={FileDigit} title={t("memory.documents.title")} description={t("memory.documents.desc")} />
+      <ArchiveLayerHeader icon={FileDigit} title={t("memory.documents.title")} description={t("memory.documents.desc")} tone={tone} />
       <ArchiveCapsule>
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           <div className="flex items-center gap-2">{getAgentBadge(selectedAgentId)}</div>
-          <span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1 font-medium text-cyan-700 dark:border-cyan-800/50 dark:bg-cyan-900/20 dark:text-cyan-300">
+          <span className={`rounded-full border px-3 py-1 font-medium ${toneClasses.chip}`}>
             {workspaceLabel}
           </span>
           <span className="rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
@@ -48,7 +57,7 @@ export function MemoryDocumentsMobile({
           </div>
         ) : (
           visibleDocuments.map((item) => (
-            <div key={item.name} tabIndex={0} onClick={() => onSelectDocument(item.name)} className={`group relative cursor-pointer overflow-hidden rounded-2xl border p-4 shadow-sm transition-transform active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-sky-500 ${item.name === selectedDocumentName ? "border-sky-300 bg-sky-50 dark:border-sky-700 dark:bg-slate-800" : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"}`}>
+            <div key={item.name} tabIndex={0} onClick={() => onSelectDocument(item.name)} className={`group relative cursor-pointer overflow-hidden rounded-2xl border p-4 shadow-sm transition-transform active:scale-[0.98] focus:outline-none focus:ring-2 ${toneClasses.focus} ${item.name === selectedDocumentName ? toneClasses.selected : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"}`}>
               <div className="mb-2.5 flex items-start justify-between gap-3">
                 <div className="min-w-0 flex flex-col gap-1.5">
                   <div className="flex items-center gap-2">{getAgentBadge(selectedAgentId)}</div>
@@ -61,7 +70,7 @@ export function MemoryDocumentsMobile({
               <div className="mb-2 break-all text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">{item.name}</div>
               <p className="mb-4 line-clamp-3 text-[14px] leading-relaxed text-slate-700 dark:text-slate-300">{item.content ? item.content.slice(0, 120) : item.path}</p>
               <div className="flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
-                <span className="flex items-center gap-1 rounded border border-sky-100 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:border-sky-800/50 dark:bg-sky-900/30 dark:text-sky-300">
+                <span className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium ${toneClasses.chip}`}>
                   <FileDigit className="h-3 w-3" /> document
                 </span>
                 <div className="flex items-center gap-1.5 text-[11px] font-medium">

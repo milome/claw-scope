@@ -5,6 +5,7 @@ import type { GatewayAgentMemoryResult, GatewayAgentMemoryTimelineResult } from 
 import type { MemoryExternalSourceItem } from "./memoryState";
 import { buildMemoryResourceGroups } from "./memoryResourcesState";
 import { ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveInfoBlock, ArchiveNotice, ArchiveSectionCard, ArchiveSplitPanel, ArchiveStatCard } from "./memoryArchiveUi";
+import { resourceToneForGroup, resolveResourceToneClasses } from "./viewTone";
 
 type HealthProbeSummary = {
   provider: string;
@@ -89,12 +90,14 @@ export function MemoryResourcesPanel({
     }
     return current;
   }, null);
+  const selectedLeafGroup = groups.find((group) => group.leaves.some((leaf) => leaf.id === selectedLeafId)) ?? null;
+  const selectedToneClasses = resolveResourceToneClasses(resourceToneForGroup(selectedLeafGroup?.id ?? "resources:runtime"));
 
   if (compact) {
     return (
-      <ArchiveSectionCard>
+      <ArchiveSectionCard tone="sky">
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          <FolderTree className="w-4 h-4 text-sky-500" />
+          <FolderTree className="w-4 h-4 text-sky-500 dark:text-sky-400" />
           {t("memory.resources.title")}
         </div>
         <div className="grid gap-3 md:grid-cols-2">
@@ -123,17 +126,18 @@ export function MemoryResourcesPanel({
         <div className="mt-4 space-y-3">
           {groups.map((group) => {
             const Icon = groupIcon(group.id);
+            const toneClasses = resolveResourceToneClasses(resourceToneForGroup(group.id));
             const expanded = expandedGroupIds[group.id] ?? false;
             return (
-              <div key={group.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div key={group.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <button
                   type="button"
                   onClick={() => setExpandedGroupIds((current) => ({ ...current, [group.id]: !expanded }))}
                   className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-950/60">
-                      <Icon className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+                    <div className={`rounded-xl border p-2 ${toneClasses.iconWrap}`}>
+                      <Icon className={`h-4 w-4 ${toneClasses.icon}`} />
                     </div>
                     <div>
                       <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t(group.titleKey)}</div>
@@ -159,9 +163,9 @@ export function MemoryResourcesPanel({
                               setSelectedLeafId(leaf.id);
                               onOpenResource({ kind: leaf.kind, label: leaf.label, meta: leaf.meta });
                             }}
-                            className={`flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition ${selectedLeafId === leaf.id ? "border-sky-300 bg-sky-50 dark:border-sky-700 dark:bg-slate-800" : "border-slate-200 bg-slate-50 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-slate-700"}`}
+                            className={`flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition ${selectedLeafId === leaf.id ? toneClasses.selected : `border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40 ${toneClasses.hover}`}`}
                           >
-                            <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-sky-500" />
+                            <div className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${toneClasses.dot}`} />
                             <div className="min-w-0">
                               <div className="break-all text-sm font-medium text-slate-900 dark:text-slate-100">{leaf.label}</div>
                               {leaf.meta ? <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{leaf.meta}</div> : null}
@@ -194,9 +198,9 @@ export function MemoryResourcesPanel({
         description={t("memory.resources.desc")}
         columns="lg:grid-cols-[1.05fr_0.95fr]"
         left={(
-          <ArchiveSectionCard>
+          <ArchiveSectionCard tone="sky">
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-              <FolderTree className="w-4 h-4 text-sky-500" />
+              <FolderTree className="w-4 h-4 text-sky-500 dark:text-sky-400" />
               {t("memory.resources.title")}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
@@ -223,7 +227,7 @@ export function MemoryResourcesPanel({
             <div className="mt-4 flex items-center justify-end">
               <button
                 onClick={onOpenDiagnostics}
-                className="shrink-0 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-sky-300 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
+                className={`shrink-0 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 ${selectedToneClasses.action}`}
               >
                 {t("memory.resources.openDiagnostics")}
               </button>
@@ -232,6 +236,7 @@ export function MemoryResourcesPanel({
             <div className="space-y-3">
               {groups.map((group) => {
                 const Icon = groupIcon(group.id);
+                const toneClasses = resolveResourceToneClasses(resourceToneForGroup(group.id));
                 const expanded = expandedGroupIds[group.id] ?? false;
                 return (
                   <div key={group.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -241,8 +246,8 @@ export function MemoryResourcesPanel({
                       className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
                     >
                       <div className="flex items-start gap-3">
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-950/60">
-                          <Icon className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+                        <div className={`rounded-xl border p-2 ${toneClasses.iconWrap}`}>
+                          <Icon className={`h-4 w-4 ${toneClasses.icon}`} />
                         </div>
                         <div>
                           <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t(group.titleKey)}</div>
@@ -268,9 +273,9 @@ export function MemoryResourcesPanel({
                                   setSelectedLeafId(leaf.id);
                                   onOpenResource({ kind: leaf.kind, label: leaf.label, meta: leaf.meta });
                                 }}
-                                className={`flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition ${selectedLeafId === leaf.id ? "border-sky-300 bg-sky-50 dark:border-sky-700 dark:bg-slate-800" : "border-slate-200 bg-slate-50 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-slate-700"}`}
+                                className={`flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition ${selectedLeafId === leaf.id ? toneClasses.selected : `border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40 ${toneClasses.hover}`}`}
                               >
-                                <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-sky-500" />
+                                <div className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${toneClasses.dot}`} />
                                 <div className="min-w-0">
                                   <div className="break-all text-sm font-medium text-slate-900 dark:text-slate-100">{leaf.label}</div>
                                   {leaf.meta ? <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{leaf.meta}</div> : null}
@@ -288,8 +293,8 @@ export function MemoryResourcesPanel({
           </ArchiveSectionCard>
         )}
         right={(
-          <ArchiveSectionCard>
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+          <ArchiveSectionCard tone="sky">
+            <div className={`rounded-3xl border p-4 ${selectedToneClasses.iconWrap}`}>
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{t("memory.resources.selected")}</div>
               <div className="mt-2 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">{selectedLeaf?.label ?? t("memory.resources.noneSelected")}</div>
               {selectedLeaf?.meta ? <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{selectedLeaf.meta}</div> : null}
@@ -312,13 +317,13 @@ export function MemoryResourcesPanel({
             </div>
 
             {healthProbeSummary ? (
-              <ArchiveDiagnosticsCard title={t("memory.diag.healthProbe")} className="mt-4 text-xs">
+              <ArchiveDiagnosticsCard title={t("memory.diag.healthProbe")} className="mt-4 text-xs" tone={resourceToneForGroup(selectedLeafGroup?.id ?? "resources:runtime")}>
                 <div>{healthProbeSummary.provider} / {healthProbeSummary.model}</div>
                 <div className="mt-1">{t("memory.resources.embeddings")}: {healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")}</div>
               </ArchiveDiagnosticsCard>
             ) : null}
 
-            <ArchiveDiagnosticsCard title={t("memory.resources.payload")} className="mt-4 text-sm leading-7 text-slate-800 dark:text-slate-100">
+            <ArchiveDiagnosticsCard title={t("memory.resources.payload")} className="mt-4 text-sm leading-7 text-slate-800 dark:text-slate-100" tone={resourceToneForGroup(selectedLeafGroup?.id ?? "resources:runtime")}>
               {selectedLeaf?.content ? selectedLeaf.content : t("memory.resources.payloadEmpty")}
             </ArchiveDiagnosticsCard>
 
@@ -336,15 +341,16 @@ export function MemoryResourcesPanel({
       <ArchiveDetailPane>
         <ArchiveEditorPane
           header={<div className="text-sm font-semibold">{t("memory.resources.phase1Status")}</div>}
+          tone={resourceToneForGroup(selectedLeafGroup?.id ?? "resources:runtime")}
           body={(
             <>
-              <ArchiveDiagnosticsCard title={t("memory.resources.phase1Outcome")}>
+              <ArchiveDiagnosticsCard title={t("memory.resources.phase1Outcome")} tone={resourceToneForGroup(selectedLeafGroup?.id ?? "resources:runtime")}>
                 <div className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
                   <div>{t("memory.resources.phase1OutcomeLine1")}</div>
                   <div>{t("memory.resources.phase1OutcomeLine2")}</div>
                 </div>
               </ArchiveDiagnosticsCard>
-              <ArchiveDiagnosticsCard title={t("memory.resources.panelScope")}>
+              <ArchiveDiagnosticsCard title={t("memory.resources.panelScope")} tone={resourceToneForGroup(selectedLeafGroup?.id ?? "resources:runtime")}>
                 <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
                   <div>{t("memory.resources.scopeLine1")}</div>
                   <div>{t("memory.resources.scopeLine2")}</div>

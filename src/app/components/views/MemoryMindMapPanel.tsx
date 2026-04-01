@@ -2,11 +2,12 @@ import { BrainCircuit, Cpu, Orbit, Sparkles, Workflow } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import type { SemanticCluster, SemanticConcept, SemanticMindMapModel } from "./memorySemanticTypes";
-import { ArchiveDiagnosticsCard, ArchiveInfoBlock, ArchiveLayerHeader, ArchiveNotice, ArchiveSectionCard } from "./memoryArchiveUi";
+import { ArchiveDiagnosticsCard, ArchiveInfoBlock, ArchiveLayerHeader, ArchiveNotice, ArchiveSectionCard, type ArchiveTone } from "./memoryArchiveUi";
 import { debugReasonLabel, sourceKindLabel } from "./memoryDisplayLabels";
 import { LabelValueList } from "./LabelValueList";
 
 type MemoryMindMapPanelProps = {
+  tone?: ArchiveTone;
   model: SemanticMindMapModel;
   t: (key: string, ...args: (string | number)[]) => string;
   showDebug: boolean;
@@ -112,7 +113,7 @@ function buildFloatingConcepts(anchors: SemanticClusterAnchor[]) {
   );
 }
 
-export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenEvidence }: MemoryMindMapPanelProps) {
+export function MemoryMindMapPanel({ tone = "sky", model, t, showDebug, onToggleDebug, onOpenEvidence }: MemoryMindMapPanelProps) {
   const anchors = useMemo(() => buildClusterAnchors(model), [model]);
   const floatingConcepts = useMemo(() => buildFloatingConcepts(anchors), [anchors]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>(anchors[0]?.cluster.id ?? model.concepts[0]?.id ?? "");
@@ -164,10 +165,11 @@ export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenE
         icon={BrainCircuit}
         title={t("memory.tab.knowledge")}
         description={t("memory.knowledge.note")}
+        tone={tone}
       />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.95fr)_minmax(320px,0.72fr)]">
-        <ArchiveSectionCard>
+        <ArchiveSectionCard tone={tone}>
             <div className="mb-3 flex items-start justify-between gap-3 rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,rgba(240,249,255,0.95),rgba(236,253,245,0.88))] p-4 dark:border-sky-900/60 dark:bg-[linear-gradient(135deg,rgba(12,74,110,0.2),rgba(6,95,70,0.14))]">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700 dark:border-sky-800/80 dark:bg-slate-950/60 dark:text-sky-300">
@@ -198,7 +200,7 @@ export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenE
               </button>
             </div>
 
-            <ArchiveDiagnosticsCard title={t("memory.mindmap.semanticSummary")} className="mb-3 text-xs">
+            <ArchiveDiagnosticsCard title={t("memory.mindmap.semanticSummary")} className="mb-3 text-xs" tone={tone}>
               <LabelValueList
                 className="md:grid-cols-2"
                 items={[

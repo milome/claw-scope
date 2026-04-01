@@ -54,6 +54,7 @@ import {
 } from "../../contexts/OpenClawContext";
 import { applyIdentityMetaToDocument } from "./profileIdentityDocument";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
+import { resolveViewToneClasses } from "./viewTone";
 
 type AgentStatusKey = "active" | "standby" | "sleeping";
 type Translate = (key: string, ...args: (string | number)[]) => string;
@@ -1949,25 +1950,12 @@ function ProfileSectionHeader({
   isDirty?: boolean;
   dirtyLabel: string;
 }) {
-  const toneClasses =
-    tone === "violet"
-      ? {
-          badge:
-            "border-violet-100 bg-violet-50 text-violet-500 shadow-sm dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300",
-          title: "text-slate-900 dark:text-slate-100",
-          meta: "text-slate-400 dark:text-slate-500",
-        }
-      : {
-          badge:
-            "border-sky-100 bg-sky-50 text-sky-500 shadow-sm dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300",
-          title: "text-slate-900 dark:text-slate-100",
-          meta: "text-slate-500 dark:text-slate-400",
-        };
+  const toneClasses = resolveViewToneClasses(tone);
 
   return (
     <div className="flex items-start gap-3">
       <span
-        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${toneClasses.badge}`}
+        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border shadow-sm ${toneClasses.softBadge}`}
       >
         <Icon className="h-4 w-4" />
       </span>
@@ -2001,14 +1989,11 @@ function ProfileSectionCard({
   className?: string;
   children: ReactNode;
 }) {
-  const toneClasses =
-    tone === "violet"
-      ? "border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.05)] before:bg-violet-400/85 after:bg-violet-400/95 dark:border-slate-800 dark:bg-slate-950/80 dark:before:bg-violet-300/80 dark:after:bg-violet-300/85"
-      : "border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.05)] before:bg-sky-400/85 after:bg-sky-400/95 dark:border-slate-800 dark:bg-slate-950/80 dark:before:bg-sky-300/80 dark:after:bg-sky-300/85";
+  const toneClasses = resolveViewToneClasses(tone);
 
   return (
     <div
-      className={`relative overflow-hidden rounded-[26px] border p-4 transition-colors before:pointer-events-none before:absolute before:inset-x-6 before:top-0 before:h-0.5 before:rounded-full after:pointer-events-none after:absolute after:inset-y-5 after:left-0 after:w-1 after:rounded-r-full rtl:after:left-auto rtl:after:right-0 rtl:after:rounded-l-full rtl:after:rounded-r-none md:p-5 ${toneClasses} ${className}`}
+      className={`relative overflow-hidden rounded-[26px] border border-slate-200/90 bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.05)] transition-colors dark:border-slate-800 dark:bg-slate-950/80 before:pointer-events-none before:absolute before:inset-x-6 before:top-0 before:h-0.5 before:rounded-full after:pointer-events-none after:absolute after:inset-y-5 after:left-0 after:w-1 after:rounded-r-full rtl:after:left-auto rtl:after:right-0 rtl:after:rounded-l-full rtl:after:rounded-r-none md:p-5 ${toneClasses.cardAccent} ${className}`}
     >
       {children}
     </div>
@@ -2017,19 +2002,22 @@ function ProfileSectionCard({
 
 function ProfileActionButton({
   variant,
+  tone = "sky",
   disabled = false,
   onClick,
   children,
 }: {
   variant: "secondary" | "primary";
+  tone?: "sky" | "violet";
   disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
+  const toneClasses = resolveViewToneClasses(tone);
   const className =
     variant === "primary"
       ? "inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
-      : "rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-sky-200 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300";
+      : `rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 ${toneClasses.actionSecondary}`;
 
   return (
     <button
@@ -2049,6 +2037,7 @@ function ProfileSectionActions({
   isSaving,
   reloadDisabled,
   editDisabled,
+  tone = "sky",
   onReload,
   onEdit,
   onCancel,
@@ -2064,6 +2053,7 @@ function ProfileSectionActions({
   isSaving: boolean;
   reloadDisabled: boolean;
   editDisabled: boolean;
+  tone?: "sky" | "violet";
   onReload: () => void;
   onEdit: () => void;
   onCancel: () => void;
@@ -2082,6 +2072,7 @@ function ProfileSectionActions({
     <div className="flex flex-wrap items-center gap-2 md:justify-end">
       <ProfileActionButton
         variant="secondary"
+        tone={tone}
         onClick={onReload}
         disabled={reloadDisabled}
       >
@@ -2091,6 +2082,7 @@ function ProfileSectionActions({
         <>
           <ProfileActionButton
             variant="secondary"
+            tone={tone}
             onClick={onCancel}
             disabled={isSaving}
           >
@@ -2098,6 +2090,7 @@ function ProfileSectionActions({
           </ProfileActionButton>
           <ProfileActionButton
             variant="primary"
+            tone={tone}
             onClick={onSave}
             disabled={isSaving}
           >
@@ -2108,6 +2101,7 @@ function ProfileSectionActions({
       ) : (
         <ProfileActionButton
           variant="primary"
+          tone={tone}
           onClick={onEdit}
           disabled={editDisabled}
         >
@@ -2133,36 +2127,16 @@ function ProfileStatCard({
   labelIcon: LucideIcon;
   metricIcon: LucideIcon;
 }) {
-  const toneClasses =
-    tone === "violet"
-      ? {
-          card: "border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.05)] before:bg-violet-400/85 hover:border-violet-200 dark:border-slate-800 dark:bg-slate-950/80 dark:before:bg-violet-300/75 dark:hover:border-violet-800",
-          labelIcon: "text-violet-500 dark:text-violet-400",
-          metricBadge:
-            "bg-violet-50 text-violet-500 shadow-sm dark:bg-violet-900/30 dark:text-violet-400",
-        }
-      : tone === "emerald"
-        ? {
-            card: "border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.05)] before:bg-emerald-400/85 hover:border-emerald-200 dark:border-slate-800 dark:bg-slate-950/80 dark:before:bg-emerald-300/75 dark:hover:border-emerald-800",
-            labelIcon: "text-emerald-500 dark:text-emerald-400",
-            metricBadge:
-              "bg-emerald-50 text-emerald-500 shadow-sm dark:bg-emerald-900/30 dark:text-emerald-400",
-          }
-        : {
-            card: "border-slate-200/90 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.05)] before:bg-sky-400/85 hover:border-sky-200 dark:border-slate-800 dark:bg-slate-950/80 dark:before:bg-sky-300/75 dark:hover:border-sky-800",
-            labelIcon: "text-sky-500 dark:text-sky-400",
-            metricBadge:
-              "bg-sky-50 text-sky-500 shadow-sm dark:bg-sky-900/30 dark:text-sky-400",
-          };
+  const toneClasses = resolveViewToneClasses(tone);
 
   return (
     <div
-      className={`relative min-w-[200px] snap-center flex-1 overflow-hidden rounded-[24px] border p-4 transition-colors before:pointer-events-none before:absolute before:inset-x-5 before:top-0 before:h-0.5 before:rounded-full md:min-w-0 md:p-5 ${toneClasses.card}`}
+      className={`relative min-w-[200px] snap-center flex-1 overflow-hidden rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.05)] transition-colors before:pointer-events-none before:absolute before:inset-x-5 before:top-0 before:h-0.5 before:rounded-full md:min-w-0 md:p-5 dark:border-slate-800 dark:bg-slate-950/80 ${toneClasses.cardAccent} ${toneClasses.cardHover}`}
     >
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 md:text-sm">
-            <LabelIcon className={`h-3.5 w-3.5 ${toneClasses.labelIcon}`} />
+            <LabelIcon className={`h-3.5 w-3.5 ${toneClasses.iconText}`} />
             {label}
           </div>
           <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 md:text-3xl">
@@ -3188,6 +3162,7 @@ export function ProfileView() {
                         </div>
                         <div className="mt-4">
                           <ProfileSectionActions
+                            tone="sky"
                             visible={hasRealAgents}
                             isEditing={isEditingIdentityMeta}
                             isSaving={isSavingIdentityMeta}
@@ -3219,8 +3194,8 @@ export function ProfileView() {
                       <div className="mb-5 px-2">
                         <div className="flex items-center gap-3">
                           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-slate-700" />
-                          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-300">
-                            <FileText className="h-3.5 w-3.5 text-sky-500 dark:text-sky-300" />
+                          <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] shadow-sm ${resolveViewToneClasses('sky').softBadge}`}>
+                            <FileText className={`h-3.5 w-3.5 ${resolveViewToneClasses('sky').iconText}`} />
                             {t("profile.documentLayer")}
                           </div>
                           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-slate-700" />
@@ -3241,6 +3216,7 @@ export function ProfileView() {
                             dirtyLabel={t("profile.unsaved")}
                           />
                           <ProfileSectionActions
+                            tone="sky"
                             visible={hasRealAgents}
                             isEditing={isEditingIdentityDoc}
                             isSaving={isSavingIdentityDoc}
@@ -3301,6 +3277,7 @@ export function ProfileView() {
                             dirtyLabel={t("profile.unsaved")}
                           />
                           <ProfileSectionActions
+                            tone="violet"
                             visible={hasRealAgents}
                             isEditing={isEditingSoulDoc}
                             isSaving={isSavingSoulDoc}
@@ -3353,11 +3330,11 @@ export function ProfileView() {
                   <div className="flex flex-col sm:flex-row gap-3 md:gap-4 mt-6 md:mt-8 md:px-7">
                     <button
                       onClick={() => navigate("/memory")}
-                      className="flex-1 bg-slate-900 dark:bg-sky-600 hover:bg-black dark:hover:bg-sky-500 text-white py-3 md:py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md md:group"
+                      className="flex-1 bg-slate-900 dark:bg-violet-600 hover:bg-black dark:hover:bg-violet-500 text-white py-3 md:py-2.5 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md md:group"
                     >
-                      <Database className="w-4 h-4 text-sky-400 dark:text-sky-100" />
+                      <Database className="w-4 h-4 text-violet-400 dark:text-violet-200" />
                       {t("profile.btn.memory")}
-                      <ArrowRight className="w-4 h-4 text-slate-400 dark:text-sky-100 md:group-hover:translate-x-1 rtl:md:group-hover:-translate-x-1 rtl:rotate-180 transition-transform" />
+                      <ArrowRight className="w-4 h-4 text-slate-500 dark:text-violet-200 md:group-hover:translate-x-1 rtl:md:group-hover:-translate-x-1 rtl:rotate-180 transition-transform" />
                     </button>
                     <button
                       onClick={() => navigate("/config")}
