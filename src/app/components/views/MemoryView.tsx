@@ -104,6 +104,8 @@ export type DiagnosticsDrawerState = {
   source: "search" | "knowledge";
 };
 
+type DocumentIndexRefreshState = "idle" | "done" | "error";
+
 function sourceTone(source: string) {
   if (source.includes("session")) {
     return "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800/70 dark:bg-violet-950/30 dark:text-violet-300";
@@ -241,7 +243,7 @@ export function MemoryView() {
   const [memoryRuntimeStatus, setMemoryRuntimeStatus] = useState<GatewayAgentMemoryRuntimeStatusResult | null>(null);
   const [diagnosticsDrawer, setDiagnosticsDrawer] = useState<DiagnosticsDrawerState>({ open: false, source: "search" });
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchRunning] = useState(false);
+  const [searchRunning, setSearchRunning] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchResult, setSearchResult] = useState<GatewayAgentMemorySearchResult | null>(null);
   const [searchDetail, setSearchDetail] = useState<SearchDetailState>(null);
@@ -261,6 +263,7 @@ export function MemoryView() {
   const [documentEvidenceExpanded, setDocumentEvidenceExpanded] = useState(false);
   const [documentSaveState, setDocumentSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [documentSaveMessage, setDocumentSaveMessage] = useState<string | null>(null);
+  const [documentIndexRefreshState, setDocumentIndexRefreshState] = useState<DocumentIndexRefreshState>("idle");
   const [isEditingDocument, setIsEditingDocument] = useState(false);
   const [timelineFocus] = useState<MemoryTimelineFocusFilter>("all");
   const [selectedTimelineEntryName, setSelectedTimelineEntryName] = useState("");
@@ -747,6 +750,7 @@ export function MemoryView() {
       return;
     }
 
+    setSearchRunning(true);
     setMemoryLoading(true);
     try {
       const result = await gatewayAgentMemorySearch(selectedAgentId, searchQuery, 20, "all");
@@ -758,6 +762,7 @@ export function MemoryView() {
       setSearchResult(null);
     } finally {
       setMemoryLoading(false);
+      setSearchRunning(false);
     }
   };
 
@@ -963,10 +968,12 @@ export function MemoryView() {
         resolveSelectedMemoryDocumentName(current, result.documents),
       );
       setDocumentSaveState("idle");
-      setDocumentSaveMessage(t("memory.documents.reload"));
+      setDocumentSaveMessage(t("memory.documents.reloadDone"));
+      setDocumentIndexRefreshState("idle");
     } catch (error) {
       setDocumentSaveState("error");
       setDocumentSaveMessage(error instanceof Error ? error.message : String(error));
+      setDocumentIndexRefreshState("idle");
     }
   };
 
@@ -977,6 +984,7 @@ export function MemoryView() {
 
     setDocumentSaveState("saving");
     setDocumentSaveMessage(null);
+    setDocumentIndexRefreshState("idle");
 
     try {
       await gatewayAgentMemorySet(selectedAgentId, selectedDocument.name, selectedDocumentContent);
@@ -988,12 +996,14 @@ export function MemoryView() {
       );
       setDocumentSaveState("saved");
       setDocumentSaveMessage(t("memory.documents.saved", selectedDocument.name));
+      setDocumentIndexRefreshState("done");
       setIsEditingDocument(false);
       toast.success(t("memory.documents.saved", selectedDocument.name));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setDocumentSaveState("error");
       setDocumentSaveMessage(message);
+      setDocumentIndexRefreshState("idle");
       toast.error(message);
     }
   };
@@ -1108,6 +1118,7 @@ export function MemoryView() {
           documentSearchSource={documentSearchSource}
           documentSaveMessage={documentSaveMessage}
           documentSaveState={documentSaveState}
+          documentIndexRefreshState={documentIndexRefreshState}
           selectedDocument={selectedDocument}
           selectedDocumentName={selectedDocumentName}
           selectedDocumentContent={selectedDocumentContent}
