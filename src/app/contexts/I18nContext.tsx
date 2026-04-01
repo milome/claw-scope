@@ -1434,6 +1434,21 @@ const DICT: Record<string, string[]> = {
   "memory.documents.reloadDone": ["Reloaded latest document state.", "已重新加载最新文档状态。", "已重新載入最新文件狀態。"],
   "memory.documents.save": ["Save", "保存", "儲存"],
   "memory.documents.saving": ["Saving...", "保存中...", "儲存中..."],
+  "memory.documents.index.incremental": [
+    "Local gateway detected. Saved content has triggered an incremental index refresh.",
+    "已检测到本地网关。保存后的内容已自动触发一次增量索引刷新。",
+    "已偵測到本地 Gateway。儲存後的內容已自動觸發一次增量索引刷新。",
+  ],
+  "memory.documents.index.full": [
+    "Local gateway detected. Indexed files were still zero, so save triggered a full index rebuild.",
+    "已检测到本地网关。由于 indexed files 仍然为 0，本次保存已自动触发一次全量重建。",
+    "已偵測到本地 Gateway。由於 indexed files 仍然為 0，本次儲存已自動觸發一次全量重建。",
+  ],
+  "memory.documents.index.remote": [
+    "Current session is remote. Save only updates the document; run the shown index command on the OpenClaw host if you need search results to catch up.",
+    "当前会话是远程连接。本次保存只更新文档；如果需要让搜索索引同步，请在 OpenClaw 所在机器上执行界面提示的索引命令。",
+    "目前工作階段是遠端連線。本次儲存只會更新文件；如果需要讓搜尋索引同步，請在 OpenClaw 所在主機上執行介面提示的索引命令。",
+  ],
   "memory.documents.searchPlaceholder": [
     "Search inside the selected root document",
     "在当前选中的根文档里搜索",
@@ -1636,6 +1651,16 @@ const DICT: Record<string, string[]> = {
     "如果你走的是 Ollama embeddings，请在 OpenClaw 所在机器上执行下面这组配置与建索引命令。",
     "如果你使用的是 Ollama embeddings，請在 OpenClaw 所在主機上執行下面這組設定與建索引命令。",
   ],
+  "memory.search.commands.localIncremental": [
+    "Local gateway detected. The current index is not empty, so ClawScope will prefer incremental refreshes on this machine.",
+    "已检测到本地网关。当前索引不是空的，ClawScope 会优先在这台机器上执行增量刷新。",
+    "已偵測到本地 Gateway。當前索引不是空的，ClawScope 會優先在這台主機上執行增量刷新。",
+  ],
+  "memory.search.commands.localForce": [
+    "Local gateway detected. Indexed files are still zero, so ClawScope will escalate to a full rebuild on this machine.",
+    "已检测到本地网关。indexed files 仍然是 0，ClawScope 会自动升级为在这台机器上执行一次全量重建。",
+    "已偵測到本地 Gateway。indexed files 仍然是 0，ClawScope 會自動升級為在這台主機上執行一次全量重建。",
+  ],
   "memory.search.commands.openai": [
     "This probe suggests a hosted embeddings provider is configured. Verify the provider credentials first, then run the index commands below on the OpenClaw host.",
     "这个探针更像是在提示你已经配置了托管型 embeddings provider。请先确认 provider 凭据，再在 OpenClaw 所在机器上执行下面的索引命令。",
@@ -1652,9 +1677,9 @@ const DICT: Record<string, string[]> = {
     "Provider 仍需處理",
   ],
   "memory.search.commands.generic": [
-    "The health probe is green, but index build is still a separate step. Run the index commands on the OpenClaw host and verify with `openclaw memory status --deep --index`.",
-    "健康探针变绿只代表 provider 可用，建索引仍然是单独步骤。请在 OpenClaw 所在机器上执行索引命令，并用 `openclaw memory status --deep --index` 复查。",
-    "健康探針變綠只代表 provider 可用，建立索引仍然是獨立步驟。請在 OpenClaw 所在主機上執行索引命令，並用 `openclaw memory status --deep --index` 再次確認。",
+    "The health probe is green, but indexing is still a separate step. Run the shown index command on the OpenClaw host, then verify with `openclaw memory status --agent <agent-id> --deep --index`.",
+    "健康探针变绿只代表 provider 可用，建索引仍然是单独步骤。请在 OpenClaw 所在机器上执行界面展示的索引命令，再用 `openclaw memory status --agent <agent-id> --deep --index` 复查。",
+    "健康探針變綠只代表 provider 可用，建立索引仍然是獨立步驟。請在 OpenClaw 所在主機上執行介面顯示的索引命令，再用 `openclaw memory status --agent <agent-id> --deep --index` 再次確認。",
   ],
   "memory.search.commands.copySuccess": [
     "Command guide copied to clipboard.",

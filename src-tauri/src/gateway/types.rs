@@ -251,6 +251,14 @@ pub struct GatewayAgentMemoryRuntimeStatusResult {
     pub raw_payload: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayAgentMemoryIndexResult {
+    pub agent_id: String,
+    pub forced: bool,
+    pub stdout: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GatewayAgentMemorySearchEntry {

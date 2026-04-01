@@ -194,6 +194,12 @@ export interface GatewayAgentMemoryRuntimeStatusResult {
   rawPayload: string;
 }
 
+export interface GatewayAgentMemoryIndexResult {
+  agentId: string;
+  forced: boolean;
+  stdout: string;
+}
+
 export interface GatewayAgentMemorySearchEntry {
   id: string;
   path: string;
@@ -627,6 +633,13 @@ export async function gatewayAgentMemorySet(
     agentId,
     name,
     content,
+  });
+}
+
+export async function gatewayAgentMemoryIndex(agentId: string, force = false) {
+  return invokeGateway<GatewayAgentMemoryIndexResult>('gateway_agent_memory_index', {
+    agentId,
+    force,
   });
 }
 

@@ -22,6 +22,7 @@ type MemoryDocumentsDesktopProps = {
   documentSaveMessage: string | null;
   documentSaveState: "idle" | "saving" | "saved" | "error";
   documentIndexRefreshState: "idle" | "done" | "error";
+  documentIndexRefreshDescription: string | null;
   selectedDocument: GatewayAgentFileEntry | null;
   selectedDocumentName: string;
   selectedDocumentContent: string;
@@ -61,6 +62,7 @@ export function MemoryDocumentsDesktop({
   documentSaveMessage,
   documentSaveState,
   documentIndexRefreshState,
+  documentIndexRefreshDescription,
   selectedDocument,
   selectedDocumentName,
   selectedDocumentContent,
@@ -219,7 +221,7 @@ export function MemoryDocumentsDesktop({
           )}
           {documentIndexRefreshState !== "idle" ? (
             <div className={`mt-3 rounded-2xl border px-3 py-2 text-xs ${documentIndexRefreshState === "error" ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300" : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300"}`}>
-              {documentSaveMessage}
+              {documentIndexRefreshDescription ?? documentSaveMessage}
             </div>
           ) : null}
         </ArchiveCapsule>

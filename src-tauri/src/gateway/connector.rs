@@ -34,6 +34,7 @@ use crate::gateway::{
     },
     types::{
         GatewayAgentFileEntry, GatewayAgentFileGetResult, GatewayAgentIdentityResult,
+        GatewayAgentMemoryIndexResult,
         GatewayAgentMemoryDiagnostics, GatewayAgentMemoryResult,
         GatewayAgentMemoryRuntimeStatusCore, GatewayAgentMemoryRuntimeStatusResult,
         GatewayAgentMemoryRuntimeStatusSourceCount, GatewayAgentMemoryStatusResult,
@@ -583,6 +584,56 @@ pub async fn agent_memory_runtime_status(
             source_counts,
         },
         raw_payload,
+    })
+}
+
+pub async fn agent_memory_index(
+    state: GatewayAppState,
+    agent_id: &str,
+    force: bool,
+) -> Result<GatewayAgentMemoryIndexResult, GatewayError> {
+    let endpoint = state
+        .session()
+        .await
+        .map(|session| session.endpoint.transport)
+        .ok_or_else(|| GatewayError::Transport {
+            message: "gateway not connected".to_string(),
+        })?;
+    if endpoint != GatewayTransportKind::LocalLoopback {
+        return Err(GatewayError::NotImplemented {
+            feature: "local-only memory index bridge for remote gateway sessions".to_string(),
+        });
+    }
+
+    let mut command = Command::new("openclaw");
+    command.args(["memory", "index", "--agent", agent_id]);
+    if force {
+        command.arg("--force");
+    }
+
+    let output = command.output().map_err(|error| GatewayError::Transport {
+        message: format!("failed to run local openclaw CLI: {error}"),
+    })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(GatewayError::Transport {
+            message: if stderr.is_empty() {
+                format!("local openclaw CLI exited with status {}", output.status)
+            } else {
+                format!("local openclaw CLI failed: {stderr}")
+            },
+        });
+    }
+
+    let stdout = String::from_utf8(output.stdout).map_err(|error| GatewayError::Protocol {
+        message: format!("failed decoding local openclaw CLI output: {error}"),
+    })?;
+
+    Ok(GatewayAgentMemoryIndexResult {
+        agent_id: agent_id.to_string(),
+        forced: force,
+        stdout: stdout.trim().to_string(),
     })
 }
 

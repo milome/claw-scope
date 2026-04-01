@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import {
   gatewayAgentMemoryGet,
   gatewayAgentMemorySet,
+  gatewayAgentMemoryIndex,
   gatewayAgentFileRead,
   gatewayAgentMemorySearch,
   gatewayAgentMemoryRuntimeStatus,
@@ -105,6 +106,8 @@ export type DiagnosticsDrawerState = {
 };
 
 type DocumentIndexRefreshState = "idle" | "done" | "error";
+
+type MemoryIndexStrategy = "incremental" | "full";
 
 function sourceTone(source: string) {
   if (source.includes("session")) {
@@ -705,7 +708,15 @@ export function MemoryView() {
     providerHint.includes("anthropic") ||
     providerHint.includes("gemini") ||
     providerHint.includes("azure");
+  const shouldForceReindex = (runtimeStatusSummary?.indexedFiles ?? 0) === 0;
+  const resolvedIndexStrategy: MemoryIndexStrategy = shouldForceReindex ? "full" : "incremental";
+  const resolvedAgentIdForGuide = selectedAgentId || "<agent-id>";
   const commandGuide = useMemo(() => {
+    const indexCommand = resolvedIndexStrategy === "full"
+      ? `openclaw memory index --agent ${resolvedAgentIdForGuide} --force`
+      : `openclaw memory index --agent ${resolvedAgentIdForGuide}`;
+    const statusCommand = `openclaw memory status --agent ${resolvedAgentIdForGuide} --deep --index`;
+
     if (isOllamaProvider) {
       return [
         "ollama serve",
@@ -714,17 +725,23 @@ export function MemoryView() {
         'openclaw config set models.providers.ollama.apiKey "ollama-local"',
         'openclaw config set models.providers.ollama.api "ollama"',
         'openclaw config set agents.defaults.memorySearch.provider "ollama"',
-        'openclaw memory index --agent guigui-2 --force',
-        'openclaw memory status --agent guigui-2 --deep --index',
+        indexCommand,
+        statusCommand,
       ].join("\n");
     }
 
     return [
-      'openclaw memory index --agent <agent-id> --force',
-      'openclaw memory status --agent <agent-id> --deep --index',
+      indexCommand,
+      statusCommand,
     ].join("\n");
-  }, [isOllamaProvider]);
+  }, [isOllamaProvider, resolvedAgentIdForGuide, resolvedIndexStrategy]);
   const commandGuideDescription = useMemo(() => {
+    if (isLocalGatewaySession) {
+      if (resolvedIndexStrategy === "full") {
+        return t("memory.search.commands.localForce");
+      }
+      return t("memory.search.commands.localIncremental");
+    }
     if (isOllamaProvider) {
       return t("memory.search.commands.ollama");
     }
@@ -732,7 +749,20 @@ export function MemoryView() {
       return t("memory.search.commands.openai");
     }
     return t("memory.search.commands.generic");
-  }, [isHostedProvider, isOllamaProvider, t]);
+  }, [isHostedProvider, isLocalGatewaySession, isOllamaProvider, resolvedIndexStrategy, t]);
+  const documentIndexRefreshDescription = useMemo(() => {
+    if (documentIndexRefreshState === "idle") {
+      return null;
+    }
+
+    if (!isLocalGatewaySession) {
+      return t("memory.documents.index.remote");
+    }
+
+    return resolvedIndexStrategy === "full"
+      ? t("memory.documents.index.full")
+      : t("memory.documents.index.incremental");
+  }, [documentIndexRefreshState, isLocalGatewaySession, resolvedIndexStrategy, t]);
 
   const getAgentBadge = (agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
@@ -988,6 +1018,12 @@ export function MemoryView() {
 
     try {
       await gatewayAgentMemorySet(selectedAgentId, selectedDocument.name, selectedDocumentContent);
+      if (isLocalGatewaySession) {
+        await gatewayAgentMemoryIndex(
+          selectedAgentId,
+          resolvedIndexStrategy === "full",
+        );
+      }
       const result = await gatewayAgentMemoryGet(selectedAgentId);
       setMemoryResult(result);
       setDrafts(createMemoryDrafts(result));
@@ -1119,6 +1155,7 @@ export function MemoryView() {
           documentSaveMessage={documentSaveMessage}
           documentSaveState={documentSaveState}
           documentIndexRefreshState={documentIndexRefreshState}
+          documentIndexRefreshDescription={documentIndexRefreshDescription}
           selectedDocument={selectedDocument}
           selectedDocumentName={selectedDocumentName}
           selectedDocumentContent={selectedDocumentContent}
