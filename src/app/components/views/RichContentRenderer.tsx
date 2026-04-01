@@ -25,35 +25,62 @@ export function buildRichContentBlocks(text: string): RichContentBlock[] {
     });
 }
 
-function renderHighlightedText(text: string, highlightTerm: string | null) {
+function buildHighlightedParts(text: string, highlightTerm: string | null) {
   if (!highlightTerm || !text.toLowerCase().includes(highlightTerm.toLowerCase())) {
-    return text;
+    return [{ text, isMatch: false }];
   }
 
-  return text.split(new RegExp(`(${highlightTerm})`, "ig")).map((part, partIndex) =>
-    part.toLowerCase() === highlightTerm.toLowerCase() ? (
-      <mark key={partIndex} className="rounded bg-sky-200 px-0.5 text-slate-900 dark:bg-sky-500/40 dark:text-sky-50">{part}</mark>
-    ) : (
-      <Fragment key={partIndex}>{part}</Fragment>
-    ),
-  );
+  const regex = new RegExp(`(${highlightTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "ig");
+  return text.split(regex).map((part) => ({
+    text: part,
+    isMatch: part.toLowerCase() === highlightTerm.toLowerCase(),
+  }));
 }
 
 export function RichContentRenderer({
   text,
   highlightTerm,
+  activeMatchIndex = -1,
+  matchIdPrefix = "memory-match",
 }: {
   text: string;
   highlightTerm: string | null;
+  activeMatchIndex?: number;
+  matchIdPrefix?: string;
 }) {
   const blocks = buildRichContentBlocks(text);
+  let globalMatchIndex = -1;
+
+  const renderText = (value: string) =>
+    buildHighlightedParts(value, highlightTerm).map((part, index) => {
+      if (!part.isMatch) {
+        return <Fragment key={`${value}-${index}`}>{part.text}</Fragment>;
+      }
+
+      globalMatchIndex += 1;
+      const isActive = globalMatchIndex === activeMatchIndex;
+
+      return (
+        <mark
+          key={`${value}-${index}`}
+          id={`${matchIdPrefix}-${globalMatchIndex}`}
+          data-memory-match-index={globalMatchIndex}
+          className={isActive
+            ? "rounded bg-amber-300 px-0.5 text-slate-950 ring-2 ring-amber-500 dark:bg-amber-300 dark:text-slate-950 dark:ring-amber-200"
+            : "rounded bg-yellow-200 px-0.5 text-slate-950 dark:bg-yellow-300/80 dark:text-slate-950"
+          }
+        >
+          {part.text}
+        </mark>
+      );
+    });
 
   return (
     <div className="space-y-3">
       {blocks.map((block, blockIndex) => {
-        const rendered = renderHighlightedText(block.text, highlightTerm);
+        const rendered = renderText(block.text);
         if (block.type === "heading") {
-          return <h4 key={blockIndex} className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100 border-b border-slate-200 pb-1 dark:border-slate-800">{rendered}</h4>;
+          return <h4 key={blockIndex} className="border-b border-slate-200 pb-1 text-sm font-semibold tracking-tight text-slate-900 dark:border-slate-800 dark:text-slate-100">{rendered}</h4>;
         }
         if (block.type === "list") {
           return (

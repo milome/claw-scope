@@ -1457,6 +1457,10 @@ const DICT: Record<string, string[]> = {
   "memory.documents.searchAction": ["Search", "搜索", "搜尋"],
   "memory.documents.searchRun": ["Searching current document for: {0}", "正在当前文档内搜索：{0}", "正在目前文件內搜尋：{0}"],
   "memory.documents.searchCleared": ["Document text search cleared.", "已清除文档文本搜索。", "已清除文件文字搜尋。"],
+  "memory.documents.searchState.matched": ["{0} matches", "已命中 {0} 处", "已命中 {0} 處"],
+  "memory.documents.searchState.empty": ["No matches", "未命中", "未命中"],
+  "memory.documents.searchNavigationHint": ["Use Prev/Next to jump through matches. Now viewing {0}/{1}, and the document will scroll to the active match.", "使用上一处/下一处在命中间跳转。当前查看第 {0}/{1} 处，文档会滚动到当前命中。", "使用上一處/下一處在命中間跳轉。目前查看第 {0}/{1} 處，文件會捲動到目前命中。"],
+  "memory.documents.searchIdleHint": ["Enter text and press Search or Enter to find matches in the current document.", "输入文本后点击搜索或按回车，即可在当前文档内查找命中。", "輸入文字後點擊搜尋或按 Enter，即可在目前文件內查找命中。"],
   "memory.documents.matches": [
     "{0} matches",
     "{0} 条匹配",

@@ -11,12 +11,17 @@ type MemorySearchMatch = {
   end: number;
 };
 
+type DocumentSearchFeedbackState = "idle" | "searching" | "matched" | "empty";
+
 type MemoryDocumentsDesktopProps = {
   title: string;
   description: string;
   documentSearchInput: string;
+  documentQuery: string;
   documentMatches: MemorySearchMatch[];
   documentMatchIndex: number;
+  documentSearchFeedbackState: DocumentSearchFeedbackState;
+  documentSearchHint: string | null;
   documentDirty: boolean;
   documentSearchSource: "manual" | "search_result";
   documentSaveMessage: string | null;
@@ -56,8 +61,11 @@ export function MemoryDocumentsDesktop({
   title: _title,
   description: _description,
   documentSearchInput,
+  documentQuery,
   documentMatches,
   documentMatchIndex,
+  documentSearchFeedbackState,
+  documentSearchHint,
   documentDirty,
   documentSearchSource,
   documentSaveMessage,
@@ -95,8 +103,49 @@ export function MemoryDocumentsDesktop({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const lastScrolledMatchIndexRef = useRef<number | null>(null);
+  const navigationDirectionRef = useRef<"prev" | "next" | null>(null);
 
-  const activeHighlightTerm = selectedHighlightTerm ?? (documentSearchInput.trim() || null);
+  const activeHighlightTerm = selectedHighlightTerm ?? (documentQuery.trim() || null);
+  const activeMatchCursor = selectedHighlightTerm ? activeHighlightIndex : documentMatchIndex;
+
+  const scrollToMatchIndex = (matchIndex: number) => {
+    const textarea = textareaRef.current;
+    const overlay = overlayRef.current;
+    if (matchIndex < 0) {
+      return;
+    }
+
+    const activeNode = overlay?.querySelector<HTMLElement>(`#memory-document-match-${matchIndex}`) ?? null;
+    if (overlay && activeNode) {
+      activeNode.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+      lastScrolledMatchIndexRef.current = matchIndex;
+      return;
+    }
+
+    const fallbackMatch = highlightSelection?.matches[matchIndex];
+    if (!fallbackMatch) {
+      return;
+    }
+
+    const lineHeight = 24;
+    const linesBefore = selectedDocumentContent.slice(0, fallbackMatch.start).split("\n").length - 1;
+    const viewportHeight = textarea?.clientHeight ?? overlay?.clientHeight ?? 0;
+    const fallbackScrollTop = Math.max(0, linesBefore * lineHeight - viewportHeight / 3);
+
+    if (textarea) {
+      textarea.scrollTop = fallbackScrollTop;
+      if (isEditing) {
+        textarea.focus();
+        textarea.setSelectionRange(fallbackMatch.start, fallbackMatch.end);
+      }
+    }
+
+    if (overlay) {
+      overlay.scrollTop = fallbackScrollTop;
+    }
+
+    lastScrolledMatchIndexRef.current = matchIndex;
+  };
 
   const highlightSelection = useMemo(() => {
     if (!selectedDocumentContent || !activeHighlightTerm) {
@@ -123,39 +172,46 @@ export function MemoryDocumentsDesktop({
 
     return {
       matches,
-      current: matches[Math.max(0, Math.min(activeHighlightIndex, matches.length - 1))],
+      current: matches[Math.max(0, Math.min(activeMatchCursor, matches.length - 1))],
     };
-  }, [activeHighlightIndex, activeHighlightTerm, selectedDocumentContent]);
+  }, [activeHighlightTerm, activeMatchCursor, selectedDocumentContent]);
 
   useEffect(() => {
-    const textarea = textareaRef.current;
-    const overlay = overlayRef.current;
-    if ((!textarea && !overlay) || !highlightSelection) {
+    if (!highlightSelection) {
       lastScrolledMatchIndexRef.current = null;
       return;
     }
 
-    if (lastScrolledMatchIndexRef.current === activeHighlightIndex) {
+    if (lastScrolledMatchIndexRef.current === activeMatchCursor) {
       return;
     }
 
-    const lineHeight = 24;
-    const linesBefore = selectedDocumentContent.slice(0, highlightSelection.current.start).split("\n").length - 1;
-    const scrollTop = Math.max(0, linesBefore * lineHeight - (textarea?.clientHeight ?? overlay?.clientHeight ?? 0) / 3);
+    requestAnimationFrame(() => {
+      scrollToMatchIndex(activeMatchCursor);
+      requestAnimationFrame(() => scrollToMatchIndex(activeMatchCursor));
+    });
+  }, [activeMatchCursor, highlightSelection, isEditing, selectedDocumentContent]);
 
-    if (textarea) {
-      textarea.scrollTop = scrollTop;
-      if (isEditing) {
-        textarea.focus();
-        textarea.setSelectionRange(highlightSelection.current.start, highlightSelection.current.end);
-      }
+  const handlePreviousHighlight = () => {
+    navigationDirectionRef.current = "prev";
+    onPreviousHighlight();
+  };
+
+  const handleNextHighlight = () => {
+    navigationDirectionRef.current = "next";
+    onNextHighlight();
+  };
+
+  useEffect(() => {
+    if (!navigationDirectionRef.current || activeMatchCursor < 0) {
+      return;
     }
 
-    if (overlay) {
-      overlay.scrollTop = scrollTop;
-    }
-    lastScrolledMatchIndexRef.current = activeHighlightIndex;
-  }, [activeHighlightIndex, highlightSelection, isEditing, selectedDocumentContent]);
+    requestAnimationFrame(() => {
+      scrollToMatchIndex(activeMatchCursor);
+      navigationDirectionRef.current = null;
+    });
+  }, [activeMatchCursor]);
 
   const highlightedSegments = useMemo(() => {
     if (!selectedDocumentContent || !activeHighlightTerm) {
@@ -213,17 +269,42 @@ export function MemoryDocumentsDesktop({
               <input
                 value={documentSearchInput}
                 onChange={(event) => onDocumentSearchInputChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    onRunDocumentSearch();
+                  }
+                }}
                 placeholder={t("memory.documents.searchPlaceholder")}
                 className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-sky-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500"
               />
-              <ArchiveActionButton onClick={onRunDocumentSearch} variant="primary">
-                <Search className="mr-1 inline h-3.5 w-3.5" />
-                {t("memory.documents.searchAction")}
-              </ArchiveActionButton>
+              <div className="flex flex-wrap items-center gap-2">
+                <ArchiveActionButton onClick={onRunDocumentSearch} variant="primary">
+                  <Search className="mr-1 inline h-3.5 w-3.5" />
+                  {documentSearchFeedbackState === "matched"
+                    ? t("memory.documents.searchState.matched", documentMatches.length)
+                    : documentSearchFeedbackState === "empty"
+                      ? t("memory.documents.searchState.empty")
+                      : t("memory.documents.searchAction")}
+                </ArchiveActionButton>
+                <ArchiveActionButton onClick={handlePreviousHighlight} disabled={documentMatches.length <= 0}>
+                  {t("memory.highlight.prev")}
+                </ArchiveActionButton>
+                <ArchiveActionButton onClick={handleNextHighlight} disabled={documentMatches.length <= 0}>
+                  {t("memory.highlight.next")}
+                </ArchiveActionButton>
+                <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                  {documentMatches.length > 0 ? `${documentMatchIndex + 1}/${documentMatches.length}` : "0/0"}
+                </span>
+              </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <span>{t("memory.documents.matches", documentMatches.length)}</span>
-                <span>{documentMatches.length > 0 ? `${documentMatchIndex + 1}/${documentMatches.length}` : "0/0"}</span>
                 <span>{documentSearchSource === "search_result" ? t("memory.documents.searchSource.search") : t("memory.documents.searchSource.manual")}</span>
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                {documentMatches.length > 0
+                  ? t("memory.documents.searchNavigationHint", documentMatchIndex + 1, documentMatches.length)
+                  : documentSearchHint ?? t("memory.documents.searchIdleHint")}
               </div>
             </div>
           </div>
@@ -331,7 +412,7 @@ export function MemoryDocumentsDesktop({
                         >
                           {highlightedSegments.map((segment, index) =>
                             segment.match ? (
-                              <mark key={index} className="rounded bg-sky-200 px-0.5 text-transparent dark:bg-sky-500/40">
+                              <mark key={index} className="rounded bg-yellow-200 px-0.5 text-transparent dark:bg-yellow-300/80">
                                 {segment.text}
                               </mark>
                             ) : (
@@ -359,7 +440,7 @@ export function MemoryDocumentsDesktop({
                         className="min-h-0 flex-1 overflow-auto rounded-[24px] px-4 py-4 text-[13px] leading-6 text-slate-800 dark:text-slate-100"
                         style={{ maxHeight: "calc(100vh - 440px)" }}
                       >
-                        <RichContentRenderer text={selectedDocumentContent} highlightTerm={activeHighlightTerm} />
+                        <RichContentRenderer text={selectedDocumentContent} highlightTerm={activeHighlightTerm} activeMatchIndex={activeMatchCursor} matchIdPrefix="memory-document-match" />
                       </div>
                     )}
                   </div>
@@ -376,9 +457,9 @@ export function MemoryDocumentsDesktop({
                       >
                         {highlightSelection ? (
                           <div className="flex items-center gap-2">
-                            <button type="button" onClick={onPreviousHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.prev")}</button>
+                            <button type="button" onClick={handlePreviousHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.prev")}</button>
                             <span className="text-[11px] font-semibold">{Math.max(1, Math.min(activeHighlightIndex + 1, highlightSelection.matches.length))}/{highlightSelection.matches.length}</span>
-                            <button type="button" onClick={onNextHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.next")}</button>
+                            <button type="button" onClick={handleNextHighlight} className="rounded-full border border-sky-300 px-2 py-1 text-[11px] font-semibold">{t("memory.highlight.next")}</button>
                           </div>
                         ) : null}
                       </EvidenceFocusCard>

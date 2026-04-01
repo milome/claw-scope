@@ -306,6 +306,7 @@ export function MemoryView() {
   const [documentQuery, setDocumentQuery] = useState("");
   const [documentSearchInput, setDocumentSearchInput] = useState("");
   const [documentMatchIndex, setDocumentMatchIndex] = useState(-1);
+  const [documentSearchFeedbackState, setDocumentSearchFeedbackState] = useState<"idle" | "matched" | "empty">("idle");
   const [documentSearchSource, setDocumentSearchSource] = useState<"manual" | "search_result">("manual");
   const [documentSearchHint, setDocumentSearchHint] = useState<string | null>(null);
   const [documentEvidenceSnippet, setDocumentEvidenceSnippet] = useState<string | null>(null);
@@ -713,6 +714,26 @@ export function MemoryView() {
       clampActiveSearchMatchIndex(current, documentMatches.length),
     );
   }, [documentMatches.length, selectedDocumentName, selectedDocumentContent]);
+
+  useEffect(() => {
+    if (!documentSearchInput.trim() && documentQuery) {
+      setDocumentQuery("");
+      setDocumentMatchIndex(-1);
+      setDocumentSearchFeedbackState("idle");
+      setDocumentSearchHint(t("memory.documents.searchCleared"));
+      setDocumentEvidenceTerm(null);
+      setDocumentEvidenceSnippet(null);
+    }
+  }, [documentQuery, documentSearchInput, t]);
+
+  useEffect(() => {
+    if (!documentQuery.trim()) {
+      setDocumentSearchFeedbackState("idle");
+      return;
+    }
+
+    setDocumentSearchFeedbackState(documentMatches.length > 0 ? "matched" : "empty");
+  }, [documentMatches.length, documentQuery]);
 
   useEffect(() => {
     setDocumentSearchInput(documentQuery);
@@ -1234,8 +1255,11 @@ export function MemoryView() {
           title={t("memory.documents.title")}
           description={documentSearchHint ?? t("memory.documents.desc")}
           documentSearchInput={documentSearchInput}
+          documentQuery={documentQuery}
           documentMatches={documentMatches}
           documentMatchIndex={documentMatchIndex}
+          documentSearchFeedbackState={documentSearchFeedbackState}
+          documentSearchHint={documentSearchHint}
           documentDirty={documentDirty}
           documentSearchSource={documentSearchSource}
           documentSaveMessage={documentSaveMessage}
