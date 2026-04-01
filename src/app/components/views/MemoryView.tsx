@@ -58,7 +58,7 @@ import { MemoryDiagnosticsDrawer } from "./MemoryDiagnosticsDrawer";
 import { MemorySearchPanel } from "./MemorySearchPanel";
 import { MemoryFootprintsPanel } from "./MemoryFootprintsPanel";
 import { MemoryKnowledgePanel } from "./MemoryKnowledgePanel";
-import { buildMemoryConfigStatusSummary, type MemoryIndexStrategy } from "./memoryConfigStatus";
+import { buildMemoryConfigStatusSummary, memoryConfigStatusMessageKey, type MemoryIndexStrategy } from "./memoryConfigStatus";
 import { MemoryResourcesPanel } from "./MemoryResourcesPanel";
 import { MemoryDocumentsDesktop } from "./MemoryDocumentsDesktop";
 import { MemoryDocumentsMobile } from "./MemoryDocumentsMobile";
@@ -1310,7 +1310,8 @@ export function MemoryView() {
           isLocalGatewaySession={isLocalGatewaySession}
           commandGuide={memoryConfigStatus.commandGuide}
           commandGuideDescription={t(memoryConfigStatus.commandDescriptionKey)}
-          configStatusMessage={t(`memory.knowledge.summary.${memoryConfigStatus.statusKey}`)}
+          configStatusMessage={t(memoryConfigStatusMessageKey(memoryConfigStatus.statusKey))}
+          searchAvailabilityReason={t(memoryConfigStatus.searchAvailabilityReasonKey)}
           copiedCommandGuide={copiedCommandGuide}
           searchQuery={searchQuery}
           searchRunning={searchRunning}

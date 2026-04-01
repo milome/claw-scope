@@ -58,6 +58,8 @@ describe("buildMemoryConfigStatusSummary", () => {
 
     expect(summary.configuredButNotIndexed).toBe(true);
     expect(summary.statusKey).toBe("configured_only");
+    expect(summary.searchAvailabilityReasonKey).toBe("memory.search.reason.configuredOnly");
+    expect(summary.runtimeMatchState).toBe("missing");
   });
 
   it("marks dirty runtime state as configured_stale", () => {
@@ -109,6 +111,8 @@ describe("buildMemoryConfigStatusSummary", () => {
 
     expect(summary.reindexRequired).toBe(true);
     expect(summary.statusKey).toBe("configured_stale");
+    expect(summary.searchAvailabilityReasonKey).toBe("memory.search.reason.stale");
+    expect(summary.runtimeMatchState).toBe("partial");
   });
 
   it("marks missing diagnostics as diag_unavailable", () => {
@@ -126,5 +130,6 @@ describe("buildMemoryConfigStatusSummary", () => {
 
     expect(summary.statusKey).toBe("diag_unavailable");
     expect(summary.runtimeAvailable).toBe(false);
+    expect(summary.searchAvailabilityReasonKey).toBe("memory.search.reason.diagUnavailable");
   });
 });

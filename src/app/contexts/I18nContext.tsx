@@ -2062,6 +2062,14 @@ const DICT: Record<string, string[]> = {
   "memory.knowledge.bridgeStatus": ["Config bridge", "配置桥接", "設定橋接"],
   "memory.knowledge.bridgeStatus.local": ["Local-only bridge is available in this session.", "当前会话可使用 local-only bridge。", "目前工作階段可使用 local-only bridge。"],
   "memory.knowledge.bridgeStatus.remote": ["Local-only bridge is unavailable in remote mode. Apply changes on the OpenClaw host.", "远程模式下 local-only bridge 不可用，修改需在 OpenClaw 宿主机执行。", "遠端模式下 local-only bridge 不可用，修改需在 OpenClaw 主機上執行。"],
+  "memory.knowledge.runtimeMatch.missing": ["Configured inputs are not reflected in runtime yet.", "已配置的输入尚未反映到 runtime。", "已設定的輸入尚未反映到 runtime。"],
+  "memory.knowledge.runtimeMatch.partial": ["Runtime only reflects part of the configured inputs.", "runtime 只反映了部分已配置输入。", "runtime 只反映了部分已設定輸入。"],
+  "memory.knowledge.runtimeMatch.matched": ["Runtime matches the configured external knowledge inputs.", "runtime 已与外部知识配置对齐。", "runtime 已與 external knowledge 設定對齊。"],
+  "memory.search.reason.configuredOnly": ["External knowledge is configured, but indexing has not caught up yet.", "external knowledge 已配置，但索引还没跟上。", "external knowledge 已設定，但索引還沒跟上。"],
+  "memory.search.reason.stale": ["External knowledge is configured, but the runtime index is stale and should be refreshed.", "external knowledge 已配置，但 runtime 索引已过期，需要刷新。", "external knowledge 已設定，但 runtime 索引已過期，需要刷新。"],
+  "memory.search.reason.indexed": ["External knowledge is configured and indexed. If search still fails, check the provider or embeddings status.", "external knowledge 已配置且已建索引；如果搜索仍不可用，请检查 provider 或 embeddings 状态。", "external knowledge 已設定且已建索引；若搜尋仍不可用，請檢查 provider 或 embeddings 狀態。"],
+  "memory.search.reason.diagUnavailable": ["Diagnostics are unavailable, so the page cannot confirm whether external knowledge is indexed.", "诊断信息缺失，当前无法确认 external knowledge 是否已进入索引。", "診斷資訊缺失，目前無法確認 external knowledge 是否已進入索引。"],
+  "memory.search.reason.remoteReadonly": ["Current session is remote read-only. Search can inspect status, but config changes and local indexing must happen on the host.", "当前是远程只读会话。Search 页可以查看状态，但配置修改和本地索引必须在宿主机执行。", "目前是遠端唯讀工作階段。Search 頁可以查看狀態，但設定修改與本地索引必須在主機上執行。"],
 
   "agent.active": [
     "Active",

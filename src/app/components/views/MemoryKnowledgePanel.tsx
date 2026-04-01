@@ -9,7 +9,7 @@ import type {
 import type { SemanticMindMapModel } from "./memorySemanticTypes";
 import type { MemoryExternalSourceItem } from "./memoryState";
 import { buildExternalKnowledgeViewModel, isBlockedExternalKnowledgePath } from "./memoryKnowledgeState";
-import { buildMemoryConfigStatusSummary } from "./memoryConfigStatus";
+import { buildMemoryConfigStatusSummary, memoryConfigBridgeMessageKey, memoryConfigStatusMessageKey } from "./memoryConfigStatus";
 import {
   runExternalKnowledgeReindex,
   setExternalKnowledgePaths,
@@ -335,7 +335,7 @@ export function MemoryKnowledgePanel({
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <ArchiveStatCard
             label={t("memory.knowledge.summaryCard")}
-            value={t(`memory.knowledge.summary.${statusSummary.statusKey}`)}
+            value={t(memoryConfigStatusMessageKey(statusSummary.statusKey))}
             meta={knowledgeModel.hasExternalKnowledge ? t("memory.knowledge.present") : t("memory.knowledge.none")}
           />
           <ArchiveStatCard
@@ -354,7 +354,7 @@ export function MemoryKnowledgePanel({
           <ArchiveStatCard
             label={t("memory.knowledge.permission")}
             value={knowledgeModel.localWritable ? t("memory.knowledge.localWritable") : t("memory.knowledge.remoteReadonly")}
-            meta={t(knowledgeModel.localWritable ? "memory.knowledge.bridgeStatus.local" : "memory.knowledge.bridgeStatus.remote")}
+            meta={t(memoryConfigBridgeMessageKey(knowledgeModel.localWritable))}
           />
         </div>
 
@@ -396,6 +396,11 @@ export function MemoryKnowledgePanel({
               {t(isLocalGatewaySession ? "memory.diag.runtimePlaceholder" : "memory.diag.runtimeRemoteUnavailable")}
             </div>
           )}
+          <div className="mt-3">
+            <ArchiveNotice tone={statusSummary.runtimeMatchState === "matched" ? "info" : "warn"}>
+              {t(`memory.knowledge.runtimeMatch.${statusSummary.runtimeMatchState}`)}
+            </ArchiveNotice>
+          </div>
         </div>
 
         <div className="mt-4 grid gap-3 xl:grid-cols-3">
@@ -458,7 +463,7 @@ export function MemoryKnowledgePanel({
             {t("memory.knowledge.configActions")}
           </div>
           <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-            {knowledgeModel.localWritable ? t("memory.knowledge.bridgeStatus.local") : t("memory.knowledge.bridgeStatus.remote")}
+            {t(memoryConfigBridgeMessageKey(knowledgeModel.localWritable))}
           </div>
           {!knowledgeModel.localWritable ? (
             <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">

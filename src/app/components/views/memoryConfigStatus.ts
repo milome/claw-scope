@@ -26,7 +26,26 @@ export type MemoryConfigStatusSummary = {
     | "memory.search.commands.localForce"
     | "memory.search.commands.openai"
     | "memory.search.commands.generic";
+  searchAvailabilityReasonKey:
+    | "memory.search.reason.configuredOnly"
+    | "memory.search.reason.stale"
+    | "memory.search.reason.indexed"
+    | "memory.search.reason.diagUnavailable"
+    | "memory.search.reason.remoteReadonly";
+  runtimeMatchState: "missing" | "partial" | "matched";
 };
+
+export function memoryConfigStatusMessageKey(
+  statusKey: MemoryConfigStatusSummary["statusKey"],
+) {
+  return `memory.knowledge.summary.${statusKey}` as const;
+}
+
+export function memoryConfigBridgeMessageKey(localWritable: boolean) {
+  return localWritable
+    ? "memory.knowledge.bridgeStatus.local"
+    : "memory.knowledge.bridgeStatus.remote";
+}
 
 function buildHints(...values: Array<string | null | undefined>) {
   return values
@@ -87,6 +106,22 @@ export function buildMemoryConfigStatusSummary({
       memoryResult?.diagnostics?.sessionMemoryEnabled,
   );
   const configuredButNotIndexed = hasExternalKnowledge && runtimeAvailable && indexedFiles === 0;
+  const configuredPaths = memoryResult?.diagnostics?.extraPaths ?? [];
+  const runtimePaths = runtimeStatus?.status.extraPaths ?? [];
+  const runtimeSourceNames = new Set((runtimeStatus?.status.sourceCounts ?? []).map((item) => item.source));
+  const matchedConfiguredPaths = configuredPaths.filter((path) => runtimePaths.includes(path));
+  const sessionConfiguredAndIndexed = Boolean(
+    memoryResult?.diagnostics?.sessionMemoryEnabled && runtimeSourceNames.has("sessions"),
+  );
+  const totalExpectedMatches = configuredPaths.length + (memoryResult?.diagnostics?.sessionMemoryEnabled ? 1 : 0);
+  const totalActualMatches = matchedConfiguredPaths.length + (sessionConfiguredAndIndexed ? 1 : 0);
+  const runtimeMatchState: MemoryConfigStatusSummary["runtimeMatchState"] = totalExpectedMatches === 0
+    ? "matched"
+    : totalActualMatches === 0
+      ? "missing"
+      : totalActualMatches < totalExpectedMatches
+        ? "partial"
+        : "matched";
 
   const indexCommand =
     reindexStrategy === "full"
@@ -118,18 +153,25 @@ export function buildMemoryConfigStatusSummary({
         : "memory.search.commands.generic";
 
   let statusKey: MemoryConfigStatusSummary["statusKey"] = "diag_unavailable";
+  let searchAvailabilityReasonKey: MemoryConfigStatusSummary["searchAvailabilityReasonKey"] = "memory.search.reason.diagUnavailable";
   if (!memoryResult?.diagnostics) {
     statusKey = "diag_unavailable";
+    searchAvailabilityReasonKey = "memory.search.reason.diagUnavailable";
   } else if (!isLocalGatewaySession) {
     statusKey = "remote_readonly";
+    searchAvailabilityReasonKey = "memory.search.reason.remoteReadonly";
   } else if (hasExternalKnowledge && reindexRequired) {
     statusKey = "configured_stale";
+    searchAvailabilityReasonKey = "memory.search.reason.stale";
   } else if (configuredButNotIndexed) {
     statusKey = "configured_only";
+    searchAvailabilityReasonKey = "memory.search.reason.configuredOnly";
   } else if (hasExternalKnowledge) {
     statusKey = "configured_indexed";
+    searchAvailabilityReasonKey = "memory.search.reason.indexed";
   } else {
     statusKey = "configured_only";
+    searchAvailabilityReasonKey = "memory.search.reason.configuredOnly";
   }
 
   return {
@@ -142,5 +184,7 @@ export function buildMemoryConfigStatusSummary({
     statusKey,
     commandGuide,
     commandDescriptionKey,
+    searchAvailabilityReasonKey,
+    runtimeMatchState,
   };
 }

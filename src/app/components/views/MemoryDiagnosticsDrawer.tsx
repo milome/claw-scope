@@ -4,7 +4,7 @@ import type {
   GatewayAgentMemoryResult,
 } from "../../contexts/OpenClawContext";
 import { ArchiveDiagnosticsCard, ArchiveDiagnosticsLayout, ArchiveDrawer, archiveDiagnosticsTone } from "./memoryArchiveUi";
-import { buildMemoryConfigStatusSummary } from "./memoryConfigStatus";
+import { buildMemoryConfigStatusSummary, memoryConfigBridgeMessageKey, memoryConfigStatusMessageKey } from "./memoryConfigStatus";
 import { buildExternalKnowledgeViewModel } from "./memoryKnowledgeState";
 
 type HealthProbeSummary = {
@@ -191,14 +191,16 @@ export function MemoryDiagnosticsDrawer({
         </DiagnosticsCard>
         <DiagnosticsCard title={t("memory.diag.knowledge")}>
           <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
-            <div>{t(`memory.knowledge.summary.${configStatus.statusKey}`)}</div>
-            <div>{configStatus.localWritable ? t("memory.knowledge.bridgeStatus.local") : t("memory.knowledge.bridgeStatus.remote")}</div>
+            <div>{t(memoryConfigStatusMessageKey(configStatus.statusKey))}</div>
+            <div>{t(memoryConfigBridgeMessageKey(configStatus.localWritable))}</div>
             <div>diagnostics: {knowledgeModel.diagnosticsAvailable ? t("memory.diag.ready") : t("memory.diag.unavailableShort")}</div>
             <div>backend: {knowledgeModel.backend ?? t("memory.diag.unavailable")}</div>
             <div>provider: {knowledgeModel.provider ?? t("memory.knowledge.providerFallback")}</div>
             <div>sources: {knowledgeModel.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
             <div>extra paths: {knowledgeModel.extraPaths.join(", ") || t("memory.knowledge.none")}</div>
             <div>qmd paths: {knowledgeModel.qmdPaths.join(", ") || t("memory.knowledge.none")}</div>
+            <div>source counts: {knowledgeModel.runtimeSummary?.sourceCounts.map((item) => `${item.source}: ${item.files}/${item.chunks}`).join(" · ") || t("memory.knowledge.sourcesEmpty")}</div>
+            <div>{t(`memory.knowledge.runtimeMatch.${configStatus.runtimeMatchState}`)}</div>
             <div>session memory: {knowledgeModel.sessionMemoryEnabled ? t("memory.diag.ready") : t("memory.diag.unavailableShort")}</div>
             <div>
               runtime: {knowledgeModel.runtimeAvailable
