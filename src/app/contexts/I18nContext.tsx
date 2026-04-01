@@ -1701,6 +1701,31 @@ const DICT: Record<string, string[]> = {
     "搜索结果现在可以直接带你打开对应位置。Search 和 Knowledge 共用同一份诊断摘要，信息会一路保持一致。",
     "搜尋結果現在可以直接帶你打開對應位置。Search 與 Knowledge 共用同一份診斷摘要，資訊會一路保持一致。",
   ],
+  "memory.tab.tooltip.overview": [
+    "Workspace status, source summary, and editability.",
+    "工作区状态、来源概览与可编辑性。",
+    "工作區狀態、來源概覽與可編輯性。",
+  ],
+  "memory.tab.tooltip.documents": [
+    "Primary table-style document workspace for readable memory files.",
+    "用于阅读记忆文件的主文档工作区。",
+    "用於閱讀記憶文件的主文件工作區。",
+  ],
+  "memory.tab.tooltip.footprints": [
+    "Daily footprints view for timeline-first browsing.",
+    "按时间线优先浏览的每日足迹视图。",
+    "按時間線優先瀏覽的每日足跡視圖。",
+  ],
+  "memory.tab.tooltip.search": [
+    "Semantic lookup and routed result inspection.",
+    "语义搜索与结果跳转检查。",
+    "語義搜尋與結果跳轉檢查。",
+  ],
+  "memory.tab.tooltip.knowledge": [
+    "Reserved semantic mind-map lane backed by memory-content inference.",
+    "基于记忆内容推断的语义脑图视图。",
+    "基於記憶內容推斷的語義腦圖視圖。",
+  ],
   "memory.search.sharedSummary": [
     "Shared diagnostics summary",
     "共享诊断摘要",
@@ -1852,6 +1877,11 @@ const DICT: Record<string, string[]> = {
   "memory.highlight.next": ["Next", "下一处", "下一處"],
   "memory.resources.openDiagnostics": ["Open diagnostics", "查看诊断", "查看診斷"],
   "memory.resources.workspace": ["Workspace", "工作区", "工作區"],
+  "memory.resources.total": ["Resources", "资源数", "資源數"],
+  "memory.resources.totalMeta": ["{0} groups", "共 {0} 组", "共 {0} 組"],
+  "memory.resources.topGroup": ["Largest group", "最大分组", "最大分組"],
+  "memory.resources.tree": ["Tree focus", "树状焦点", "樹狀焦點"],
+  "memory.resources.treeHint": ["Expand the tree below to inspect entries", "展开下方树状结构查看条目", "展開下方樹狀結構查看條目"],
   "memory.resources.payloadEmpty": [
     "Select a file, path, or runtime signal to inspect its current payload or reference string.",
     "请选择一个文件、路径或运行时信号来查看当前内容或引用信息。",

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Calendar, Network, Cpu, BrainCircuit, ChevronDown, BookOpen, FileText } from "lucide-react";
+import { Search, Calendar, Network, Cpu, BrainCircuit, ChevronDown, BookOpen, FileText, Info } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { useI18n } from "../../contexts/I18nContext";
@@ -171,6 +171,42 @@ function resultRouteLabel(
   }
 }
 
+function normalizeUiErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message.trim()) {
+      return record.message;
+    }
+    if (typeof record.error === "string" && record.error.trim()) {
+      return record.error;
+    }
+    if (typeof record.code === "string" && record.code.trim()) {
+      return record.code;
+    }
+    try {
+      return JSON.stringify(error, null, 2);
+    } catch {
+      return "Unknown error";
+    }
+  }
+
+  return String(error);
+}
+
+function buildErrorTextFragments(...values: Array<string | null | undefined>) {
+  return values
+    .map((value) => (typeof value === "string" ? value.trim().toLowerCase() : ""))
+    .filter(Boolean);
+}
+
 function resolveTimelineModeLabel(
   access: GatewayAgentMemoryTimelineAccessResult | null,
   result: GatewayAgentMemoryTimelineResult | null,
@@ -325,7 +361,7 @@ export function MemoryView() {
         );
       } catch (error) {
         if (!cancelled) {
-          setMemoryError(error instanceof Error ? error.message : String(error));
+          setMemoryError(normalizeUiErrorMessage(error));
         }
       } finally {
         if (!cancelled) {
@@ -355,7 +391,7 @@ export function MemoryView() {
         );
       } catch (error) {
         if (!cancelled) {
-          setTimelineError(error instanceof Error ? error.message : String(error));
+          setTimelineError(normalizeUiErrorMessage(error));
         }
       } finally {
         if (!cancelled) {
@@ -377,7 +413,7 @@ export function MemoryView() {
         setMemoryStatusError(null);
       } catch (error) {
         if (!cancelled) {
-          setMemoryStatusError(error instanceof Error ? error.message : String(error));
+          setMemoryStatusError(normalizeUiErrorMessage(error));
         }
       }
     };
@@ -435,7 +471,7 @@ export function MemoryView() {
         }
       } catch (error) {
         if (!cancelled) {
-          setTimelineEntryError(error instanceof Error ? error.message : String(error));
+          setTimelineEntryError(normalizeUiErrorMessage(error));
           setTimelineEntryContent("");
         }
       } finally {
@@ -701,13 +737,26 @@ export function MemoryView() {
       rawPayload: memoryRuntimeStatus.rawPayload,
     };
   }, [memoryRuntimeStatus]);
-  const providerHint = (healthProbeSummary?.provider ?? "").toLowerCase();
-  const isOllamaProvider = providerHint.includes("ollama");
-  const isHostedProvider =
-    providerHint.includes("openai") ||
-    providerHint.includes("anthropic") ||
-    providerHint.includes("gemini") ||
-    providerHint.includes("azure");
+  const providerHints = buildErrorTextFragments(
+    healthProbeSummary?.provider,
+    healthProbeSummary?.model,
+    memoryStatus?.provider,
+    memoryStatus?.requestedProvider,
+    memoryRuntimeStatus?.status.provider,
+    memoryRuntimeStatus?.status.requestedProvider,
+    healthProbeSummary?.embeddingsError,
+    memoryStatus?.embeddingsError,
+    memoryRuntimeStatus?.embeddingError,
+    memoryRuntimeStatus?.rawPayload,
+  );
+  const isOllamaProvider = providerHints.some((value) => value.includes("ollama"));
+  const isHostedProvider = providerHints.some(
+    (value) =>
+      value.includes("openai") ||
+      value.includes("anthropic") ||
+      value.includes("gemini") ||
+      value.includes("azure"),
+  );
   const shouldForceReindex = (runtimeStatusSummary?.indexedFiles ?? 0) === 0;
   const resolvedIndexStrategy: MemoryIndexStrategy = shouldForceReindex ? "full" : "incremental";
   const resolvedAgentIdForGuide = selectedAgentId || "<agent-id>";
@@ -736,14 +785,14 @@ export function MemoryView() {
     ].join("\n");
   }, [isOllamaProvider, resolvedAgentIdForGuide, resolvedIndexStrategy]);
   const commandGuideDescription = useMemo(() => {
+    if (isOllamaProvider) {
+      return t("memory.search.commands.ollama");
+    }
     if (isLocalGatewaySession) {
       if (resolvedIndexStrategy === "full") {
         return t("memory.search.commands.localForce");
       }
       return t("memory.search.commands.localIncremental");
-    }
-    if (isOllamaProvider) {
-      return t("memory.search.commands.ollama");
     }
     if (isHostedProvider) {
       return t("memory.search.commands.openai");
@@ -788,7 +837,7 @@ export function MemoryView() {
       setSearchError(null);
       setActiveSection("search");
     } catch (error) {
-      setSearchError(error instanceof Error ? error.message : String(error));
+      setSearchError(normalizeUiErrorMessage(error));
       setSearchResult(null);
     } finally {
       setMemoryLoading(false);
@@ -899,13 +948,14 @@ export function MemoryView() {
         failureReasons: {},
       });
     } catch (error) {
-      setTimelineError(error instanceof Error ? error.message : String(error));
+      const message = normalizeUiErrorMessage(error);
+      setTimelineError(message);
       setTimelineProbeState("error");
       setTimelineProbeFeedback({
         coveredDates: locallyCovered,
         missingDates,
         probingDates: [],
-        failureReasons: Object.fromEntries(missingDates.map((date) => [date, error instanceof Error ? error.message : String(error)])),
+        failureReasons: Object.fromEntries(missingDates.map((date) => [date, message])),
       });
     } finally {
       setTimelineLoading(false);
@@ -943,14 +993,15 @@ export function MemoryView() {
         failureReasons: Object.fromEntries(Object.entries(current.failureReasons).filter(([key]) => key !== date)),
       }));
     } catch (error) {
-      setTimelineError(error instanceof Error ? error.message : String(error));
+      const message = normalizeUiErrorMessage(error);
+      setTimelineError(message);
       setTimelineProbeState("error");
       setTimelineProbeFeedback((current) => ({
         ...current,
         probingDates: [],
         failureReasons: {
           ...current.failureReasons,
-          [date]: error instanceof Error ? error.message : String(error),
+          [date]: message,
         },
       }));
     } finally {
@@ -1002,7 +1053,7 @@ export function MemoryView() {
       setDocumentIndexRefreshState("idle");
     } catch (error) {
       setDocumentSaveState("error");
-      setDocumentSaveMessage(error instanceof Error ? error.message : String(error));
+      setDocumentSaveMessage(normalizeUiErrorMessage(error));
       setDocumentIndexRefreshState("idle");
     }
   };
@@ -1036,7 +1087,7 @@ export function MemoryView() {
       setIsEditingDocument(false);
       toast.success(t("memory.documents.saved", selectedDocument.name));
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = normalizeUiErrorMessage(error);
       setDocumentSaveState("error");
       setDocumentSaveMessage(message);
       setDocumentIndexRefreshState("idle");
@@ -1104,7 +1155,7 @@ export function MemoryView() {
         snippet: entry.snippet,
         content: "",
         loading: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizeUiErrorMessage(error),
       });
     }
   };
@@ -1302,15 +1353,6 @@ export function MemoryView() {
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Memory Modes</div>
-            <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              {activeSection === "documents"
-                ? "Table workspace stays primary while footprints and knowledge remain peer views."
-                : activeSection === "footprints"
-                  ? "Daily footprints share the same memory dataset and keep the timeline as a first-class peer mode."
-                  : activeSection === "knowledge"
-                    ? "Mind Map is now reserved for semantic graph work and should stop carrying structural topology." 
-                    : "Overview now includes the resource tree, while documents, footprints, search, and mind map stay as the focused working views."}
-            </div>
           </div>
           <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
             {agents.length} agent{agents.length === 1 ? "" : "s"} available
@@ -1318,22 +1360,29 @@ export function MemoryView() {
         </div>
         <ArchiveTabBar>
           {([
-            ["overview", t("memory.tab.overview"), "Workspace status, source summary, and editability.", BookOpen],
-            ["documents", t("memory.tab.documents"), "Primary table-style document workspace for readable memory files.", FileText],
-            ["footprints", t("memory.tab.footprints"), "Daily footprints view for timeline-first browsing.", Calendar],
-            ["search", t("memory.tab.search"), "Semantic lookup and routed result inspection.", Search],
-            ["knowledge", t("memory.tab.knowledge"), "Reserved semantic mind-map lane backed by memory-content inference.", BrainCircuit],
+            ["overview", t("memory.tab.overview"), t("memory.tab.tooltip.overview"), BookOpen],
+            ["documents", t("memory.tab.documents"), t("memory.tab.tooltip.documents"), FileText],
+            ["footprints", t("memory.tab.footprints"), t("memory.tab.tooltip.footprints"), Calendar],
+            ["search", t("memory.tab.search"), t("memory.tab.tooltip.search"), Search],
+            ["knowledge", t("memory.tab.knowledge"), t("memory.tab.tooltip.knowledge"), BrainCircuit],
           ] as const).map(([section, label, description, Icon]) => {
             const active = activeSection === section;
             return (
-              <ArchiveSegmentedTabButton
-                key={section}
-                active={active}
-                icon={Icon}
-                label={label}
-                description={description}
-                onClick={() => setActiveSection(section)}
-              />
+              <div key={section} className="group relative">
+                <ArchiveSegmentedTabButton
+                  active={active}
+                  icon={Icon}
+                  label={label}
+                  description=""
+                  onClick={() => setActiveSection(section)}
+                />
+                <div className="pointer-events-none absolute right-3 top-3 z-10">
+                  <Info className="h-3.5 w-3.5 text-slate-400 transition group-hover:text-sky-500 dark:text-slate-500 dark:group-hover:text-sky-400" />
+                </div>
+                <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600 shadow-lg group-hover:block dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                  {description}
+                </div>
+              </div>
             );
           })}
         </ArchiveTabBar>

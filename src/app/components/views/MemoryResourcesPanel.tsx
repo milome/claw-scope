@@ -1,11 +1,10 @@
 import { ChevronDown, ChevronRight, Database, FileText, FolderTree, Route } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
-import { diagnosticsTone } from "./MemoryDiagnosticsDrawer";
 import type { GatewayAgentMemoryResult, GatewayAgentMemoryTimelineResult } from "../../contexts/OpenClawContext";
 import type { MemoryExternalSourceItem } from "./memoryState";
 import { buildMemoryResourceGroups } from "./memoryResourcesState";
-import { ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveInfoBlock, ArchiveNotice, ArchiveSectionCard, ArchiveSplitPanel } from "./memoryArchiveUi";
+import { ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveInfoBlock, ArchiveNotice, ArchiveSectionCard, ArchiveSplitPanel, ArchiveStatCard } from "./memoryArchiveUi";
 
 type HealthProbeSummary = {
   provider: string;
@@ -83,6 +82,103 @@ export function MemoryResourcesPanel({
   const [selectedLeafId, setSelectedLeafId] = useState<string>(groups[0]?.leaves[0]?.id ?? "");
 
   const selectedLeaf = groups.flatMap((group) => group.leaves).find((leaf) => leaf.id === selectedLeafId) ?? null;
+  const resourceCount = groups.reduce((count, group) => count + group.leaves.length, 0);
+  const topGroup = groups.reduce<(typeof groups)[number] | null>((current, group) => {
+    if (!current || group.leaves.length > current.leaves.length) {
+      return group;
+    }
+    return current;
+  }, null);
+
+  if (compact) {
+    return (
+      <ArchiveSectionCard>
+        <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          <FolderTree className="w-4 h-4 text-sky-500" />
+          {t("memory.resources.title")}
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <ArchiveStatCard
+            label={t("memory.resources.workspace")}
+            value={<span className="break-all text-sm font-medium text-slate-700 dark:text-slate-200">{memoryResult?.workspace ?? t("memory.diag.unavailable")}</span>}
+            meta={topGroup ? t(topGroup.titleKey) : t("memory.resources.noneSelected")}
+          />
+          <ArchiveStatCard
+            label={t("memory.resources.total")}
+            value={<span className="text-sm font-medium">{resourceCount}</span>}
+            meta={t("memory.resources.totalMeta", groups.length)}
+          />
+          <ArchiveStatCard
+            label={t("memory.diag.runtimeStatus")}
+            value={<span className="text-sm font-medium">{runtimeStatusSummary ? `${runtimeStatusSummary.indexedFiles}${runtimeStatusSummary.totalFiles != null ? `/${runtimeStatusSummary.totalFiles}` : ""}` : t(isLocalGatewaySession ? "memory.diag.runtimePlaceholder" : "memory.diag.runtimeRemoteUnavailable")}</span>}
+            meta={runtimeStatusSummary ? `${runtimeStatusSummary.chunks} chunks` : "-"}
+          />
+          <ArchiveStatCard
+            label={t("memory.resources.tree")}
+            value={<span className="text-sm font-medium">{topGroup ? t(topGroup.titleKey) : t("memory.resources.noneSelected")}</span>}
+            meta={topGroup ? t("memory.resources.count", topGroup.leaves.length) : t("memory.resources.treeHint")}
+          />
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {groups.map((group) => {
+            const Icon = groupIcon(group.id);
+            const expanded = expandedGroupIds[group.id] ?? false;
+            return (
+              <div key={group.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <button
+                  type="button"
+                  onClick={() => setExpandedGroupIds((current) => ({ ...current, [group.id]: !expanded }))}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-950/60">
+                      <Icon className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t(group.titleKey)}</div>
+                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(group.descriptionKey)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span>{t("memory.resources.count", group.leaves.length)}</span>
+                    {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </div>
+                </button>
+                {expanded ? (
+                  <div className="border-t border-slate-200 px-3 py-3 dark:border-slate-800">
+                    {group.leaves.length === 0 ? (
+                      <ArchiveNotice>{t("memory.knowledge.pathsUnavailable")}</ArchiveNotice>
+                    ) : (
+                      <div className="space-y-2">
+                        {group.leaves.map((leaf) => (
+                          <button
+                            key={leaf.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedLeafId(leaf.id);
+                              onOpenResource({ kind: leaf.kind, label: leaf.label, meta: leaf.meta });
+                            }}
+                            className={`flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition ${selectedLeafId === leaf.id ? "border-sky-300 bg-sky-50 dark:border-sky-700 dark:bg-slate-800" : "border-slate-200 bg-slate-50 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/40 dark:hover:border-slate-700"}`}
+                          >
+                            <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-sky-500" />
+                            <div className="min-w-0">
+                              <div className="break-all text-sm font-medium text-slate-900 dark:text-slate-100">{leaf.label}</div>
+                              {leaf.meta ? <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{leaf.meta}</div> : null}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </ArchiveSectionCard>
+    );
+  }
 
   return (
     <motion.div
@@ -96,20 +192,35 @@ export function MemoryResourcesPanel({
         icon={FolderTree}
         title={t("memory.resources.title")}
         description={t("memory.resources.desc")}
-        columns={compact ? "lg:grid-cols-1" : "lg:grid-cols-[1.05fr_0.95fr]"}
+        columns="lg:grid-cols-[1.05fr_0.95fr]"
         left={(
           <ArchiveSectionCard>
-            <div className="mb-4 flex items-start justify-between gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                  <FolderTree className="h-3.5 w-3.5" />
-                  {t("memory.resources.structuralTopology")}
-                </div>
-                <div className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{t("memory.resources.desc")}</div>
-                <div className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">
-                  {t("memory.resources.phase1OutcomeLine1")}
-                </div>
-              </div>
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <FolderTree className="w-4 h-4 text-sky-500" />
+              {t("memory.resources.title")}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <ArchiveStatCard
+                label={t("memory.resources.workspace")}
+                value={<span className="break-all text-sm font-medium text-slate-700 dark:text-slate-200">{memoryResult?.workspace ?? t("memory.diag.unavailable")}</span>}
+              />
+              <ArchiveStatCard
+                label={t("memory.resources.total")}
+                value={<span className="text-sm font-medium">{resourceCount}</span>}
+                meta={t("memory.resources.totalMeta", groups.length)}
+              />
+              <ArchiveStatCard
+                label={t("memory.diag.runtimeStatus")}
+                value={<span className="text-sm font-medium">{runtimeStatusSummary ? `${runtimeStatusSummary.indexedFiles}${runtimeStatusSummary.totalFiles != null ? `/${runtimeStatusSummary.totalFiles}` : ""}` : t(isLocalGatewaySession ? "memory.diag.runtimePlaceholder" : "memory.diag.runtimeRemoteUnavailable")}</span>}
+                meta={runtimeStatusSummary ? `${runtimeStatusSummary.chunks} chunks` : "-"}
+              />
+              <ArchiveStatCard
+                label={t("memory.resources.topGroup")}
+                value={<span className="text-sm font-medium">{topGroup ? t(topGroup.titleKey) : t("memory.resources.noneSelected")}</span>}
+                meta={topGroup ? t("memory.resources.count", topGroup.leaves.length) : "-"}
+              />
+            </div>
+            <div className="mt-4 flex items-center justify-end">
               <button
                 onClick={onOpenDiagnostics}
                 className="shrink-0 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-sky-300 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
@@ -176,7 +287,7 @@ export function MemoryResourcesPanel({
             </div>
           </ArchiveSectionCard>
         )}
-        right={compact ? null : (
+        right={(
           <ArchiveSectionCard>
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{t("memory.resources.selected")}</div>
@@ -201,7 +312,7 @@ export function MemoryResourcesPanel({
             </div>
 
             {healthProbeSummary ? (
-              <ArchiveDiagnosticsCard title={t("memory.diag.healthProbe")} className={`mt-4 text-xs ${diagnosticsTone(healthProbeSummary)}`}>
+              <ArchiveDiagnosticsCard title={t("memory.diag.healthProbe")} className="mt-4 text-xs">
                 <div>{healthProbeSummary.provider} / {healthProbeSummary.model}</div>
                 <div className="mt-1">{t("memory.resources.embeddings")}: {healthProbeSummary.embeddingsReady === true ? t("memory.diag.ready") : healthProbeSummary.embeddingsReady === false ? t("memory.diag.unavailableShort") : t("memory.diag.unknownShort")}</div>
               </ArchiveDiagnosticsCard>
@@ -222,7 +333,7 @@ export function MemoryResourcesPanel({
         )}
       />
 
-      {compact ? null : <ArchiveDetailPane>
+      <ArchiveDetailPane>
         <ArchiveEditorPane
           header={<div className="text-sm font-semibold">{t("memory.resources.phase1Status")}</div>}
           body={(
@@ -243,7 +354,7 @@ export function MemoryResourcesPanel({
             </>
           )}
         />
-      </ArchiveDetailPane>}
+      </ArchiveDetailPane>
     </motion.div>
   );
 }

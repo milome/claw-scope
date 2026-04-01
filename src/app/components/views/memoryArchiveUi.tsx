@@ -106,20 +106,20 @@ export function ArchiveDiagnosticsLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="absolute inset-y-0 right-0 z-20 w-full max-w-md border-l border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</div>
-          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{subtitle}</div>
+    <div className="absolute inset-y-0 right-0 z-20 w-full max-w-xl overflow-hidden border-l border-slate-800 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] p-5 shadow-[0_24px_64px_rgba(2,6,23,0.55)] backdrop-blur-xl">
+      <div className="flex items-center justify-between gap-3 rounded-[24px] border border-slate-800/90 bg-slate-950/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(148,163,184,0.08)]">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-slate-100">{title}</div>
+          <div className="mt-1 text-xs text-slate-400">{subtitle}</div>
         </div>
         <button
           onClick={onClose}
-          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition-colors hover:border-sky-300 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
+          className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-200 shadow-sm transition-colors hover:border-sky-600 hover:text-sky-300"
         >
           Close
         </button>
       </div>
-      <div className="mt-4 space-y-3">{children}</div>
+      <div className="mt-4 max-h-[calc(100vh-120px)] space-y-3 overflow-y-auto pr-1">{children}</div>
     </div>
   );
 }
@@ -179,7 +179,7 @@ export function ArchiveDrawer({
   children: ReactNode;
 }) {
   return (
-    <div className="absolute inset-y-0 right-0 z-20 w-full max-w-md border-l border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+    <div className="absolute inset-0 z-20 bg-slate-950/40 backdrop-blur-[2px]">
       {children}
     </div>
   );

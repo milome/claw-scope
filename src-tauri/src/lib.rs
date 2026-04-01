@@ -33,6 +33,7 @@ pub fn run() {
             gateway::commands::gateway_agent_workspace_identity_get,
             gateway::commands::gateway_agent_settings_get,
             gateway::commands::gateway_agent_memory_set,
+            gateway::commands::gateway_agent_memory_index,
             gateway::commands::gateway_agent_workspace_identity_set,
             gateway::commands::gateway_agent_soul_set,
             gateway::commands::open_external_url,
