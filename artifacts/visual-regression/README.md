@@ -2,6 +2,12 @@
 
 Playwright 截图回归产物统一放在 `artifacts/visual-regression/`。
 
+## 保留策略
+
+- `ci-baseline/`：仓库内保留，作为 CI 默认产物目录与结构基线
+- 其它按日期或版本号命名的 baseline：默认视为本地审查产物，不建议长期提交到仓库
+- 若需要归档某一轮人工审查，请在提交说明里明确原因，避免把截图历史无限堆进版本库
+
 ## 目录结构
 
 - `<baseline-name>/light/*.png`
@@ -64,3 +70,7 @@ npm run visual:ci
 ```
 
 然后把 `artifacts/visual-regression/ci-baseline/` 作为 artifact 上传。
+
+## 清理建议
+
+如需清理本地历史 baseline，可删除除 `README.md` 与 `ci-baseline/` 之外的目录后重新生成。
