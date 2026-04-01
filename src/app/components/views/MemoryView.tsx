@@ -834,6 +834,9 @@ export function MemoryView() {
     memoryStatus,
     runtimeStatus: memoryRuntimeStatus,
   });
+  const searchPrimaryReason = memoryStatus?.embeddingsError
+    ? t(memoryConfigStatus.providerAvailabilityReasonKey)
+    : t(memoryConfigStatus.searchAvailabilityReasonKey);
 
   const getAgentBadge = (agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
@@ -1312,6 +1315,8 @@ export function MemoryView() {
           commandGuideDescription={t(memoryConfigStatus.commandDescriptionKey)}
           configStatusMessage={t(memoryConfigStatusMessageKey(memoryConfigStatus.statusKey))}
           searchAvailabilityReason={t(memoryConfigStatus.searchAvailabilityReasonKey)}
+          providerAvailabilityReason={t(memoryConfigStatus.providerAvailabilityReasonKey)}
+          searchPrimaryReason={searchPrimaryReason}
           copiedCommandGuide={copiedCommandGuide}
           searchQuery={searchQuery}
           searchRunning={searchRunning}

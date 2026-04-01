@@ -201,6 +201,7 @@ export function MemoryDiagnosticsDrawer({
             <div>qmd paths: {knowledgeModel.qmdPaths.join(", ") || t("memory.knowledge.none")}</div>
             <div>source counts: {knowledgeModel.runtimeSummary?.sourceCounts.map((item) => `${item.source}: ${item.files}/${item.chunks}`).join(" · ") || t("memory.knowledge.sourcesEmpty")}</div>
             <div>{t(`memory.knowledge.runtimeMatch.${configStatus.runtimeMatchState}`)}</div>
+            <div>external summary: {knowledgeModel.sections.map((section) => `${t(section.titleKey)}=${section.entries.length}`).join(" · ")}</div>
             <div>session memory: {knowledgeModel.sessionMemoryEnabled ? t("memory.diag.ready") : t("memory.diag.unavailableShort")}</div>
             <div>
               runtime: {knowledgeModel.runtimeAvailable

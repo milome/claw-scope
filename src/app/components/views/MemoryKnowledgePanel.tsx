@@ -9,7 +9,7 @@ import type {
 import type { SemanticMindMapModel } from "./memorySemanticTypes";
 import type { MemoryExternalSourceItem } from "./memoryState";
 import { buildExternalKnowledgeViewModel, isBlockedExternalKnowledgePath } from "./memoryKnowledgeState";
-import { buildMemoryConfigStatusSummary, memoryConfigBridgeMessageKey, memoryConfigStatusMessageKey } from "./memoryConfigStatus";
+import { buildMemoryConfigStatusSummary, memoryConfigBridgeMessageKey, memoryConfigStatusMessageKey, memoryReindexModeMessageKey } from "./memoryConfigStatus";
 import {
   runExternalKnowledgeReindex,
   setExternalKnowledgePaths,
@@ -198,6 +198,30 @@ export function MemoryKnowledgePanel({
     }
   };
 
+  const runPostConfigReindex = async () => {
+    if (!statusSummary.localWritable || !selectedAgentId) {
+      return;
+    }
+
+    setSavingAction("reindex");
+    clearFieldError("reindex");
+    setReindexFeedback(t("memory.knowledge.reindexAutoRunning"));
+    try {
+      const result = await runExternalKnowledgeReindex(
+        selectedAgentId,
+        statusSummary.reindexStrategy,
+        t,
+      );
+      await onRefreshKnowledge();
+      setReindexFeedback(result.stdout || t("memory.knowledge.reindexDone"));
+    } catch (error) {
+      const failure = error as MemoryKnowledgeActionFailure;
+      setFieldError("reindex", failure.message);
+    } finally {
+      setSavingAction(null);
+    }
+  };
+
   const handleAddExtraPath = async () => {
     const normalized = newExtraPath.trim();
     if (!normalized) {
@@ -222,6 +246,7 @@ export function MemoryKnowledgePanel({
     if (result) {
       startTransition(() => setNewExtraPath(""));
       toast.success(t("memory.knowledge.pathAdded"));
+      await runPostConfigReindex();
     }
   };
 
@@ -238,6 +263,7 @@ export function MemoryKnowledgePanel({
     );
     if (result) {
       toast.success(t("memory.knowledge.pathRemoved"));
+      await runPostConfigReindex();
     }
   };
 
@@ -265,6 +291,7 @@ export function MemoryKnowledgePanel({
     );
     if (result) {
       toast.success(t(enabled ? "memory.knowledge.sessionToggleOn" : "memory.knowledge.sessionToggleOff"));
+      await runPostConfigReindex();
     }
   };
 
@@ -294,6 +321,7 @@ export function MemoryKnowledgePanel({
     );
     if (result) {
       toast.success(t("memory.knowledge.sourcesUpdated"));
+      await runPostConfigReindex();
     }
   };
 
@@ -476,6 +504,8 @@ export function MemoryKnowledgePanel({
               <div>
                 <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("memory.knowledge.reindexCard")}</div>
                 <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(statusSummary.commandDescriptionKey)}</div>
+                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(memoryReindexModeMessageKey(statusSummary.reindexMode))}</div>
+                {statusSummary.localWritable ? <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.reindexAutoHint")}</div> : null}
               </div>
               {statusSummary.localWritable ? (
                 <ArchiveActionButton

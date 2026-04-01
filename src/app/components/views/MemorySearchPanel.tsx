@@ -49,6 +49,8 @@ type MemorySearchPanelProps = {
   commandGuideDescription: string;
   configStatusMessage: string;
   searchAvailabilityReason: string;
+  providerAvailabilityReason: string;
+  searchPrimaryReason: string;
   copiedCommandGuide: boolean;
   searchQuery: string;
   searchRunning: boolean;
@@ -78,6 +80,8 @@ export function MemorySearchPanel({
   commandGuideDescription,
   configStatusMessage,
   searchAvailabilityReason,
+  providerAvailabilityReason,
+  searchPrimaryReason,
   copiedCommandGuide,
   searchQuery,
   searchRunning,
@@ -168,7 +172,9 @@ export function MemorySearchPanel({
               {healthProbeSummary?.embeddingsReady ? t("memory.search.commands.providerReady") : t("memory.search.commands.providerMissing")}
             </div>
             <div className="mt-2 text-slate-500 dark:text-slate-400">{configStatusMessage}</div>
+            <div className="font-medium text-slate-700 dark:text-slate-200">{searchPrimaryReason}</div>
             <div className="text-slate-500 dark:text-slate-400">{searchAvailabilityReason}</div>
+            <div className="text-slate-500 dark:text-slate-400">{providerAvailabilityReason}</div>
             <div className="text-slate-500 dark:text-slate-400">{isLocalGatewaySession ? t("memory.knowledge.bridgeStatus.local") : t("memory.knowledge.bridgeStatus.remote")}</div>
             <div className="text-slate-500 dark:text-slate-400">{commandGuideDescription}</div>
             <pre className="mt-3 overflow-auto rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">{commandGuide}</pre>

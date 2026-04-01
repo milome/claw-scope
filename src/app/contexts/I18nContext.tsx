@@ -2070,6 +2070,14 @@ const DICT: Record<string, string[]> = {
   "memory.search.reason.indexed": ["External knowledge is configured and indexed. If search still fails, check the provider or embeddings status.", "external knowledge 已配置且已建索引；如果搜索仍不可用，请检查 provider 或 embeddings 状态。", "external knowledge 已設定且已建索引；若搜尋仍不可用，請檢查 provider 或 embeddings 狀態。"],
   "memory.search.reason.diagUnavailable": ["Diagnostics are unavailable, so the page cannot confirm whether external knowledge is indexed.", "诊断信息缺失，当前无法确认 external knowledge 是否已进入索引。", "診斷資訊缺失，目前無法確認 external knowledge 是否已進入索引。"],
   "memory.search.reason.remoteReadonly": ["Current session is remote read-only. Search can inspect status, but config changes and local indexing must happen on the host.", "当前是远程只读会话。Search 页可以查看状态，但配置修改和本地索引必须在宿主机执行。", "目前是遠端唯讀工作階段。Search 頁可以查看狀態，但設定修改與本地索引必須在主機上執行。"],
+  "memory.search.providerReason.ready": ["Embedding provider looks ready.", "embedding provider 看起来已就绪。", "embedding provider 看起來已就緒。"],
+  "memory.search.providerReason.embeddingsError": ["Embedding provider returned an explicit error. Search availability may still fail even if indexing state looks healthy.", "embedding provider 已返回明确错误；即使索引状态正常，搜索仍可能不可用。", "embedding provider 已回傳明確錯誤；即使索引狀態正常，搜尋仍可能不可用。"],
+  "memory.search.providerReason.embeddingsUnavailable": ["Embeddings are currently unavailable. Search cannot become healthy until provider readiness is restored.", "embeddings 当前不可用，provider 恢复前搜索不会真正健康。", "embeddings 目前不可用，在 provider 恢復前搜尋不會真正健康。"],
+  "memory.search.providerReason.providerMissing": ["Provider readiness is still unknown from current diagnostics.", "当前 diagnostics 还无法确认 provider 是否就绪。", "目前 diagnostics 還無法確認 provider 是否就緒。"],
+  "memory.knowledge.reindexAutoHint": ["Local writes can trigger an immediate follow-up reindex to keep runtime state closer to config changes.", "本地写入后可以立即跟一个 reindex，尽量让 runtime 状态贴近配置变更。", "本地寫入後可以立即接一個 reindex，盡量讓 runtime 狀態貼近設定變更。"],
+  "memory.knowledge.reindexAutoRunning": ["Config applied. Reindex is running now.", "配置已写入，正在继续执行 reindex。", "設定已寫入，正在接續執行 reindex。"],
+  "memory.knowledge.reindexMode.auto": ["Local session uses automatic follow-up reindex after config writes.", "本地会话会在配置写入后自动补一次 reindex。", "本地工作階段會在設定寫入後自動補一次 reindex。"],
+  "memory.knowledge.reindexMode.manual": ["Remote read-only mode uses manual guidance only. Reindex must be triggered on the host.", "远程只读模式只提供手动指引，reindex 需要在宿主机触发。", "遠端唯讀模式只提供手動指引，reindex 需要在主機上觸發。"],
 
   "agent.active": [
     "Active",

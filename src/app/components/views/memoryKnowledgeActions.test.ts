@@ -77,5 +77,17 @@ describe("memoryKnowledgeActions", () => {
     expect(gatewayAgentMemoryIndex).toHaveBeenCalledWith("agent-main", true);
     expect(result.stdout).toBe("reindexed");
   });
-});
 
+  it("runs reindex incrementally when strategy is incremental", async () => {
+    vi.mocked(gatewayAgentMemoryIndex).mockResolvedValueOnce({
+      agentId: "agent-main",
+      forced: false,
+      stdout: "reindexed incremental",
+    });
+
+    const result = await runExternalKnowledgeReindex("agent-main", "incremental", t);
+
+    expect(gatewayAgentMemoryIndex).toHaveBeenCalledWith("agent-main", false);
+    expect(result.stdout).toBe("reindexed incremental");
+  });
+});

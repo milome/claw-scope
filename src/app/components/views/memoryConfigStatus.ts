@@ -5,12 +5,14 @@ import type {
 } from "../../contexts/OpenClawContext";
 
 export type MemoryIndexStrategy = "incremental" | "full";
+export type MemoryReindexMode = "auto" | "manual";
 
 export type MemoryConfigStatusSummary = {
   hasExternalKnowledge: boolean;
   localWritable: boolean;
   reindexRequired: boolean;
   reindexStrategy: MemoryIndexStrategy;
+  reindexMode: MemoryReindexMode;
   configuredButNotIndexed: boolean;
   runtimeAvailable: boolean;
   statusKey:
@@ -32,6 +34,11 @@ export type MemoryConfigStatusSummary = {
     | "memory.search.reason.indexed"
     | "memory.search.reason.diagUnavailable"
     | "memory.search.reason.remoteReadonly";
+  providerAvailabilityReasonKey:
+    | "memory.search.providerReason.ready"
+    | "memory.search.providerReason.embeddingsError"
+    | "memory.search.providerReason.embeddingsUnavailable"
+    | "memory.search.providerReason.providerMissing";
   runtimeMatchState: "missing" | "partial" | "matched";
 };
 
@@ -45,6 +52,12 @@ export function memoryConfigBridgeMessageKey(localWritable: boolean) {
   return localWritable
     ? "memory.knowledge.bridgeStatus.local"
     : "memory.knowledge.bridgeStatus.remote";
+}
+
+export function memoryReindexModeMessageKey(mode: MemoryReindexMode) {
+  return mode === "auto"
+    ? "memory.knowledge.reindexMode.auto"
+    : "memory.knowledge.reindexMode.manual";
 }
 
 function buildHints(...values: Array<string | null | undefined>) {
@@ -99,6 +112,7 @@ export function buildMemoryConfigStatusSummary({
   const indexedFiles = runtimeStatus?.status.files ?? 0;
   const runtimeAvailable = runtimeStatus !== null;
   const reindexStrategy: MemoryIndexStrategy = indexedFiles === 0 ? "full" : "incremental";
+  const reindexMode: MemoryReindexMode = isLocalGatewaySession ? "auto" : "manual";
   const reindexRequired = Boolean(runtimeStatus?.status.dirty);
   const hasExternalKnowledge = Boolean(
     (memoryResult?.diagnostics?.extraPaths?.length ?? 0) > 0 ||
@@ -154,6 +168,16 @@ export function buildMemoryConfigStatusSummary({
 
   let statusKey: MemoryConfigStatusSummary["statusKey"] = "diag_unavailable";
   let searchAvailabilityReasonKey: MemoryConfigStatusSummary["searchAvailabilityReasonKey"] = "memory.search.reason.diagUnavailable";
+  let providerAvailabilityReasonKey: MemoryConfigStatusSummary["providerAvailabilityReasonKey"] = "memory.search.providerReason.providerMissing";
+
+  if (memoryStatus?.embeddingsError) {
+    providerAvailabilityReasonKey = "memory.search.providerReason.embeddingsError";
+  } else if (memoryStatus?.embeddingsAvailable === false) {
+    providerAvailabilityReasonKey = "memory.search.providerReason.embeddingsUnavailable";
+  } else if (memoryStatus?.embeddingsAvailable === true) {
+    providerAvailabilityReasonKey = "memory.search.providerReason.ready";
+  }
+
   if (!memoryResult?.diagnostics) {
     statusKey = "diag_unavailable";
     searchAvailabilityReasonKey = "memory.search.reason.diagUnavailable";
@@ -179,12 +203,14 @@ export function buildMemoryConfigStatusSummary({
     localWritable: isLocalGatewaySession,
     reindexRequired,
     reindexStrategy,
+    reindexMode,
     configuredButNotIndexed,
     runtimeAvailable,
     statusKey,
     commandGuide,
     commandDescriptionKey,
     searchAvailabilityReasonKey,
+    providerAvailabilityReasonKey,
     runtimeMatchState,
   };
 }
