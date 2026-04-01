@@ -233,9 +233,9 @@ export function Shell() {
           </NavLink>
 
           <div className="mt-auto px-4 pb-3 flex flex-col gap-3">
-            <div className="bg-[#fef9c3] dark:bg-amber-900/20 border border-[#fde047] dark:border-amber-700/30 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-400 shadow-sm">
-              <div className="font-semibold mb-1 flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div> {t("demo.mode")}</div>
-              {t("demo.desc")}
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
+              <div className="font-semibold text-slate-800 dark:text-slate-200">ClawScope v0.1.0</div>
+              <div className="mt-1">Copyright © 2026 ClawScope</div>
             </div>
           </div>
         </aside>
