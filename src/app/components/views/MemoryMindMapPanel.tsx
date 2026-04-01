@@ -2,7 +2,7 @@ import { BrainCircuit, Cpu, Orbit, Sparkles, Workflow } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import type { SemanticCluster, SemanticConcept, SemanticMindMapModel } from "./memorySemanticTypes";
-import { ArchiveDetailPane, ArchiveDiagnosticsCard, ArchiveEditorPane, ArchiveInfoBlock, ArchiveNotice, ArchiveSectionCard, ArchiveSplitPanel } from "./memoryArchiveUi";
+import { ArchiveDiagnosticsCard, ArchiveInfoBlock, ArchiveLayerHeader, ArchiveNotice, ArchiveSectionCard } from "./memoryArchiveUi";
 import { debugReasonLabel, sourceKindLabel } from "./memoryDisplayLabels";
 import { LabelValueList } from "./LabelValueList";
 
@@ -158,19 +158,21 @@ export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenE
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
       transition={{ duration: 0.24 }}
+      className="space-y-4"
     >
-      <ArchiveSplitPanel
+      <ArchiveLayerHeader
         icon={BrainCircuit}
         title={t("memory.tab.knowledge")}
         description={t("memory.knowledge.note")}
-        columns="lg:grid-cols-[1.32fr_0.95fr]"
-        left={(
-          <ArchiveSectionCard>
-            <div className="mb-4 flex items-start justify-between gap-3 rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,rgba(240,249,255,0.95),rgba(236,253,245,0.88))] p-4 dark:border-sky-900/60 dark:bg-[linear-gradient(135deg,rgba(12,74,110,0.2),rgba(6,95,70,0.14))]">
+      />
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.95fr)_minmax(320px,0.72fr)]">
+        <ArchiveSectionCard>
+            <div className="mb-3 flex items-start justify-between gap-3 rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,rgba(240,249,255,0.95),rgba(236,253,245,0.88))] p-4 dark:border-sky-900/60 dark:bg-[linear-gradient(135deg,rgba(12,74,110,0.2),rgba(6,95,70,0.14))]">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700 dark:border-sky-800/80 dark:bg-slate-950/60 dark:text-sky-300">
                   <Orbit className="h-3.5 w-3.5" />
-                  Figma semantic map
+                  SEMANTIC MIND MAP
                 </div>
                 <div className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{t("memory.mindmap.headerGlow")}</div>
                 <div className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">
@@ -182,7 +184,7 @@ export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenE
               </div>
             </div>
 
-            <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{t("memory.mindmap.debug.title")}</div>
                 <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.mindmap.debug.inspect")}</div>
@@ -196,7 +198,7 @@ export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenE
               </button>
             </div>
 
-            <ArchiveDiagnosticsCard title={t("memory.mindmap.semanticSummary")} className="mb-4 text-xs">
+            <ArchiveDiagnosticsCard title={t("memory.mindmap.semanticSummary")} className="mb-3 text-xs">
               <LabelValueList
                 className="md:grid-cols-2"
                 items={[
@@ -333,7 +335,7 @@ export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenE
                       <div className="bg-black/40 p-2 rounded-lg shrink-0 border border-white/10"><Workflow className={`w-5 h-5 ${anchor.colorClass}`} /></div>
                       <div className="min-w-0 flex-1">
                         <div className="text-[13px] font-bold text-slate-100 tracking-wide truncate">{shortLabel(anchor.cluster.label, 20)}</div>
-                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">{anchor.concepts.length} {t("memory.mindmap.concept")}</div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">{anchor.concepts.length} {t("memory.mindmap.concept")}</div>
                       </div>
                       <div className="absolute inset-0 rounded-xl border border-white/5 pointer-events-none" />
                     </motion.button>
@@ -359,10 +361,9 @@ export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenE
                 ))}
               </div>
             )}
-          </ArchiveSectionCard>
-        )}
-        right={(
-          <ArchiveSectionCard>
+        </ArchiveSectionCard>
+
+        <ArchiveSectionCard>
             <div className="rounded-3xl border border-slate-700 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.92))] p-4 shadow-[0_18px_40px_rgba(2,6,23,0.32)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -524,46 +525,42 @@ export function MemoryMindMapPanel({ model, t, showDebug, onToggleDebug, onOpenE
                 </div>
               </ArchiveDiagnosticsCard>
             ) : null}
-          </ArchiveSectionCard>
-        )}
-      />
+        </ArchiveSectionCard>
+      </div>
 
-      <ArchiveDetailPane>
-        <ArchiveEditorPane
-          header={
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold">{t("memory.knowledge.drawerFields")}</div>
-                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.note")}</div>
-              </div>
-              <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                <Sparkles className="mr-1 inline h-3.5 w-3.5" /> {t("memory.mindmap.figmaSemanticBadge")}
-              </div>
+      <ArchiveSectionCard>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("memory.knowledge.drawerFields")}</div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.note")}</div>
+          </div>
+          <div className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+            <Sparkles className="mr-1 inline h-3.5 w-3.5" /> {t("memory.mindmap.figmaSemanticBadge")}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+          <ArchiveDiagnosticsCard title={t("memory.mindmap.pipelineContract")} className="text-xs">
+            <LabelValueList
+              items={[
+                { label: t("memory.mindmap.entriesStat"), value: model.entries.length },
+                { label: t("memory.mindmap.clustersStat"), value: model.clusters.length },
+                { label: t("memory.mindmap.conceptsStat"), value: model.concepts.length },
+                { label: t("memory.mindmap.edgesStat"), value: model.edges.length },
+              ]}
+            />
+          </ArchiveDiagnosticsCard>
+
+          <ArchiveDiagnosticsCard title={t("memory.mindmap.implementationNote")} className="text-xs">
+            <div className="space-y-1.5 text-slate-500 dark:text-slate-400">
+              <div>{t("memory.knowledge.note")}</div>
+              <div>{t("memory.mindmap.semanticMap")}</div>
+              <div>{t("memory.resources.desc")}</div>
             </div>
-          }
-          body={
-            <>
-              <ArchiveDiagnosticsCard title={t("memory.mindmap.pipelineContract") }>
-                <LabelValueList
-                  items={[
-                    { label: t("memory.mindmap.entriesStat"), value: model.entries.length },
-                    { label: t("memory.mindmap.clustersStat"), value: model.clusters.length },
-                    { label: t("memory.mindmap.conceptsStat"), value: model.concepts.length },
-                    { label: t("memory.mindmap.edgesStat"), value: model.edges.length },
-                  ]}
-                />
-              </ArchiveDiagnosticsCard>
-              <ArchiveDiagnosticsCard title={t("memory.mindmap.implementationNote") }>
-                <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
-                  <div>{t("memory.knowledge.note")}</div>
-                  <div>{t("memory.mindmap.semanticMap")}</div>
-                  <div>{t("memory.resources.desc")}</div>
-                </div>
-              </ArchiveDiagnosticsCard>
-            </>
-          }
-        />
-      </ArchiveDetailPane>
+          </ArchiveDiagnosticsCard>
+        </div>
+      </ArchiveSectionCard>
+
     </motion.div>
   );
 }

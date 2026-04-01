@@ -1454,6 +1454,9 @@ const DICT: Record<string, string[]> = {
     "在当前选中的根文档里搜索",
     "在目前選中的根文件裡搜尋",
   ],
+  "memory.documents.searchAction": ["Search", "搜索", "搜尋"],
+  "memory.documents.searchRun": ["Searching current document for: {0}", "正在当前文档内搜索：{0}", "正在目前文件內搜尋：{0}"],
+  "memory.documents.searchCleared": ["Document text search cleared.", "已清除文档文本搜索。", "已清除文件文字搜尋。"],
   "memory.documents.matches": [
     "{0} matches",
     "{0} 条匹配",
@@ -1951,11 +1954,11 @@ const DICT: Record<string, string[]> = {
     "网关已经返回记忆文档，但还没有附带外部知识输入的诊断信息。",
     "閘道已回傳記憶文件，但還沒有附帶外部知識輸入的診斷資訊。",
   ],
-  "memory.knowledge.note": [
-    "This area should gradually adopt the same warmer tone as Profile: clearer guidance, softer wording, and less mechanical framing.",
-    "这里后续也会继续向 Profile 的表达靠拢：说明更清楚，语气更柔和，少一点机械感。",
-    "這裡後續也會持續向 Profile 的表達靠攏：說明更清楚，語氣更柔和，也少一些機械感。",
-  ],
+    "memory.knowledge.note": [
+      "Browse the semantic mind map, inspect runtime diagnostics, and manage external knowledge sources from one page.",
+      "在这个页面可以查看语义导图、运行诊断，以及外部知识接入配置。",
+      "在這個頁面可以查看語意導圖、執行診斷，以及外部知識接入設定。",
+    ],
   "memory.knowledge.paths": [
     "Resolved source paths",
     "已解析的来源路径",

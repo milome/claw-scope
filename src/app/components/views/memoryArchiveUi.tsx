@@ -119,7 +119,7 @@ export function ArchiveDiagnosticsLayout({
           Close
         </button>
       </div>
-      <div className="mt-4 max-h-[calc(100vh-120px)] space-y-3 overflow-y-auto pr-1">{children}</div>
+      <div className="mt-4 h-[calc(100vh-120px)] space-y-3 overflow-y-auto pr-2 pb-8">{children}</div>
     </div>
   );
 }
@@ -156,16 +156,21 @@ export function ArchiveResultCard({
 export function ArchivePageHeader({
   title,
   description,
+  leadingIcon,
   actions,
 }: {
   title: string;
   description: string;
+  leadingIcon?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
     <div className="mb-4 md:mb-5 shrink-0 flex flex-col md:flex-row md:items-end justify-between gap-4">
       <div>
-        <h1 className="text-[20px] md:text-[22px] font-bold tracking-tight text-slate-900 dark:text-slate-100 mb-1">{title}</h1>
+        <div className="mb-1 flex items-center gap-2">
+          {leadingIcon}
+          <h1 className="text-[20px] md:text-[22px] font-bold tracking-tight text-slate-900 dark:text-slate-100">{title}</h1>
+        </div>
         <p className="text-[13px] md:text-sm text-slate-500 dark:text-slate-400">{description}</p>
       </div>
       {actions}

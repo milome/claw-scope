@@ -50,7 +50,7 @@ type MemorySearchPanelProps = {
   configStatusMessage: string;
   searchAvailabilityReason: string;
   providerAvailabilityReason: string;
-  searchPrimaryReason: string;
+  searchPrimaryReason: string | null;
   copiedCommandGuide: boolean;
   searchQuery: string;
   searchRunning: boolean;
@@ -172,7 +172,7 @@ export function MemorySearchPanel({
               {healthProbeSummary?.embeddingsReady ? t("memory.search.commands.providerReady") : t("memory.search.commands.providerMissing")}
             </div>
             <div className="mt-2 text-slate-500 dark:text-slate-400">{configStatusMessage}</div>
-            <div className="font-medium text-slate-700 dark:text-slate-200">{searchPrimaryReason}</div>
+            {searchPrimaryReason ? <div className="font-medium text-slate-700 dark:text-slate-200">{searchPrimaryReason}</div> : null}
             <div className="text-slate-500 dark:text-slate-400">{searchAvailabilityReason}</div>
             <div className="text-slate-500 dark:text-slate-400">{providerAvailabilityReason}</div>
             <div className="text-slate-500 dark:text-slate-400">{isLocalGatewaySession ? t("memory.knowledge.bridgeStatus.local") : t("memory.knowledge.bridgeStatus.remote")}</div>

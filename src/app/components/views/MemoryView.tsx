@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Calendar, Network, Cpu, BrainCircuit, ChevronDown, BookOpen, FileText, Info } from "lucide-react";
+import { Search, Calendar, Network, Cpu, BrainCircuit, ChevronDown, BookOpen, FileText, Info, LibraryBig } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { useI18n } from "../../contexts/I18nContext";
@@ -252,23 +252,6 @@ function resolveTimelineModeLabel(
   return t("memory.timeline.mode.unknown");
 }
 
-function sectionDescription(section: MemorySection, t: (key: string, ...args: (string | number)[]) => string) {
-  switch (section) {
-    case "overview":
-      return t("memory.overview.sources.title");
-    case "documents":
-      return t("memory.documents.desc");
-    case "footprints":
-      return t("memory.footprints.probeHint");
-    case "search":
-      return t("memory.search.routingNote");
-    case "knowledge":
-      return t("memory.knowledge.subtitle");
-    default:
-      return t("memory.desc");
-  }
-}
-
 function openTargetForResource(kind: "document" | "timeline" | "external_source" | "runtime_signal") {
   if (kind === "document") {
     return "documents" as const;
@@ -318,6 +301,7 @@ export function MemoryView() {
   const [selectedDocumentName, setSelectedDocumentName] = useState("");
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [documentQuery, setDocumentQuery] = useState("");
+  const [documentSearchInput, setDocumentSearchInput] = useState("");
   const [documentMatchIndex, setDocumentMatchIndex] = useState(-1);
   const [documentSearchSource, setDocumentSearchSource] = useState<"manual" | "search_result">("manual");
   const [documentSearchHint, setDocumentSearchHint] = useState<string | null>(null);
@@ -726,6 +710,10 @@ export function MemoryView() {
   }, [documentMatches.length, selectedDocumentName]);
 
   useEffect(() => {
+    setDocumentSearchInput(documentQuery);
+  }, [documentQuery]);
+
+  useEffect(() => {
     if (!selectedTimelineEntryName) {
       setSelectedTimelineDateLabel("");
       return;
@@ -834,10 +822,12 @@ export function MemoryView() {
     memoryStatus,
     runtimeStatus: memoryRuntimeStatus,
   });
-  const searchPrimaryReasonKey = memoryStatus?.embeddingsError
+  const searchPrimaryReasonKey = !isLocalGatewaySession
+    ? null
+    : memoryStatus?.embeddingsError
     ? memoryConfigStatus.providerAvailabilityReasonKey
     : memoryConfigStatus.searchAvailabilityReasonKey;
-  const searchPrimaryReason = t(searchPrimaryReasonKey);
+  const searchPrimaryReason = searchPrimaryReasonKey ? t(searchPrimaryReasonKey) : null;
 
   const getAgentBadge = (agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
@@ -1049,6 +1039,13 @@ export function MemoryView() {
     }
   };
 
+  const handleRunDocumentSearch = () => {
+    const nextQuery = documentSearchInput.trim();
+    setDocumentQuery(nextQuery);
+    setDocumentSearchSource("manual");
+    setDocumentSearchHint(nextQuery ? t("memory.documents.searchRun", nextQuery) : t("memory.documents.searchCleared"));
+  };
+
   const handleCancelDocumentEdit = () => {
     if (!selectedDocument) {
       return;
@@ -1224,7 +1221,7 @@ export function MemoryView() {
         <MemoryDocumentsDesktop
           title={t("memory.documents.title")}
           description={documentSearchHint ?? t("memory.documents.desc")}
-          documentQuery={documentQuery}
+          documentSearchInput={documentSearchInput}
           documentMatches={documentMatches}
           documentMatchIndex={documentMatchIndex}
           documentDirty={documentDirty}
@@ -1249,7 +1246,8 @@ export function MemoryView() {
           t={t}
           getAgentBadge={getAgentBadge}
           selectedAgentId={selectedAgentId}
-          onDocumentQueryChange={setDocumentQuery}
+          onDocumentSearchInputChange={setDocumentSearchInput}
+          onRunDocumentSearch={handleRunDocumentSearch}
           onPreviousHighlight={() => setDocumentEvidenceMatchIndex((current) => Math.max(0, current - 1))}
           onNextHighlight={() => setDocumentEvidenceMatchIndex((current) => current + 1)}
           onSelectDocument={setSelectedDocumentName}
@@ -1366,6 +1364,7 @@ export function MemoryView() {
       <ArchivePageHeader
         title={t("memory.title")}
         description={t("memory.desc")}
+        leadingIcon={<LibraryBig className="h-5 w-5 text-sky-500" />}
         actions={(
           <div className="relative inline-flex items-center">
             <select
@@ -1383,12 +1382,9 @@ export function MemoryView() {
       />
 
       <ArchiveCapsule>
-        <ArchiveTabFrame icon={BookOpen} title={t("memory.title")} description={sectionDescription(activeSection, t)}>
-        <div className="space-y-4">
+        <div className="space-y-2">
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">Memory Modes</div>
-          </div>
+          <div />
           <div className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
             {agents.length} agent{agents.length === 1 ? "" : "s"} available
           </div>
@@ -1422,7 +1418,6 @@ export function MemoryView() {
           })}
         </ArchiveTabBar>
         </div>
-        </ArchiveTabFrame>
       </ArchiveCapsule>
 
       <div className="hidden">

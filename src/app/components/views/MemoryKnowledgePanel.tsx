@@ -1,4 +1,4 @@
-import { Blocks, Copy, FolderTree, Link2, Plus, RefreshCw, ShieldCheck, Trash2, BrainCircuit, Activity } from "lucide-react";
+import { Copy, FolderTree, Link2, Plus, RefreshCw, ShieldCheck, Trash2, Activity } from "lucide-react";
 import { startTransition, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type {
@@ -50,45 +50,6 @@ type MemoryKnowledgePanelProps = {
   openHint: string | null;
   onRefreshKnowledge: () => Promise<void>;
 };
-
-function statusTone(status: "configured" | "indexed" | "stale") {
-  if (status === "indexed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/30 dark:text-emerald-300";
-  }
-  if (status === "stale") {
-    return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-300";
-  }
-  return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
-}
-
-function renderEntryLabel(t: MemoryKnowledgePanelProps["t"], label: string) {
-  if (label === "session_memory_enabled") {
-    return t("memory.knowledge.sessionMemoryEnabled");
-  }
-  if (label === "session_memory_disabled") {
-    return t("memory.knowledge.sessionMemoryDisabled");
-  }
-  return label;
-}
-
-function renderEntryNote(t: MemoryKnowledgePanelProps["t"], note: string | null | undefined) {
-  if (!note) {
-    return null;
-  }
-  if (note === "sessions_source_enabled") {
-    return t("memory.knowledge.sessionsSourceEnabled");
-  }
-  if (note === "sessions_source_missing") {
-    return t("memory.knowledge.sessionsSourceMissing");
-  }
-  if (note === "qmd_active") {
-    return t("memory.knowledge.qmdActive");
-  }
-  if (note === "qmd_inactive") {
-    return t("memory.knowledge.qmdInactive");
-  }
-  return note;
-}
 
 export function MemoryKnowledgePanel({
   memoryResult,
@@ -327,29 +288,16 @@ export function MemoryKnowledgePanel({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-4">
       {openHint ? <ArchiveNotice>{openHint}</ArchiveNotice> : null}
 
-      <ArchiveSectionCard>
-        <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          <BrainCircuit className="w-4 h-4 text-sky-500" />
-          {t("memory.tab.knowledge")}
-        </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Semantic mind map</div>
-            <div className="mt-2 text-sm text-slate-700 dark:text-slate-200">{t("memory.knowledge.ia.mindMap")}</div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">External knowledge sources</div>
-            <div className="mt-2 text-sm text-slate-700 dark:text-slate-200">{t("memory.knowledge.ia.external")}</div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Diagnostics</div>
-            <div className="mt-2 text-sm text-slate-700 dark:text-slate-200">{t("memory.knowledge.ia.diagnostics")}</div>
-          </div>
-        </div>
-      </ArchiveSectionCard>
+      <MemoryMindMapPanel
+        model={model}
+        t={t}
+        showDebug={showDebug}
+        onToggleDebug={onToggleDebug}
+        onOpenEvidence={onOpenEvidence}
+      />
 
       <ArchiveSectionCard>
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -387,7 +335,7 @@ export function MemoryKnowledgePanel({
           />
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <ArchiveStatCard
             label={t("memory.knowledge.diagnostics")}
             value={knowledgeModel.diagnosticsAvailable ? t("memory.diag.ready") : t("memory.diag.unavailableShort")}
@@ -403,18 +351,22 @@ export function MemoryKnowledgePanel({
           />
           <ArchiveStatCard
             label={t("memory.knowledge.store")}
-            value={memoryResult?.diagnostics?.builtinStorePath ?? t("memory.diag.unavailable")}
+            value={(
+              <span className="block break-all text-sm font-medium leading-6 text-slate-700 dark:text-slate-200">
+                {memoryResult?.diagnostics?.builtinStorePath ?? t("memory.diag.unavailable")}
+              </span>
+            )}
           />
         </div>
 
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
             <Activity className="h-4 w-4 text-sky-500" />
             {t("memory.knowledge.runtimeCard")}
           </div>
           <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{t("memory.knowledge.runtimeHint")}</div>
           {knowledgeModel.runtimeAvailable && knowledgeModel.runtimeSummary ? (
-            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-2 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <ArchiveStatCard label={t("memory.knowledge.runtimeFiles")} value={knowledgeModel.runtimeSummary.files} />
               <ArchiveStatCard label={t("memory.knowledge.runtimeChunks")} value={knowledgeModel.runtimeSummary.chunks} />
               <ArchiveStatCard label={t("memory.knowledge.runtimeDirty")} value={knowledgeModel.runtimeSummary.dirty ? t("memory.knowledge.reindexNeeded") : t("memory.knowledge.reindexClean")} />
@@ -425,49 +377,14 @@ export function MemoryKnowledgePanel({
               {t(isLocalGatewaySession ? "memory.diag.runtimePlaceholder" : "memory.diag.runtimeRemoteUnavailable")}
             </div>
           )}
-          <div className="mt-3">
+          <div className="mt-2">
             <ArchiveNotice tone={statusSummary.runtimeMatchState === "matched" ? "info" : "warn"}>
               {t(`memory.knowledge.runtimeMatch.${statusSummary.runtimeMatchState}`)}
             </ArchiveNotice>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 xl:grid-cols-3">
-          {knowledgeModel.sections.map((section) => (
-            <div key={section.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                <Blocks className="h-4 w-4 text-sky-500" />
-                {t(section.titleKey)}
-              </div>
-              <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{t(section.descriptionKey)}</div>
-
-              {section.entries.length === 0 ? (
-                <div className="mt-3 rounded-xl border border-dashed border-slate-200 px-3 py-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  {t("memory.knowledge.sectionEmpty")}
-                </div>
-              ) : (
-                <div className="mt-3 space-y-2">
-                  {section.entries.map((entry) => (
-                    <div key={entry.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-950/40">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="break-all text-sm font-medium text-slate-800 dark:text-slate-100">{renderEntryLabel(t, entry.label)}</div>
-                          {entry.path ? <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{entry.path}</div> : null}
-                          {entry.note ? <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{renderEntryNote(t, entry.note)}</div> : null}
-                        </div>
-                        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusTone(entry.status)}`}>
-                          {t(`memory.knowledge.status.${entry.status}`)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
               <Link2 className="h-3.5 w-3.5 text-sky-500" />
@@ -485,144 +402,133 @@ export function MemoryKnowledgePanel({
             <div className="mt-2 text-sm text-slate-700 dark:text-slate-200">{t("memory.knowledge.guardrailDesc")}</div>
           </div>
         </div>
+        <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <ShieldCheck className="h-4 w-4 text-sky-500" />
+          {t("memory.knowledge.configActions")}
+        </div>
+        <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          {t(memoryConfigBridgeMessageKey(knowledgeModel.localWritable))}
+        </div>
+        {!knowledgeModel.localWritable ? (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+            {t("memory.knowledge.remoteReadonlyDetail")}
+          </div>
+        ) : null}
 
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-            <ShieldCheck className="h-4 w-4 text-sky-500" />
-            {t("memory.knowledge.configActions")}
-          </div>
-          <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-            {t(memoryConfigBridgeMessageKey(knowledgeModel.localWritable))}
-          </div>
-          {!knowledgeModel.localWritable ? (
-            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-              {t("memory.knowledge.remoteReadonlyDetail")}
+        <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("memory.knowledge.reindexCard")}</div>
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(statusSummary.commandDescriptionKey)}</div>
+              <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(memoryReindexModeMessageKey(statusSummary.reindexMode))}</div>
+              {autoReindexEnabled ? <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.reindexAutoHint")}</div> : null}
             </div>
+            {statusSummary.localWritable ? (
+              <ArchiveActionButton
+                onClick={() => void handleRunReindex()}
+                disabled={savingAction !== null}
+                variant="primary"
+              >
+                <RefreshCw className="mr-1 inline h-3.5 w-3.5" />
+                {t("memory.knowledge.reindexNow")}
+              </ArchiveActionButton>
+            ) : (
+              <ArchiveActionButton onClick={() => void handleCopyRemoteGuide()} disabled={savingAction !== null}>
+                <Copy className="mr-1 inline h-3.5 w-3.5" />
+                {t("memory.knowledge.copyRemoteGuide")}
+              </ArchiveActionButton>
+            )}
+          </div>
+          {!statusSummary.localWritable ? (
+            <>
+              <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.remoteCommandHint")}</div>
+              <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">{statusSummary.commandGuide}</pre>
+            </>
           ) : null}
+          {fieldErrors.reindex ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.reindex}</ArchiveNotice></div> : null}
+        </div>
 
-          <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("memory.knowledge.reindexCard")}</div>
-                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(statusSummary.commandDescriptionKey)}</div>
-                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t(memoryReindexModeMessageKey(statusSummary.reindexMode))}</div>
-                {autoReindexEnabled ? <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.reindexAutoHint")}</div> : null}
-              </div>
-              {statusSummary.localWritable ? (
-                <ArchiveActionButton
-                  onClick={() => void handleRunReindex()}
-                  disabled={savingAction !== null}
-                  variant="primary"
-                >
-                  <RefreshCw className="mr-1 inline h-3.5 w-3.5" />
-                  {t("memory.knowledge.reindexNow")}
-                </ArchiveActionButton>
-              ) : (
-                <ArchiveActionButton onClick={() => void handleCopyRemoteGuide()} disabled={savingAction !== null}>
-                  <Copy className="mr-1 inline h-3.5 w-3.5" />
-                  {t("memory.knowledge.copyRemoteGuide")}
-                </ArchiveActionButton>
-              )}
+        <div className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{t("memory.knowledge.externalPaths")}</div>
+            <div className="mt-3 flex gap-2">
+              <input
+                value={newExtraPath}
+                onChange={(event) => setNewExtraPath(event.target.value)}
+                disabled={!knowledgeModel.localWritable || savingAction !== null}
+                placeholder={t("memory.knowledge.pathPlaceholder")}
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
+              <ArchiveActionButton
+                onClick={() => void handleAddExtraPath()}
+                disabled={!knowledgeModel.localWritable || savingAction !== null}
+                variant="primary"
+              >
+                <Plus className="mr-1 inline h-3.5 w-3.5" />
+                {t("memory.knowledge.addPath")}
+              </ArchiveActionButton>
             </div>
-            {!statusSummary.localWritable ? (
-              <>
-                <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.remoteCommandHint")}</div>
-                <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">{statusSummary.commandGuide}</pre>
-              </>
+            {knowledgeModel.extraPaths.length > 0 ? (
+              <div className="mt-3 space-y-2">
+                {knowledgeModel.extraPaths.map((path) => (
+                  <div key={path} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/40">
+                    <div className="min-w-0 break-all text-sm text-slate-700 dark:text-slate-200">{path}</div>
+                    <ArchiveActionButton
+                      onClick={() => void handleRemoveExtraPath(path)}
+                      disabled={!knowledgeModel.localWritable || savingAction !== null}
+                    >
+                      <Trash2 className="mr-1 inline h-3.5 w-3.5" />
+                      {t("memory.knowledge.removePath")}
+                    </ArchiveActionButton>
+                  </div>
+                ))}
+              </div>
             ) : null}
-            {fieldErrors.reindex ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.reindex}</ArchiveNotice></div> : null}
+            {fieldErrors.extraPath ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.extraPath}</ArchiveNotice></div> : null}
           </div>
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{t("memory.knowledge.externalPaths")}</div>
-              <div className="mt-3 flex gap-2">
-                <input
-                  value={newExtraPath}
-                  onChange={(event) => setNewExtraPath(event.target.value)}
-                  disabled={!knowledgeModel.localWritable || savingAction !== null}
-                  placeholder={t("memory.knowledge.pathPlaceholder")}
-                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-sky-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                />
-                <ArchiveActionButton
-                  onClick={() => void handleAddExtraPath()}
-                  disabled={!knowledgeModel.localWritable || savingAction !== null}
-                  variant="primary"
-                >
-                  <Plus className="mr-1 inline h-3.5 w-3.5" />
-                  {t("memory.knowledge.addPath")}
-                </ArchiveActionButton>
-              </div>
-              {knowledgeModel.extraPaths.length > 0 ? (
-                <div className="mt-3 space-y-2">
-                  {knowledgeModel.extraPaths.map((path) => (
-                    <div key={path} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/40">
-                      <div className="min-w-0 break-all text-sm text-slate-700 dark:text-slate-200">{path}</div>
-                      <ArchiveActionButton
-                        onClick={() => void handleRemoveExtraPath(path)}
-                        disabled={!knowledgeModel.localWritable || savingAction !== null}
-                      >
-                        <Trash2 className="mr-1 inline h-3.5 w-3.5" />
-                        {t("memory.knowledge.removePath")}
-                      </ArchiveActionButton>
-                    </div>
-                  ))}
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{t("memory.knowledge.recallControls")}</div>
+            <div className="mt-3 space-y-3">
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/40">
+                <div>
+                  <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{t("memory.knowledge.sessionMemoryLabel")}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.sessionMemoryDesc")}</div>
+                  {!knowledgeModel.sources.includes("sessions") ? <div className="mt-1 text-xs text-amber-700 dark:text-amber-300">{t("memory.knowledge.sessionMemoryEnablesSourcesHint")}</div> : null}
                 </div>
-              ) : null}
-              {fieldErrors.extraPath ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.extraPath}</ArchiveNotice></div> : null}
-            </div>
+                <input
+                  type="checkbox"
+                  checked={knowledgeModel.sessionMemoryEnabled}
+                  onChange={(event) => void handleToggleSessionMemory(event.target.checked)}
+                  disabled={!knowledgeModel.localWritable || savingAction !== null}
+                  className="h-4 w-4 rounded border-slate-300 text-sky-600"
+                />
+              </label>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{t("memory.knowledge.recallControls")}</div>
-              <div className="mt-3 space-y-3">
-                <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/40">
+              {(["memory", "sessions"] as const).map((source) => (
+                <label key={source} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/40">
                   <div>
-                    <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{t("memory.knowledge.sessionMemoryLabel")}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.sessionMemoryDesc")}</div>
-                    {!knowledgeModel.sources.includes("sessions") ? <div className="mt-1 text-xs text-amber-700 dark:text-amber-300">{t("memory.knowledge.sessionMemoryEnablesSourcesHint")}</div> : null}
+                    <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{source}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">{t(source === "memory" ? "memory.knowledge.sourceMemoryDesc" : "memory.knowledge.sourceSessionsDesc")}</div>
                   </div>
                   <input
                     type="checkbox"
-                    checked={knowledgeModel.sessionMemoryEnabled}
-                    onChange={(event) => void handleToggleSessionMemory(event.target.checked)}
+                    checked={knowledgeModel.sources.includes(source)}
+                    onChange={() => void handleToggleSource(source)}
                     disabled={!knowledgeModel.localWritable || savingAction !== null}
                     className="h-4 w-4 rounded border-slate-300 text-sky-600"
                   />
                 </label>
-
-                {(["memory", "sessions"] as const).map((source) => (
-                  <label key={source} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/40">
-                    <div>
-                      <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{source}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">{t(source === "memory" ? "memory.knowledge.sourceMemoryDesc" : "memory.knowledge.sourceSessionsDesc")}</div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={knowledgeModel.sources.includes(source)}
-                      onChange={() => void handleToggleSource(source)}
-                      disabled={!knowledgeModel.localWritable || savingAction !== null}
-                      className="h-4 w-4 rounded border-slate-300 text-sky-600"
-                    />
-                  </label>
-                ))}
-              </div>
-              {fieldErrors.sessionMemory ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.sessionMemory}</ArchiveNotice></div> : null}
-              {fieldErrors.sources ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.sources}</ArchiveNotice></div> : null}
+              ))}
             </div>
+            {fieldErrors.sessionMemory ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.sessionMemory}</ArchiveNotice></div> : null}
+            {fieldErrors.sources ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.sources}</ArchiveNotice></div> : null}
           </div>
-
-          {configFeedback ? <div className="mt-3"><ArchiveNotice>{configFeedback}</ArchiveNotice></div> : null}
-          {reindexFeedback ? <div className="mt-3"><ArchiveNotice>{reindexFeedback}</ArchiveNotice></div> : null}
         </div>
-      </ArchiveSectionCard>
 
-      <MemoryMindMapPanel
-        model={model}
-        t={t}
-        showDebug={showDebug}
-        onToggleDebug={onToggleDebug}
-        onOpenEvidence={onOpenEvidence}
-      />
+        {configFeedback ? <div className="mt-2"><ArchiveNotice>{configFeedback}</ArchiveNotice></div> : null}
+        {reindexFeedback ? <div className="mt-2"><ArchiveNotice>{reindexFeedback}</ArchiveNotice></div> : null}
+      </ArchiveSectionCard>
     </div>
   );
 }

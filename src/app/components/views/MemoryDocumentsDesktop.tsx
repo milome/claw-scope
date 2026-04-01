@@ -1,8 +1,8 @@
-import { Network, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import type { GatewayAgentFileEntry } from "../../contexts/OpenClawContext";
-import { ARCHIVE_SPACING, ArchiveActionButton, ArchiveCapsule, ArchiveDetailHeader, ArchiveDetailPane, ArchiveEditorPane, ArchiveFormHeader, ArchiveLayerHeader, ArchiveListCard, ArchiveListPane } from "./memoryArchiveUi";
+import { ARCHIVE_SPACING, ArchiveActionButton, ArchiveCapsule, ArchiveDetailHeader, ArchiveDetailPane, ArchiveEditorPane, ArchiveFormHeader, ArchiveListCard, ArchiveListPane } from "./memoryArchiveUi";
 import { EvidenceFocusCard } from "./EvidenceFocusCard";
 import { RichContentRenderer } from "./RichContentRenderer";
 
@@ -14,7 +14,7 @@ type MemorySearchMatch = {
 type MemoryDocumentsDesktopProps = {
   title: string;
   description: string;
-  documentQuery: string;
+  documentSearchInput: string;
   documentMatches: MemorySearchMatch[];
   documentMatchIndex: number;
   documentDirty: boolean;
@@ -39,7 +39,8 @@ type MemoryDocumentsDesktopProps = {
   t: (key: string, ...args: (string | number)[]) => string;
   getAgentBadge: (agentId: string) => ReactNode;
   selectedAgentId: string;
-  onDocumentQueryChange: (value: string) => void;
+  onDocumentSearchInputChange: (value: string) => void;
+  onRunDocumentSearch: () => void;
   onPreviousHighlight: () => void;
   onNextHighlight: () => void;
   onSelectDocument: (name: string) => void;
@@ -52,9 +53,9 @@ type MemoryDocumentsDesktopProps = {
 };
 
 export function MemoryDocumentsDesktop({
-  title,
-  description,
-  documentQuery,
+  title: _title,
+  description: _description,
+  documentSearchInput,
   documentMatches,
   documentMatchIndex,
   documentDirty,
@@ -79,7 +80,8 @@ export function MemoryDocumentsDesktop({
   t,
   getAgentBadge,
   selectedAgentId,
-  onDocumentQueryChange,
+  onDocumentSearchInputChange,
+  onRunDocumentSearch,
   onPreviousHighlight,
   onNextHighlight,
   onSelectDocument,
@@ -175,8 +177,6 @@ export function MemoryDocumentsDesktop({
   return (
     <div className="hidden flex-1 flex-col md:flex bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.88))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,1),rgba(2,6,23,0.92))]">
       <div className="px-5 pt-5">
-        <ArchiveLayerHeader icon={Network} title={title} description={description} />
-
         <ArchiveCapsule>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
             <div className="min-w-0">
@@ -201,11 +201,15 @@ export function MemoryDocumentsDesktop({
 
             <div className="flex flex-col gap-3">
               <input
-                value={documentQuery}
-                onChange={(event) => onDocumentQueryChange(event.target.value)}
+                value={documentSearchInput}
+                onChange={(event) => onDocumentSearchInputChange(event.target.value)}
                 placeholder={t("memory.documents.searchPlaceholder")}
                 className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-sky-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500"
               />
+              <ArchiveActionButton onClick={onRunDocumentSearch} variant="primary">
+                <Search className="mr-1 inline h-3.5 w-3.5" />
+                {t("memory.documents.searchAction")}
+              </ArchiveActionButton>
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <span>{t("memory.documents.matches", documentMatches.length)}</span>
                 <span>{documentMatches.length > 0 ? `${documentMatchIndex + 1}/${documentMatches.length}` : "0/0"}</span>
