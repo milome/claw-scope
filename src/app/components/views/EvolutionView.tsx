@@ -39,6 +39,7 @@ import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { MemoryTopologyGraph } from "./MemoryTopologyGraph";
 import { EvolutionHistorySheet } from "./EvolutionHistorySheet";
+import { buildEvolutionAuditReportMarkdown } from "./evolutionAuditReport";
 
 type EvoState = "idle" | "analyzing" | "diff-ready" | "executing" | "success" | "failed" | "cancelled";
 type TemplateType = EvolutionTemplateKind | null;
@@ -86,20 +87,6 @@ function formatHistoryStatus(entry: EvolutionHistoryEntry) {
       return "Cancelled";
     default:
       return "Success";
-  }
-}
-
-function formatOperationTypeLabel(operationType: string) {
-  switch (operationType) {
-    case "inject_knowledge":
-      return "知识注入";
-    case "custom_transform":
-      return "自定义模板";
-    case "restore_snapshot":
-      return "回滚恢复";
-    case "optimize":
-    default:
-      return "结构优化";
   }
 }
 
@@ -330,58 +317,10 @@ export function EvolutionView() {
       return;
     }
 
-    const lines = [
-      `# Evolution Audit Report`,
-      ``,
-      `- Agent: ${auditSummary.agentId}`,
-      `- Total Operations: ${auditSummary.totalOperations}`,
-      `- Success Count: ${auditSummary.successCount}`,
-      `- Failed Count: ${auditSummary.failedCount}`,
-      `- Cancelled Count: ${auditSummary.cancelledCount}`,
-      `- Rolled Back Count: ${auditSummary.rolledBackCount}`,
-      `- Average Duration: ${auditSummary.averageDurationMs ?? "--"} ms`,
-      ``,
-      `## Template Breakdown`,
-      ...auditSummary.templateBreakdown.map(
-        (bucket) => `- ${bucket.key}: ${bucket.count}`,
-      ),
-      ``,
-      `## Operation Type Breakdown`,
-      ...auditSummary.operationTypeBreakdown.map(
-        (bucket) => `- ${bucket.key}: ${bucket.count}`,
-      ),
-      ``,
-      `## Recent Audit Entries`,
-      ...auditSummary.recentEntries.flatMap((entry) => [
-        `### ${entry.operationId}`,
-        `- Status: ${formatHistoryStatus({
-          operationId: entry.operationId,
-          operationKind: entry.operationKind,
-          operationType: entry.operationType,
-          status: entry.status,
-          agentId: entry.agentId,
-          nodeLabel: entry.nodeLabel,
-          template: entry.template,
-          snapshotId: entry.snapshotId,
-          sourceDocument: entry.sourceDocument,
-          sourceRef: entry.sourceRef ?? null,
-          sourceRefs: entry.sourceRefs,
-          capabilityTags: entry.capabilityTags,
-          summary: entry.message,
-          bytesBefore: 0,
-          bytesAfter: 0,
-          createdAtMs: entry.endedAtMs,
-        })}`,
-        `- Operation Type: ${formatOperationTypeLabel(entry.operationType)}`,
-        `- Template: ${entry.template}`,
-        `- Snapshot: ${entry.snapshotId}`,
-        `- Source Ref: ${entry.sourceRef ?? "—"}`,
-        `- Capability Tags: ${entry.capabilityTags.join(", ") || "—"}`,
-        `- Duration: ${entry.durationMs} ms`,
-        `- Message: ${entry.message}`,
-        ``,
-      ]),
-    ].join("\n");
+    const lines = buildEvolutionAuditReportMarkdown(auditSummary, {
+      generatedAt: new Date(),
+      reportMode: "manual",
+    });
 
     try {
       const result = await gatewayExportMarkdownDocument(
@@ -404,27 +343,10 @@ export function EvolutionView() {
       return;
     }
 
-    const lines = [
-      `# Evolution Audit Report`,
-      ``,
-      `- Agent: ${auditSummary.agentId}`,
-      `- Total Operations: ${auditSummary.totalOperations}`,
-      `- Success Count: ${auditSummary.successCount}`,
-      `- Failed Count: ${auditSummary.failedCount}`,
-      `- Cancelled Count: ${auditSummary.cancelledCount}`,
-      `- Rolled Back Count: ${auditSummary.rolledBackCount}`,
-      `- Average Duration: ${auditSummary.averageDurationMs ?? "--"} ms`,
-      ``,
-      `## Template Breakdown`,
-      ...auditSummary.templateBreakdown.map(
-        (bucket) => `- ${bucket.key}: ${bucket.count}`,
-      ),
-      ``,
-      `## Operation Type Breakdown`,
-      ...auditSummary.operationTypeBreakdown.map(
-        (bucket) => `- ${bucket.key}: ${bucket.count}`,
-      ),
-    ].join("\n");
+    const lines = buildEvolutionAuditReportMarkdown(auditSummary, {
+      generatedAt: new Date(),
+      reportMode: "quick",
+    });
 
     try {
       const result = await gatewayExportMarkdownDocumentQuick(
@@ -689,6 +611,7 @@ export function EvolutionView() {
       const message = normalizeUiErrorMessage(error);
       setActionError(message);
       setState("failed");
+      void loadAudit(previewResult.agentId);
       toast.error(message);
     }
   };

@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use chrono::Utc;
+use chrono::{Duration as ChronoDuration, TimeZone, Utc};
 use rand::RngCore;
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter, Runtime, State};
@@ -13,6 +13,7 @@ use tokio::time::sleep;
 use crate::{
     evolution::{
         state::{EvolutionAppState, PendingEvolutionOperation, RuntimeEvolutionOperation},
+        state::EvolutionRuntimeConflictKind,
         store::{
             append_audit, append_history, load_audit, load_history, load_snapshot,
             store_snapshot, EvolutionStorePaths,
@@ -339,73 +340,7 @@ pub async fn evolution_audit_summary(
         load_audit(&store_paths).map_err(|error| GatewayErrorSummary::from_error(&error))?;
     audit.retain(|entry| entry.agent_id == agent_id);
     audit.sort_by(|left, right| right.ended_at_ms.cmp(&left.ended_at_ms));
-
-    let mut success_count = 0usize;
-    let mut failed_count = 0usize;
-    let mut cancelled_count = 0usize;
-    let mut rolled_back_count = 0usize;
-    let mut high_risk_count = 0usize;
-    let mut unsafe_blocked_count = 0usize;
-    let mut duration_total = 0u64;
-    let mut duration_count = 0u64;
-    let mut status_breakdown = BTreeMap::<String, usize>::new();
-    let mut template_breakdown = BTreeMap::<String, usize>::new();
-    let mut operation_type_breakdown = BTreeMap::<String, usize>::new();
-
-    for entry in &audit {
-        match entry.status {
-            EvolutionOperationStatus::Success => success_count += 1,
-            EvolutionOperationStatus::Failed => failed_count += 1,
-            EvolutionOperationStatus::Cancelled => cancelled_count += 1,
-            EvolutionOperationStatus::RolledBack => rolled_back_count += 1,
-        }
-        if entry.risk_level == "high" {
-            high_risk_count += 1;
-        }
-        if entry.message.contains("阻断") || entry.message.contains("unsafe") {
-            unsafe_blocked_count += 1;
-        }
-        duration_total = duration_total.saturating_add(entry.duration_ms);
-        duration_count = duration_count.saturating_add(1);
-        *status_breakdown
-            .entry(status_key(&entry.status))
-            .or_default() += 1;
-        *template_breakdown
-            .entry(template_key(&entry.template))
-            .or_default() += 1;
-        *operation_type_breakdown
-            .entry(operation_type_key(&entry.operation_type))
-            .or_default() += 1;
-    }
-
-    Ok(EvolutionAuditSummary {
-        agent_id,
-        total_operations: audit.len(),
-        success_count,
-        failed_count,
-        cancelled_count,
-        rolled_back_count,
-        high_risk_count,
-        unsafe_blocked_count,
-        average_duration_ms: if duration_count > 0 {
-            Some(duration_total / duration_count)
-        } else {
-            None
-        },
-        status_breakdown: status_breakdown
-            .into_iter()
-            .map(|(key, count)| EvolutionMetricBucket { key, count })
-            .collect(),
-        template_breakdown: template_breakdown
-            .into_iter()
-            .map(|(key, count)| EvolutionMetricBucket { key, count })
-            .collect(),
-        operation_type_breakdown: operation_type_breakdown
-            .into_iter()
-            .map(|(key, count)| EvolutionMetricBucket { key, count })
-            .collect(),
-        recent_entries: audit.into_iter().take(8).collect(),
-    })
+    Ok(summarize_audit_entries(agent_id, audit))
 }
 
 #[tauri::command]
@@ -477,6 +412,10 @@ pub async fn evolution_rollback(
             risk_level: "rollback".to_string(),
             source_ref: None,
             source_refs: Vec::new(),
+            preflight_blocked: false,
+            blocked_reason_code: None,
+            override_applied: false,
+            override_reason_code: None,
             capability_tags: Vec::new(),
             message: history_entry.summary.clone(),
             started_at_ms,
@@ -514,11 +453,20 @@ async fn start_execute_operation<R: Runtime>(
         })?;
 
     if pending.preview.unsafe_apply {
+        let store_paths = EvolutionStorePaths::resolve();
         let unsafe_reason = if pending.preview.unsafe_reasons.is_empty() {
             "当前 preview 被标记为 unsafe apply。".to_string()
         } else {
             pending.preview.unsafe_reasons.join(" ")
         };
+        let _ = append_audit(
+            &store_paths,
+            &build_preflight_blocked_audit_entry(
+                &pending.preview,
+                unsafe_reason.as_str(),
+                "EVOLUTION_UNSAFE_APPLY_BLOCKED",
+            ),
+        );
         evolution_state.insert_pending(pending).await;
         return Err(GatewayErrorSummary::new(
             "protocol",
@@ -530,29 +478,73 @@ async fn start_execute_operation<R: Runtime>(
     }
 
     if pending.preview.requires_confirmation && !override_risk_ack {
+        let store_paths = EvolutionStorePaths::resolve();
+        let message = "高风险进化尚未确认，当前不允许直接执行。";
+        let _ = append_audit(
+            &store_paths,
+            &build_preflight_blocked_audit_entry(
+                &pending.preview,
+                message,
+                "EVOLUTION_HIGH_RISK_CONFIRMATION_REQUIRED",
+            ),
+        );
         evolution_state.insert_pending(pending).await;
         return Err(GatewayErrorSummary::new(
             "protocol",
             Some("EVOLUTION_HIGH_RISK_CONFIRMATION_REQUIRED".to_string()),
-            "高风险进化尚未确认，当前不允许直接执行。".to_string(),
+            message.to_string(),
             false,
             Some("请先完成高风险确认，再重新执行。".to_string()),
         ));
     }
 
-    if let Some(active_operation_id) = evolution_state
-        .has_running_operation_for_agent(pending.preview.agent_id.as_str(), pending.preview.operation_id.as_str())
+    if let Some(conflict) = evolution_state
+        .find_running_conflict_for_preview(&pending.preview, pending.preview.operation_id.as_str())
         .await
     {
+        let store_paths = EvolutionStorePaths::resolve();
+        let (blocked_reason_code, message) = match conflict.kind {
+            EvolutionRuntimeConflictKind::SourceRefConflict => (
+                "EVOLUTION_RUNTIME_SOURCE_REF_CONFLICT",
+                format!(
+                    "当前节点已有运行中的 Evolution 正在占用本次来源引用 {}，阻断本次预检执行：{}",
+                    conflict.overlapping_source_refs.join(", "),
+                    conflict.operation_id
+                ),
+            ),
+            EvolutionRuntimeConflictKind::SourceDocumentConflict => (
+                "EVOLUTION_RUNTIME_SOURCE_DOCUMENT_CONFLICT",
+                format!(
+                    "当前节点已有运行中的 Evolution 正在占用目标文档 {}，阻断本次预检执行：{}",
+                    pending.preview.source_document,
+                    conflict.operation_id
+                ),
+            ),
+            EvolutionRuntimeConflictKind::AgentRuntimeConflict => (
+                "EVOLUTION_RUNTIME_AGENT_CONFLICT",
+                format!(
+                    "当前节点已有 Evolution 操作正在执行，阻断本次预检执行：{}",
+                    conflict.operation_id
+                ),
+            ),
+        };
+        let _ = append_audit(
+            &store_paths,
+            &build_preflight_blocked_audit_entry(
+                &pending.preview,
+                message.as_str(),
+                blocked_reason_code,
+            ),
+        );
         evolution_state.insert_pending(pending).await;
         return Err(GatewayErrorSummary::new(
             "protocol",
-            Some("EVOLUTION_ACTIVE_CONFLICT".to_string()),
-            "当前节点已有 Evolution 操作正在执行。".to_string(),
+            Some(blocked_reason_code.to_string()),
+            message,
             true,
             Some(format!(
                 "请等待正在运行的操作完成，或取消该操作后再试：{}",
-                active_operation_id
+                conflict.operation_id
             )),
         ));
     }
@@ -565,10 +557,25 @@ async fn start_execute_operation<R: Runtime>(
     .await?;
 
     if current_content != pending.original_content {
+        let store_paths = EvolutionStorePaths::resolve();
+        let (blocked_reason_code, message) = classify_preflight_drift(
+            &pending.preview,
+            pending.original_content.as_str(),
+            current_content.as_str(),
+            pending.next_content.as_str(),
+        );
+        let _ = append_audit(
+            &store_paths,
+            &build_preflight_blocked_audit_entry(
+                &pending.preview,
+                message.as_str(),
+                blocked_reason_code,
+            ),
+        );
         return Err(GatewayErrorSummary::new(
             "protocol",
-            Some("EVOLUTION_PREVIEW_STALE".to_string()),
-            "当前 preview 已失效，目标文档在预览后发生了变化。".to_string(),
+            Some(blocked_reason_code.to_string()),
+            message,
             false,
             Some("请重新执行 Analyze & Preview，确认最新差异后再执行。".to_string()),
         ));
@@ -615,6 +622,7 @@ async fn execute_operation_task<R: Runtime>(
 ) {
     let store_paths = EvolutionStorePaths::resolve();
     let started_at_ms = { runtime.status.lock().await.created_at_ms };
+    let override_applied = { runtime.status.lock().await.override_applied };
 
     update_runtime_status(
         &app,
@@ -644,6 +652,7 @@ async fn execute_operation_task<R: Runtime>(
                 &history_entry,
                 "已在应用变更前取消本次 Evolution。",
                 started_at_ms,
+                override_applied,
             ),
         );
         let _ = set_terminal_status(
@@ -684,6 +693,7 @@ async fn execute_operation_task<R: Runtime>(
                 &history_entry,
                 "创建回滚快照失败，执行已终止。",
                 started_at_ms,
+                override_applied,
             ),
         );
         let _ = set_terminal_status(
@@ -726,6 +736,7 @@ async fn execute_operation_task<R: Runtime>(
                 &history_entry,
                 "已在写入变更前取消本次 Evolution。",
                 started_at_ms,
+                override_applied,
             ),
         );
         let _ = set_terminal_status(
@@ -764,6 +775,7 @@ async fn execute_operation_task<R: Runtime>(
                 &history_entry,
                 "写入目标文档失败，Evolution 已终止。",
                 started_at_ms,
+                override_applied,
             ),
         );
         let _ = set_terminal_status(
@@ -850,6 +862,7 @@ async fn execute_operation_task<R: Runtime>(
                 &failure_entry,
                 "Evolution 已写入文档，但写入历史记录失败。",
                 started_at_ms,
+                override_applied,
             ),
         );
         let _ = set_terminal_status(
@@ -871,6 +884,7 @@ async fn execute_operation_task<R: Runtime>(
             &history_entry,
             "Evolution 执行完成。",
             started_at_ms,
+            override_applied,
         ),
     );
 
@@ -1017,6 +1031,43 @@ fn summarize_source_refs(source_refs: &[String], fallback: Option<&str>) -> Stri
     } else {
         fallback.unwrap_or("unknown source").to_string()
     }
+}
+
+fn classify_preflight_drift(
+    preview: &EvolutionPreviewResult,
+    original_content: &str,
+    current_content: &str,
+    next_content: &str,
+) -> (&'static str, String) {
+    if current_content == next_content {
+        return (
+            "EVOLUTION_ALREADY_APPLIED",
+            "当前目标文档已经等于本次 preview 的目标结果，说明该 Evolution 结果已被应用。".to_string(),
+        );
+    }
+
+    let conflicting_refs = preview
+        .source_refs
+        .iter()
+        .filter(|source_ref| {
+            !original_content.contains(source_ref.as_str()) && current_content.contains(source_ref.as_str())
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    if !conflicting_refs.is_empty() {
+        return (
+            "EVOLUTION_SOURCE_REF_CONFLICT",
+            format!(
+                "当前 preview 已失效，目标文档在预览后出现了本次来源引用 {}，存在外部写入或重复应用风险。",
+                conflicting_refs.join(", ")
+            ),
+        );
+    }
+
+    (
+        "EVOLUTION_PREVIEW_STALE",
+        "当前 preview 已失效，目标文档在预览后发生了变化。".to_string(),
+    )
 }
 
 fn prepare_custom_input(
@@ -1732,6 +1783,7 @@ fn build_audit_entry(
     history_entry: &EvolutionHistoryEntry,
     message: &str,
     started_at_ms: i64,
+    override_applied: bool,
 ) -> EvolutionAuditEntry {
     EvolutionAuditEntry {
         operation_id: history_entry.operation_id.clone(),
@@ -1746,11 +1798,192 @@ fn build_audit_entry(
         risk_level: preview.risk_level.clone(),
         source_ref: history_entry.source_ref.clone(),
         source_refs: history_entry.source_refs.clone(),
+        preflight_blocked: false,
+        blocked_reason_code: None,
+        override_applied,
+        override_reason_code: if override_applied {
+            Some("EVOLUTION_HIGH_RISK_CONFIRMATION_OVERRIDE".to_string())
+        } else {
+            None
+        },
         capability_tags: history_entry.capability_tags.clone(),
         message: message.to_string(),
         started_at_ms,
         ended_at_ms: history_entry.created_at_ms,
         duration_ms: history_entry.duration_ms.unwrap_or_else(|| elapsed_ms(started_at_ms)),
+    }
+}
+
+fn build_preflight_blocked_audit_entry(
+    preview: &EvolutionPreviewResult,
+    message: &str,
+    blocked_reason_code: &str,
+) -> EvolutionAuditEntry {
+    let now = Utc::now().timestamp_millis();
+    EvolutionAuditEntry {
+        operation_id: preview.operation_id.clone(),
+        operation_kind: EvolutionOperationKind::Execute,
+        status: EvolutionOperationStatus::Failed,
+        agent_id: preview.agent_id.clone(),
+        node_label: preview.node_label.clone(),
+        template: preview.template.clone(),
+        operation_type: preview.operation_type.clone(),
+        snapshot_id: preview.snapshot_id.clone(),
+        source_document: preview.source_document.clone(),
+        risk_level: preview.risk_level.clone(),
+        source_ref: preview.source_ref.clone(),
+        source_refs: preview.source_refs.clone(),
+        preflight_blocked: true,
+        blocked_reason_code: Some(blocked_reason_code.to_string()),
+        override_applied: false,
+        override_reason_code: None,
+        capability_tags: preview.capability_tags.clone(),
+        message: message.to_string(),
+        started_at_ms: now,
+        ended_at_ms: now,
+        duration_ms: 0,
+    }
+}
+
+fn summarize_audit_entries(
+    agent_id: String,
+    audit: Vec<EvolutionAuditEntry>,
+) -> EvolutionAuditSummary {
+    let mut success_count = 0usize;
+    let mut failed_count = 0usize;
+    let mut cancelled_count = 0usize;
+    let mut rolled_back_count = 0usize;
+    let mut high_risk_count = 0usize;
+    let mut unsafe_blocked_count = 0usize;
+    let mut preflight_blocked_count = 0usize;
+    let mut override_count = 0usize;
+    let mut last_24h_operations = 0usize;
+    let mut last_24h_failures = 0usize;
+    let mut last_24h_blocked = 0usize;
+    let mut last_7d_operations = 0usize;
+    let mut last_7d_failures = 0usize;
+    let mut last_7d_overrides = 0usize;
+    let mut duration_total = 0u64;
+    let mut duration_count = 0u64;
+    let mut status_breakdown = BTreeMap::<String, usize>::new();
+    let mut template_breakdown = BTreeMap::<String, usize>::new();
+    let mut operation_type_breakdown = BTreeMap::<String, usize>::new();
+    let mut blocked_reason_breakdown = BTreeMap::<String, usize>::new();
+    let now = Utc::now();
+    let cutoff_24h = now - ChronoDuration::hours(24);
+    let cutoff_7d = now - ChronoDuration::days(7);
+    let mut recent_daily_breakdown = BTreeMap::<String, usize>::new();
+    for offset in (0..7).rev() {
+        let key = (now - ChronoDuration::days(offset)).format("%Y-%m-%d").to_string();
+        recent_daily_breakdown.insert(key, 0);
+    }
+
+    for entry in &audit {
+        let ended_at = Utc.timestamp_millis_opt(entry.ended_at_ms).single();
+        match entry.status {
+            EvolutionOperationStatus::Success => success_count += 1,
+            EvolutionOperationStatus::Failed => failed_count += 1,
+            EvolutionOperationStatus::Cancelled => cancelled_count += 1,
+            EvolutionOperationStatus::RolledBack => rolled_back_count += 1,
+        }
+        if entry.risk_level == "high" {
+            high_risk_count += 1;
+        }
+        if entry.preflight_blocked {
+            preflight_blocked_count += 1;
+            if let Some(code) = entry.blocked_reason_code.as_ref() {
+                *blocked_reason_breakdown.entry(code.clone()).or_default() += 1;
+            }
+        }
+        if entry.override_applied {
+            override_count += 1;
+        }
+        if let Some(ended_at) = ended_at {
+            if ended_at >= cutoff_24h {
+                last_24h_operations += 1;
+                if entry.status == EvolutionOperationStatus::Failed {
+                    last_24h_failures += 1;
+                }
+                if entry.preflight_blocked {
+                    last_24h_blocked += 1;
+                }
+            }
+            if ended_at >= cutoff_7d {
+                last_7d_operations += 1;
+                if entry.status == EvolutionOperationStatus::Failed {
+                    last_7d_failures += 1;
+                }
+                if entry.override_applied {
+                    last_7d_overrides += 1;
+                }
+                let date_key = ended_at.format("%Y-%m-%d").to_string();
+                if let Some(bucket) = recent_daily_breakdown.get_mut(date_key.as_str()) {
+                    *bucket += 1;
+                }
+            }
+        }
+        if entry.blocked_reason_code.as_deref() == Some("EVOLUTION_UNSAFE_APPLY_BLOCKED")
+            || entry.message.contains("阻断")
+            || entry.message.contains("unsafe")
+        {
+            unsafe_blocked_count += 1;
+        }
+        duration_total = duration_total.saturating_add(entry.duration_ms);
+        duration_count = duration_count.saturating_add(1);
+        *status_breakdown
+            .entry(status_key(&entry.status))
+            .or_default() += 1;
+        *template_breakdown
+            .entry(template_key(&entry.template))
+            .or_default() += 1;
+        *operation_type_breakdown
+            .entry(operation_type_key(&entry.operation_type))
+            .or_default() += 1;
+    }
+
+    EvolutionAuditSummary {
+        agent_id,
+        total_operations: audit.len(),
+        success_count,
+        failed_count,
+        cancelled_count,
+        rolled_back_count,
+        high_risk_count,
+        unsafe_blocked_count,
+        preflight_blocked_count,
+        override_count,
+        last_24h_operations,
+        last_24h_failures,
+        last_24h_blocked,
+        last_7d_operations,
+        last_7d_failures,
+        last_7d_overrides,
+        average_duration_ms: if duration_count > 0 {
+            Some(duration_total / duration_count)
+        } else {
+            None
+        },
+        status_breakdown: status_breakdown
+            .into_iter()
+            .map(|(key, count)| EvolutionMetricBucket { key, count })
+            .collect(),
+        template_breakdown: template_breakdown
+            .into_iter()
+            .map(|(key, count)| EvolutionMetricBucket { key, count })
+            .collect(),
+        operation_type_breakdown: operation_type_breakdown
+            .into_iter()
+            .map(|(key, count)| EvolutionMetricBucket { key, count })
+            .collect(),
+        blocked_reason_breakdown: blocked_reason_breakdown
+            .into_iter()
+            .map(|(key, count)| EvolutionMetricBucket { key, count })
+            .collect(),
+        recent_daily_breakdown: recent_daily_breakdown
+            .into_iter()
+            .map(|(key, count)| EvolutionMetricBucket { key, count })
+            .collect(),
+        recent_entries: audit.into_iter().take(8).collect(),
     }
 }
 
@@ -2091,5 +2324,265 @@ mod tests {
 
         let summary = build_success_summary(&preview, None);
         assert!(summary.contains("injected knowledge from doc://ops-playbook (+1 more refs)"));
+    }
+
+    #[test]
+    fn preflight_blocked_audit_entry_marks_reason_code() {
+        let preview = EvolutionPreviewResult {
+            operation_id: "op-blocked".to_string(),
+            agent_id: "agent-a".to_string(),
+            node_label: "agent-a".to_string(),
+            template: EvolutionTemplateKind::CustomTemplate,
+            operation_type: EvolutionOperationType::CustomTransform,
+            source_document: "MEMORY.md".to_string(),
+            risk_level: "medium".to_string(),
+            requires_confirmation: false,
+            unsafe_apply: true,
+            unsafe_reasons: vec!["unsafe".to_string()],
+            source_ref: Some("custom://playbook".to_string()),
+            source_refs: vec!["custom://playbook".to_string()],
+            capability_tags: vec!["custom".to_string()],
+            changes: Vec::new(),
+            bytes_before: 100,
+            bytes_after: 120,
+            snapshot_id: "snap-blocked".to_string(),
+            created_at_ms: 1,
+        };
+
+        let entry = build_preflight_blocked_audit_entry(
+            &preview,
+            "unsafe blocked",
+            "EVOLUTION_UNSAFE_APPLY_BLOCKED",
+        );
+
+        assert!(entry.preflight_blocked);
+        assert_eq!(
+            entry.blocked_reason_code.as_deref(),
+            Some("EVOLUTION_UNSAFE_APPLY_BLOCKED")
+        );
+        assert!(!entry.override_applied);
+        assert_eq!(entry.status, EvolutionOperationStatus::Failed);
+    }
+
+    #[test]
+    fn summarize_audit_entries_tracks_preflight_blocked_counts() {
+        let blocked = EvolutionAuditEntry {
+            operation_id: "op-blocked".to_string(),
+            operation_kind: EvolutionOperationKind::Execute,
+            status: EvolutionOperationStatus::Failed,
+            agent_id: "agent-a".to_string(),
+            node_label: "agent-a".to_string(),
+            template: EvolutionTemplateKind::KnowledgeInjection,
+            operation_type: EvolutionOperationType::InjectKnowledge,
+            snapshot_id: "snap-a".to_string(),
+            source_document: "MEMORY.md".to_string(),
+            risk_level: "high".to_string(),
+            source_ref: Some("doc://ops-playbook".to_string()),
+            source_refs: vec!["doc://ops-playbook".to_string()],
+            preflight_blocked: true,
+            blocked_reason_code: Some("EVOLUTION_PREVIEW_STALE".to_string()),
+            override_applied: false,
+            override_reason_code: None,
+            capability_tags: vec!["memory".to_string()],
+            message: "当前 preview 已失效，目标文档在预览后发生了变化。".to_string(),
+            started_at_ms: 1,
+            ended_at_ms: 1,
+            duration_ms: 0,
+        };
+        let success = EvolutionAuditEntry {
+            operation_id: "op-success".to_string(),
+            operation_kind: EvolutionOperationKind::Execute,
+            status: EvolutionOperationStatus::Success,
+            agent_id: "agent-a".to_string(),
+            node_label: "agent-a".to_string(),
+            template: EvolutionTemplateKind::Conservative,
+            operation_type: EvolutionOperationType::Optimize,
+            snapshot_id: "snap-b".to_string(),
+            source_document: "MEMORY.md".to_string(),
+            risk_level: "low".to_string(),
+            source_ref: None,
+            source_refs: Vec::new(),
+            preflight_blocked: false,
+            blocked_reason_code: None,
+            override_applied: true,
+            override_reason_code: Some("EVOLUTION_HIGH_RISK_CONFIRMATION_OVERRIDE".to_string()),
+            capability_tags: Vec::new(),
+            message: "Evolution 执行完成。".to_string(),
+            started_at_ms: 2,
+            ended_at_ms: 4,
+            duration_ms: 2,
+        };
+
+        let summary = summarize_audit_entries("agent-a".to_string(), vec![blocked, success]);
+
+        assert_eq!(summary.total_operations, 2);
+        assert_eq!(summary.preflight_blocked_count, 1);
+        assert_eq!(summary.override_count, 1);
+        assert_eq!(summary.high_risk_count, 1);
+        assert_eq!(summary.blocked_reason_breakdown.len(), 1);
+        assert_eq!(summary.blocked_reason_breakdown[0].key, "EVOLUTION_PREVIEW_STALE");
+        assert_eq!(summary.blocked_reason_breakdown[0].count, 1);
+    }
+
+    #[test]
+    fn build_audit_entry_marks_override_usage() {
+        let preview = EvolutionPreviewResult {
+            operation_id: "op-override".to_string(),
+            agent_id: "agent-a".to_string(),
+            node_label: "agent-a".to_string(),
+            template: EvolutionTemplateKind::Aggressive,
+            operation_type: EvolutionOperationType::Optimize,
+            source_document: "MEMORY.md".to_string(),
+            risk_level: "high".to_string(),
+            requires_confirmation: true,
+            unsafe_apply: false,
+            unsafe_reasons: Vec::new(),
+            source_ref: None,
+            source_refs: Vec::new(),
+            capability_tags: Vec::new(),
+            changes: Vec::new(),
+            bytes_before: 100,
+            bytes_after: 80,
+            snapshot_id: "snap-override".to_string(),
+            created_at_ms: 1,
+        };
+        let history_entry = EvolutionHistoryEntry {
+            operation_id: "op-override".to_string(),
+            operation_kind: EvolutionOperationKind::Execute,
+            status: EvolutionOperationStatus::Success,
+            agent_id: "agent-a".to_string(),
+            node_label: "agent-a".to_string(),
+            template: EvolutionTemplateKind::Aggressive,
+            operation_type: EvolutionOperationType::Optimize,
+            snapshot_id: "snap-override".to_string(),
+            source_document: "MEMORY.md".to_string(),
+            source_ref: None,
+            source_refs: Vec::new(),
+            capability_tags: Vec::new(),
+            summary: "done".to_string(),
+            bytes_before: 100,
+            bytes_after: 80,
+            duration_ms: Some(10),
+            created_at_ms: 10,
+        };
+
+        let entry = build_audit_entry(
+            &preview,
+            &history_entry,
+            "Evolution 执行完成。",
+            1,
+            true,
+        );
+
+        assert!(entry.override_applied);
+        assert_eq!(
+            entry.override_reason_code.as_deref(),
+            Some("EVOLUTION_HIGH_RISK_CONFIRMATION_OVERRIDE")
+        );
+    }
+
+    #[test]
+    fn summarize_audit_entries_tracks_recent_trends() {
+        let now = Utc::now().timestamp_millis();
+        let recent = EvolutionAuditEntry {
+            operation_id: "op-recent".to_string(),
+            operation_kind: EvolutionOperationKind::Execute,
+            status: EvolutionOperationStatus::Failed,
+            agent_id: "agent-a".to_string(),
+            node_label: "agent-a".to_string(),
+            template: EvolutionTemplateKind::Aggressive,
+            operation_type: EvolutionOperationType::Optimize,
+            snapshot_id: "snap-r".to_string(),
+            source_document: "MEMORY.md".to_string(),
+            risk_level: "high".to_string(),
+            source_ref: None,
+            source_refs: Vec::new(),
+            preflight_blocked: true,
+            blocked_reason_code: Some("EVOLUTION_RUNTIME_AGENT_CONFLICT".to_string()),
+            override_applied: true,
+            override_reason_code: Some("EVOLUTION_HIGH_RISK_CONFIRMATION_OVERRIDE".to_string()),
+            capability_tags: Vec::new(),
+            message: "recent".to_string(),
+            started_at_ms: now - 50,
+            ended_at_ms: now,
+            duration_ms: 50,
+        };
+
+        let summary = summarize_audit_entries("agent-a".to_string(), vec![recent]);
+
+        assert_eq!(summary.last_24h_operations, 1);
+        assert_eq!(summary.last_24h_failures, 1);
+        assert_eq!(summary.last_24h_blocked, 1);
+        assert_eq!(summary.last_7d_operations, 1);
+        assert_eq!(summary.last_7d_failures, 1);
+        assert_eq!(summary.last_7d_overrides, 1);
+        assert_eq!(summary.recent_daily_breakdown.len(), 7);
+        assert!(summary.recent_daily_breakdown.iter().any(|bucket| bucket.count == 1));
+    }
+
+    #[test]
+    fn classify_preflight_drift_detects_already_applied() {
+        let preview = EvolutionPreviewResult {
+            operation_id: "op-applied".to_string(),
+            agent_id: "agent-a".to_string(),
+            node_label: "agent-a".to_string(),
+            template: EvolutionTemplateKind::KnowledgeInjection,
+            operation_type: EvolutionOperationType::InjectKnowledge,
+            source_document: "MEMORY.md".to_string(),
+            risk_level: "medium".to_string(),
+            requires_confirmation: false,
+            unsafe_apply: false,
+            unsafe_reasons: Vec::new(),
+            source_ref: Some("doc://ops-playbook".to_string()),
+            source_refs: vec!["doc://ops-playbook".to_string()],
+            capability_tags: vec!["memory".to_string()],
+            changes: Vec::new(),
+            bytes_before: 100,
+            bytes_after: 120,
+            snapshot_id: "snap-a".to_string(),
+            created_at_ms: 1,
+        };
+
+        let (code, message) = classify_preflight_drift(&preview, "before", "after", "after");
+
+        assert_eq!(code, "EVOLUTION_ALREADY_APPLIED");
+        assert!(message.contains("已经等于本次 preview 的目标结果"));
+    }
+
+    #[test]
+    fn classify_preflight_drift_detects_source_ref_conflict() {
+        let preview = EvolutionPreviewResult {
+            operation_id: "op-conflict".to_string(),
+            agent_id: "agent-a".to_string(),
+            node_label: "agent-a".to_string(),
+            template: EvolutionTemplateKind::CustomTemplate,
+            operation_type: EvolutionOperationType::CustomTransform,
+            source_document: "MEMORY.md".to_string(),
+            risk_level: "medium".to_string(),
+            requires_confirmation: false,
+            unsafe_apply: false,
+            unsafe_reasons: Vec::new(),
+            source_ref: Some("custom://playbook".to_string()),
+            source_refs: vec![
+                "custom://playbook".to_string(),
+                "custom://shared-playbook".to_string(),
+            ],
+            capability_tags: vec!["custom".to_string()],
+            changes: Vec::new(),
+            bytes_before: 100,
+            bytes_after: 120,
+            snapshot_id: "snap-b".to_string(),
+            created_at_ms: 1,
+        };
+
+        let (code, message) = classify_preflight_drift(
+            &preview,
+            "before",
+            "before\ncustom://shared-playbook",
+            "after",
+        );
+
+        assert_eq!(code, "EVOLUTION_SOURCE_REF_CONFLICT");
+        assert!(message.contains("custom://shared-playbook"));
     }
 }

@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Activity, Clock3, Filter, History, Search, ShieldCheck, Tags, Undo2 } from "lucide-react";
 
 import type {
+  EvolutionAuditEntry,
   EvolutionAuditSummary,
   EvolutionHistoryEntry,
   EvolutionOperationType,
@@ -11,6 +12,7 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Input } from "../ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "../ui/sheet";
+import { buildEvolutionOperatorHealth } from "./evolutionAuditReport";
 
 type HistoryStatusFilter = "all" | "success" | "failed" | "cancelled" | "rolled_back";
 type HistoryTemplateFilter = "all" | EvolutionTemplateKind;
@@ -83,6 +85,72 @@ function statusTone(status: EvolutionHistoryEntry["status"]) {
     case "success":
     default:
       return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300";
+  }
+}
+
+function formatAuditEntryLabel(entry: EvolutionAuditEntry) {
+  if (entry.preflightBlocked) {
+    return "预检阻断";
+  }
+  switch (entry.status) {
+    case "rolled_back":
+      return "已回滚";
+    case "failed":
+      return "失败";
+    case "cancelled":
+      return "已取消";
+    case "success":
+    default:
+      return "成功";
+  }
+}
+
+function auditEntryTone(entry: EvolutionAuditEntry) {
+  if (entry.preflightBlocked) {
+    return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300";
+  }
+  switch (entry.status) {
+    case "failed":
+    case "cancelled":
+      return "border-red-200 bg-red-50 text-red-600 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300";
+    case "rolled_back":
+      return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300";
+    case "success":
+    default:
+      return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300";
+  }
+}
+
+function formatBlockedReasonLabel(code?: string | null) {
+  switch (code) {
+    case "EVOLUTION_UNSAFE_APPLY_BLOCKED":
+      return "Unsafe Apply Blocked";
+    case "EVOLUTION_HIGH_RISK_CONFIRMATION_REQUIRED":
+      return "Confirmation Required";
+    case "EVOLUTION_ACTIVE_CONFLICT":
+    case "EVOLUTION_RUNTIME_AGENT_CONFLICT":
+      return "Active Agent Conflict";
+    case "EVOLUTION_RUNTIME_SOURCE_DOCUMENT_CONFLICT":
+      return "Source Document Conflict";
+    case "EVOLUTION_RUNTIME_SOURCE_REF_CONFLICT":
+      return "Source Ref Runtime Conflict";
+    case "EVOLUTION_ALREADY_APPLIED":
+      return "Already Applied";
+    case "EVOLUTION_SOURCE_REF_CONFLICT":
+      return "Source Ref Conflict";
+    case "EVOLUTION_PREVIEW_STALE":
+      return "Preview Stale";
+    default:
+      return code ?? "—";
+  }
+}
+
+function formatOverrideReasonLabel(code?: string | null) {
+  switch (code) {
+    case "EVOLUTION_HIGH_RISK_CONFIRMATION_OVERRIDE":
+      return "High Risk Confirmation Override";
+    default:
+      return code ?? "—";
   }
 }
 
@@ -168,6 +236,18 @@ export function EvolutionHistorySheet({
   const successRate = auditSummary?.totalOperations
     ? Math.round((auditSummary.successCount / auditSummary.totalOperations) * 100)
     : null;
+  const operatorHealth = useMemo(
+    () => (auditSummary ? buildEvolutionOperatorHealth(auditSummary) : null),
+    [auditSummary],
+  );
+  const operatorHealthTone =
+    operatorHealth?.statusTone === "emerald"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300"
+      : operatorHealth?.statusTone === "amber"
+        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300"
+        : operatorHealth?.statusTone === "red"
+          ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300"
+          : "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -286,6 +366,18 @@ export function EvolutionHistorySheet({
                     Audit Feed
                   </div>
                   <div className="text-sm font-medium">{isAuditLoading ? "loading..." : `${auditSummary?.recentEntries.length ?? 0} recent`}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                    Preflight Blocked
+                  </div>
+                  <div className="text-sm font-medium">{auditSummary?.preflightBlockedCount ?? 0}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                    Overrides
+                  </div>
+                  <div className="text-sm font-medium">{auditSummary?.overrideCount ?? 0}</div>
                 </div>
               </div>
             </div>
@@ -476,6 +568,22 @@ export function EvolutionHistorySheet({
                                 : selectedAuditEntry.sourceRef ?? "—"}
                             </div>
                           </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Preflight</div>
+                            <div className="font-medium">{selectedAuditEntry.preflightBlocked ? "blocked" : "passed"}</div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Blocked Reason</div>
+                            <div className="font-medium break-all">{formatBlockedReasonLabel(selectedAuditEntry.blockedReasonCode)}</div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Override</div>
+                            <div className="font-medium">{selectedAuditEntry.overrideApplied ? "applied" : "no"}</div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Override Reason</div>
+                            <div className="font-medium break-all">{formatOverrideReasonLabel(selectedAuditEntry.overrideReasonCode)}</div>
+                          </div>
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
                           <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
@@ -511,6 +619,65 @@ export function EvolutionHistorySheet({
                       Metrics Breakdown
                     </div>
                     <div className="space-y-4">
+                      <div className={`rounded-xl border px-4 py-3 ${operatorHealthTone}`}>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-70">
+                              Operator Dashboard
+                            </div>
+                            <div className="text-sm font-semibold">
+                              {operatorHealth?.statusLabel ?? "Cold Start"}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[11px] uppercase tracking-[0.14em] opacity-70">Health Score</div>
+                            <div className="text-lg font-semibold">{operatorHealth?.score ?? 100}</div>
+                          </div>
+                        </div>
+                        <div className="space-y-1 text-xs leading-5">
+                          {(operatorHealth?.recommendations ?? ["尚无数据。"]).map((item) => (
+                            <div key={item}>- {item}</div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
+                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                          Trend Snapshot
+                        </div>
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <div className="flex items-center justify-between">
+                            <span>24h Ops</span>
+                            <span className="font-semibold">{auditSummary?.last24hOperations ?? 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>24h Failures</span>
+                            <span className="font-semibold">{auditSummary?.last24hFailures ?? 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>24h Blocked</span>
+                            <span className="font-semibold">{auditSummary?.last24hBlocked ?? 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>7d Ops</span>
+                            <span className="font-semibold">{auditSummary?.last7dOperations ?? 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>7d Failures</span>
+                            <span className="font-semibold">{auditSummary?.last7dFailures ?? 0}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>7d Overrides</span>
+                            <span className="font-semibold">{auditSummary?.last7dOverrides ?? 0}</span>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {auditSummary?.recentDailyBreakdown.length ? auditSummary.recentDailyBreakdown.map((bucket) => (
+                            <Badge key={bucket.key} variant="outline" className="border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                              {bucket.key}: {bucket.count}
+                            </Badge>
+                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">暂无数据</span>}
+                        </div>
+                      </div>
                       <div>
                         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
                           Status
@@ -555,6 +722,54 @@ export function EvolutionHistorySheet({
                         <div className="flex items-center justify-between">
                           <span>Unsafe Blocked</span>
                           <span className="font-semibold">{auditSummary?.unsafeBlockedCount ?? 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Preflight Blocked</span>
+                          <span className="font-semibold">{auditSummary?.preflightBlockedCount ?? 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Overrides</span>
+                          <span className="font-semibold">{auditSummary?.overrideCount ?? 0}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                          Blocked Reasons
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {auditSummary?.blockedReasonBreakdown.length ? auditSummary.blockedReasonBreakdown.map((bucket) => (
+                            <Badge key={bucket.key} variant="outline" className="border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+                              {bucket.key}: {bucket.count}
+                            </Badge>
+                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">暂无数据</span>}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                          Recent Audit Feed
+                        </div>
+                        <div className="space-y-2">
+                          {auditSummary?.recentEntries.length ? auditSummary.recentEntries.slice(0, 5).map((entry) => (
+                            <div
+                              key={`${entry.operationId}-${entry.endedAtMs}-${entry.blockedReasonCode ?? "ok"}`}
+                              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/60"
+                            >
+                              <div className="mb-1 flex items-center justify-between gap-2">
+                                <Badge className={auditEntryTone(entry)}>{formatAuditEntryLabel(entry)}</Badge>
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                  {formatRelativeTime(entry.endedAtMs)}
+                                </span>
+                              </div>
+                              <div className="text-xs text-slate-700 dark:text-slate-200">{entry.message}</div>
+                              <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 break-all">
+                                {entry.preflightBlocked
+                                  ? formatBlockedReasonLabel(entry.blockedReasonCode)
+                                  : entry.overrideApplied
+                                    ? formatOverrideReasonLabel(entry.overrideReasonCode)
+                                    : formatOperationTypeLabel(entry.operationType)}
+                              </div>
+                            </div>
+                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">暂无数据</span>}
                         </div>
                       </div>
                     </div>

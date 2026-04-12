@@ -500,6 +500,10 @@ export interface EvolutionAuditEntry {
   riskLevel: string;
   sourceRef?: string | null;
   sourceRefs: string[];
+  preflightBlocked: boolean;
+  blockedReasonCode?: string | null;
+  overrideApplied: boolean;
+  overrideReasonCode?: string | null;
   capabilityTags: string[];
   message: string;
   startedAtMs: number;
@@ -521,10 +525,20 @@ export interface EvolutionAuditSummary {
   rolledBackCount: number;
   highRiskCount: number;
   unsafeBlockedCount: number;
+  preflightBlockedCount: number;
+  overrideCount: number;
+  last24hOperations: number;
+  last24hFailures: number;
+  last24hBlocked: number;
+  last7dOperations: number;
+  last7dFailures: number;
+  last7dOverrides: number;
   averageDurationMs?: number | null;
   statusBreakdown: EvolutionMetricBucket[];
   templateBreakdown: EvolutionMetricBucket[];
   operationTypeBreakdown: EvolutionMetricBucket[];
+  blockedReasonBreakdown: EvolutionMetricBucket[];
+  recentDailyBreakdown: EvolutionMetricBucket[];
   recentEntries: EvolutionAuditEntry[];
 }
 

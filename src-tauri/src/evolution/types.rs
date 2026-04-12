@@ -229,6 +229,14 @@ pub struct EvolutionAuditEntry {
     pub source_ref: Option<String>,
     #[serde(default)]
     pub source_refs: Vec<String>,
+    #[serde(default)]
+    pub preflight_blocked: bool,
+    #[serde(default)]
+    pub blocked_reason_code: Option<String>,
+    #[serde(default)]
+    pub override_applied: bool,
+    #[serde(default)]
+    pub override_reason_code: Option<String>,
     pub capability_tags: Vec<String>,
     pub message: String,
     pub started_at_ms: i64,
@@ -254,9 +262,19 @@ pub struct EvolutionAuditSummary {
     pub rolled_back_count: usize,
     pub high_risk_count: usize,
     pub unsafe_blocked_count: usize,
+    pub preflight_blocked_count: usize,
+    pub override_count: usize,
+    pub last_24h_operations: usize,
+    pub last_24h_failures: usize,
+    pub last_24h_blocked: usize,
+    pub last_7d_operations: usize,
+    pub last_7d_failures: usize,
+    pub last_7d_overrides: usize,
     pub average_duration_ms: Option<u64>,
     pub status_breakdown: Vec<EvolutionMetricBucket>,
     pub template_breakdown: Vec<EvolutionMetricBucket>,
     pub operation_type_breakdown: Vec<EvolutionMetricBucket>,
+    pub blocked_reason_breakdown: Vec<EvolutionMetricBucket>,
+    pub recent_daily_breakdown: Vec<EvolutionMetricBucket>,
     pub recent_entries: Vec<EvolutionAuditEntry>,
 }

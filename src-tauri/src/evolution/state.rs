@@ -46,6 +46,20 @@ pub struct EvolutionAppState {
     runtime: Arc<Mutex<HashMap<String, Arc<RuntimeEvolutionOperation>>>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EvolutionRuntimeConflictKind {
+    AgentRuntimeConflict,
+    SourceDocumentConflict,
+    SourceRefConflict,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvolutionRuntimeConflict {
+    pub operation_id: String,
+    pub kind: EvolutionRuntimeConflictKind,
+    pub overlapping_source_refs: Vec<String>,
+}
+
 impl EvolutionAppState {
     pub async fn insert_pending(&self, operation: PendingEvolutionOperation) {
         self.pending
@@ -86,11 +100,11 @@ impl EvolutionAppState {
         Some(operation.status.lock().await.clone())
     }
 
-    pub async fn has_running_operation_for_agent(
+    pub async fn find_running_conflict_for_preview(
         &self,
-        agent_id: &str,
+        preview: &EvolutionPreviewResult,
         ignore_operation_id: &str,
-    ) -> Option<String> {
+    ) -> Option<EvolutionRuntimeConflict> {
         let operations = {
             let runtime = self.runtime.lock().await;
             runtime.values().cloned().collect::<Vec<_>>()
@@ -101,8 +115,30 @@ impl EvolutionAppState {
             if snapshot.operation_id == ignore_operation_id {
                 continue;
             }
-            if snapshot.agent_id == agent_id && snapshot.runtime_state == EvolutionRuntimeState::Running {
-                return Some(snapshot.operation_id);
+            if snapshot.agent_id == preview.agent_id && snapshot.runtime_state == EvolutionRuntimeState::Running {
+                let overlapping_source_refs = preview
+                    .source_refs
+                    .iter()
+                    .filter(|source_ref| {
+                        snapshot
+                            .source_refs
+                            .iter()
+                            .any(|current| current.eq_ignore_ascii_case(source_ref))
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let kind = if !overlapping_source_refs.is_empty() {
+                    EvolutionRuntimeConflictKind::SourceRefConflict
+                } else if snapshot.source_document == preview.source_document {
+                    EvolutionRuntimeConflictKind::SourceDocumentConflict
+                } else {
+                    EvolutionRuntimeConflictKind::AgentRuntimeConflict
+                };
+                return Some(EvolutionRuntimeConflict {
+                    operation_id: snapshot.operation_id,
+                    kind,
+                    overlapping_source_refs,
+                });
             }
         }
         None
@@ -165,17 +201,73 @@ mod tests {
         let state = EvolutionAppState::default();
         state.insert_runtime(runtime_snapshot("op-a", "agent-a")).await;
         state.insert_runtime(runtime_snapshot("op-b", "agent-b")).await;
+        let preview = EvolutionPreviewResult {
+            operation_id: "op-z".to_string(),
+            agent_id: "agent-a".to_string(),
+            node_label: "agent-a".to_string(),
+            template: EvolutionTemplateKind::Conservative,
+            operation_type: EvolutionOperationType::Optimize,
+            source_document: "MEMORY.md".to_string(),
+            snapshot_id: "snap-z".to_string(),
+            risk_level: "low".to_string(),
+            requires_confirmation: false,
+            unsafe_apply: false,
+            unsafe_reasons: Vec::new(),
+            source_ref: None,
+            source_refs: Vec::new(),
+            capability_tags: Vec::new(),
+            created_at_ms: 1,
+            changes: Vec::new(),
+            bytes_before: 0,
+            bytes_after: 0,
+        };
 
         let conflict = state
-            .has_running_operation_for_agent("agent-a", "op-z")
+            .find_running_conflict_for_preview(&preview, "op-z")
             .await
             .expect("expected conflict");
-        assert_eq!(conflict, "op-a");
+        assert_eq!(conflict.operation_id, "op-a");
+        assert_eq!(conflict.kind, EvolutionRuntimeConflictKind::SourceDocumentConflict);
 
         let no_conflict = state
-            .has_running_operation_for_agent("agent-a", "op-a")
+            .find_running_conflict_for_preview(&preview, "op-a")
             .await;
         assert!(no_conflict.is_none());
+    }
+
+    #[tokio::test]
+    async fn detects_source_ref_runtime_conflict() {
+        let state = EvolutionAppState::default();
+        let mut snapshot = runtime_snapshot("op-a", "agent-a");
+        snapshot.source_refs = vec!["doc://ops-playbook".to_string()];
+        state.insert_runtime(snapshot).await;
+        let preview = EvolutionPreviewResult {
+            operation_id: "op-z".to_string(),
+            agent_id: "agent-a".to_string(),
+            node_label: "agent-a".to_string(),
+            template: EvolutionTemplateKind::KnowledgeInjection,
+            operation_type: EvolutionOperationType::InjectKnowledge,
+            source_document: "MEMORY.md".to_string(),
+            snapshot_id: "snap-z".to_string(),
+            risk_level: "medium".to_string(),
+            requires_confirmation: false,
+            unsafe_apply: false,
+            unsafe_reasons: Vec::new(),
+            source_ref: Some("doc://ops-playbook".to_string()),
+            source_refs: vec!["doc://ops-playbook".to_string()],
+            capability_tags: vec!["memory".to_string()],
+            created_at_ms: 1,
+            changes: Vec::new(),
+            bytes_before: 0,
+            bytes_after: 0,
+        };
+
+        let conflict = state
+            .find_running_conflict_for_preview(&preview, "op-z")
+            .await
+            .expect("expected source ref conflict");
+        assert_eq!(conflict.kind, EvolutionRuntimeConflictKind::SourceRefConflict);
+        assert_eq!(conflict.overlapping_source_refs, vec!["doc://ops-playbook"]);
     }
 
     #[tokio::test]
