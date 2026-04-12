@@ -1,0 +1,17 @@
+﻿{
+  "name": "bmad-runtime",
+  "transport": "stdio",
+  "projectRoot": ".",
+  "bmadRoot": "_bmad",
+  "outputRoot": "_bmad-output",
+  "logDir": "logs",
+  "tmpDir": "tmp",
+  "features": {
+    "readRuntimeContext": true,
+    "readPolicies": true,
+    "readScoringArtifacts": true,
+    "emitSessionHints": true
+  }
+}
+
+

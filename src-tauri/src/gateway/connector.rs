@@ -30,7 +30,7 @@ use crate::gateway::{
     state::{GatewayActiveConnection, GatewayAppState, GatewaySocket, GatewaySocketWriter},
     store::{
         load_device_auth_token, normalize_role, normalize_scopes, resolve_store_paths,
-        store_device_auth_token,
+        mark_saved_endpoint_success, store_device_auth_token,
     },
     types::{
         GatewayAgentFileEntry, GatewayAgentFileGetResult, GatewayAgentIdentityResult,
@@ -154,6 +154,7 @@ pub async fn connect(
             &auth.scopes,
         )?;
     }
+    mark_saved_endpoint_success(&store_paths, &endpoint.origin_key)?;
 
     let session_id = random_hex_id();
     let writer = Arc::new(AsyncMutex::new(writer));

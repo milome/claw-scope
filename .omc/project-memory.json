@@ -1,0 +1,469 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1775712832759,
+  "projectRoot": "D:\\Dev\\claw-scope",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "react",
+        "version": "18.2.0",
+        "category": "frontend"
+      },
+      {
+        "name": "react-dom",
+        "version": "18.2.0",
+        "category": "frontend"
+      },
+      {
+        "name": "playwright",
+        "version": "1.59.1",
+        "category": "testing"
+      },
+      {
+        "name": "vite",
+        "version": "6.3.5",
+        "category": "build"
+      },
+      {
+        "name": "vitest",
+        "version": "4.1.2",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": "npm test",
+    "lintCommand": "npm run lint",
+    "devCommand": "npm run dev",
+    "scripts": {
+      "dev": "vite",
+      "build": "tsc && vite build",
+      "preview": "vite preview",
+      "visual:baseline": "node scripts/visual-regression.mjs",
+      "visual:ci": "node scripts/visual-regression-ci.mjs",
+      "tauri": "tauri",
+      "lint": "tsc --noEmit",
+      "test": "vitest run"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": "type-based"
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "public",
+      "scripts",
+      "src"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "artifacts": {
+      "path": "artifacts",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775712832721,
+      "keyFiles": []
+    },
+    "dist": {
+      "path": "dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 2,
+      "lastAccessed": 1775712832722,
+      "keyFiles": [
+        "index.html",
+        "logo.png"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 3,
+      "lastAccessed": 1775712832738,
+      "keyFiles": [
+        "2026-03-27-agent-editing-boundaries.md",
+        "2026-03-27-agent-settings-implementation-checklist.md",
+        "2026-03-31-memory-view-wave1-handoff.md"
+      ]
+    },
+    "outputs": {
+      "path": "outputs",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775712832738,
+      "keyFiles": []
+    },
+    "packages": {
+      "path": "packages",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775712832738,
+      "keyFiles": []
+    },
+    "public": {
+      "path": "public",
+      "purpose": "Public files",
+      "fileCount": 1,
+      "lastAccessed": 1775712832738,
+      "keyFiles": [
+        "logo.png"
+      ]
+    },
+    "screenshots": {
+      "path": "screenshots",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1775712832739,
+      "keyFiles": [
+        "README.md",
+        "ss1.png",
+        "ss2.png",
+        "ss3.png",
+        "ss4.png"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 3,
+      "lastAccessed": 1775712832739,
+      "keyFiles": [
+        "make_transparent.py",
+        "visual-regression-ci.mjs",
+        "visual-regression.mjs"
+      ]
+    },
+    "specs": {
+      "path": "specs",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775712832739,
+      "keyFiles": []
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 3,
+      "lastAccessed": 1775712832740,
+      "keyFiles": [
+        "App.tsx",
+        "main.tsx",
+        "vite-env.d.ts"
+      ]
+    },
+    "src-tauri": {
+      "path": "src-tauri",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1775712832740,
+      "keyFiles": [
+        "build.rs",
+        "Cargo.lock",
+        "Cargo.toml",
+        "tauri.conf.json"
+      ]
+    },
+    "_bmad": {
+      "path": "_bmad",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1775712832740,
+      "keyFiles": [
+        "runtime-context.example.json"
+      ]
+    },
+    "_bmad-output": {
+      "path": "_bmad-output",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775712832740,
+      "keyFiles": []
+    },
+    "dist\\assets": {
+      "path": "dist\\assets",
+      "purpose": "Static assets",
+      "fileCount": 3,
+      "lastAccessed": 1775712832740,
+      "keyFiles": [
+        "270226c058e3f12ad7bb9e96e3b029bc0e2c0461-yMYv3gIM.png",
+        "index-brqD9HhI.css",
+        "index-qxNBAftQ.js"
+      ]
+    },
+    "src\\app": {
+      "path": "src\\app",
+      "purpose": "Application code",
+      "fileCount": 2,
+      "lastAccessed": 1775712832741,
+      "keyFiles": [
+        "App.tsx",
+        "routes.tsx"
+      ]
+    },
+    "src\\assets": {
+      "path": "src\\assets",
+      "purpose": "Static assets",
+      "fileCount": 1,
+      "lastAccessed": 1775712832741,
+      "keyFiles": [
+        "270226c058e3f12ad7bb9e96e3b029bc0e2c0461.png"
+      ]
+    },
+    "src\\components": {
+      "path": "src\\components",
+      "purpose": "UI components",
+      "fileCount": 2,
+      "lastAccessed": 1775712832741,
+      "keyFiles": [
+        "AppLogo.module.css",
+        "AppLogo.tsx"
+      ]
+    },
+    "src-tauri\\src": {
+      "path": "src-tauri\\src",
+      "purpose": "Source code",
+      "fileCount": 2,
+      "lastAccessed": 1775712832741,
+      "keyFiles": [
+        "lib.rs",
+        "main.rs"
+      ]
+    },
+    "_bmad-output\\config": {
+      "path": "_bmad-output\\config",
+      "purpose": "Configuration files",
+      "fileCount": 0,
+      "lastAccessed": 1775712832741,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "_bmad-output\\planning-artifacts\\dev\\implementation-readiness-report-2026-04-09.md",
+      "accessCount": 9,
+      "lastAccessed": 1775734492217,
+      "type": "file"
+    },
+    {
+      "path": "_bmad\\bmm\\config.yaml",
+      "accessCount": 8,
+      "lastAccessed": 1775734786257,
+      "type": "file"
+    },
+    {
+      "path": "_bmad-output\\planning-artifacts\\dev\\epics.md",
+      "accessCount": 7,
+      "lastAccessed": 1775733873112,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 5,
+      "lastAccessed": 1775732909138,
+      "type": "directory"
+    },
+    {
+      "path": "src\\imports\\ux-design-specification-1.md",
+      "accessCount": 4,
+      "lastAccessed": 1775733183856,
+      "type": "file"
+    },
+    {
+      "path": "_bmad\\bmm\\workflows\\3-solutioning\\check-implementation-readiness\\workflow.md",
+      "accessCount": 4,
+      "lastAccessed": 1775734232426,
+      "type": "file"
+    },
+    {
+      "path": "_bmad\\bmm\\workflows\\3-solutioning\\check-implementation-readiness\\steps\\step-01-document-discovery.md",
+      "accessCount": 4,
+      "lastAccessed": 1775734244232,
+      "type": "file"
+    },
+    {
+      "path": "_bmad\\bmm\\workflows\\3-solutioning\\check-implementation-readiness\\templates\\readiness-report-template.md",
+      "accessCount": 3,
+      "lastAccessed": 1775734311690,
+      "type": "file"
+    },
+    {
+      "path": "_bmad-output\\planning-artifacts\\main\\prd.md",
+      "accessCount": 3,
+      "lastAccessed": 1775734469888,
+      "type": "file"
+    },
+    {
+      "path": "_bmad-output\\planning-artifacts\\main\\architecture.md",
+      "accessCount": 2,
+      "lastAccessed": 1775733170075,
+      "type": "file"
+    },
+    {
+      "path": "_bmad\\bmm\\workflows\\3-solutioning\\check-implementation-readiness\\steps\\step-02-prd-analysis.md",
+      "accessCount": 2,
+      "lastAccessed": 1775734460812,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\milom\\.claude\\skills\\bmad-check-implementation-readiness\\workflow.md",
+      "accessCount": 2,
+      "lastAccessed": 1775734778967,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\milom\\.claude\\skills\\bmad-check-implementation-readiness\\steps\\step-01-document-discovery.md",
+      "accessCount": 2,
+      "lastAccessed": 1775734786034,
+      "type": "file"
+    },
+    {
+      "path": "docs\\plans\\evolution-module-prd-brief.md",
+      "accessCount": 1,
+      "lastAccessed": 1775713286813,
+      "type": "file"
+    },
+    {
+      "path": "_bmad-output\\validation-consumer-governance\\implementation-readiness-report-2026-04-09.md",
+      "accessCount": 1,
+      "lastAccessed": 1775713306805,
+      "type": "file"
+    },
+    {
+      "path": "_bmad-output\\planning-artifacts\\main\\epics.md",
+      "accessCount": 1,
+      "lastAccessed": 1775715358187,
+      "type": "file"
+    },
+    {
+      "path": "_bmad\\bmm\\workflows\\3-solutioning\\check-implementation-readiness\\steps\\step-04-ux-alignment.md",
+      "accessCount": 1,
+      "lastAccessed": 1775715522222,
+      "type": "file"
+    },
+    {
+      "path": "_bmad\\bmm\\workflows\\3-solutioning\\check-implementation-readiness\\steps\\step-05-epic-quality-review.md",
+      "accessCount": 1,
+      "lastAccessed": 1775715586494,
+      "type": "file"
+    },
+    {
+      "path": "_bmad\\bmm\\workflows\\3-solutioning\\check-implementation-readiness\\steps\\step-06-final-assessment.md",
+      "accessCount": 1,
+      "lastAccessed": 1775715686516,
+      "type": "file"
+    },
+    {
+      "path": "_bmad-output\\planning-artifacts\\dev\\implementation-readiness-remediation-2026-04-09.md",
+      "accessCount": 1,
+      "lastAccessed": 1775715836873,
+      "type": "file"
+    },
+    {
+      "path": "_bmad-output\\planning-artifacts\\dev\\implementation-readiness-remediation-2026-04-09.cursor-packet.md",
+      "accessCount": 1,
+      "lastAccessed": 1775715902431,
+      "type": "file"
+    },
+    {
+      "path": "_bmad-output\\planning-artifacts\\dev\\implementation-readiness-remediation-2026-04-09.claude-packet.md",
+      "accessCount": 1,
+      "lastAccessed": 1775715903129,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\milom\\.claude\\skills\\bmad-help\\workflow.md",
+      "accessCount": 1,
+      "lastAccessed": 1775715939223,
+      "type": "file"
+    },
+    {
+      "path": "_bmad\\_config\\bmad-help.csv",
+      "accessCount": 1,
+      "lastAccessed": 1775715947467,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\milom\\.claude\\skills\\bmad-check-implementation-readiness\\templates\\readiness-report-template.md",
+      "accessCount": 1,
+      "lastAccessed": 1775732907197,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\milom\\.claude\\skills\\bmad-create-epics-and-stories\\workflow.md",
+      "accessCount": 1,
+      "lastAccessed": 1775733075578,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\milom\\.claude\\skills\\bmad-create-epics-and-stories\\steps\\step-01-validate-prerequisites.md",
+      "accessCount": 1,
+      "lastAccessed": 1775733082998,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\milom\\.claude\\skills\\bmad-create-epics-and-stories\\templates\\epics-template.md",
+      "accessCount": 1,
+      "lastAccessed": 1775733183984,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\milom\\.claude\\skills\\bmad-create-epics-and-stories\\steps\\step-02-design-epics.md",
+      "accessCount": 1,
+      "lastAccessed": 1775733345155,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\milom\\.claude\\skills\\bmad-create-epics-and-stories\\steps\\step-03-create-stories.md",
+      "accessCount": 1,
+      "lastAccessed": 1775733668118,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\milom\\.claude\\skills\\bmad-create-epics-and-stories\\steps\\step-04-final-validation.md",
+      "accessCount": 1,
+      "lastAccessed": 1775733984288,
+      "type": "file"
+    },
+    {
+      "path": ".claude\\commands\\bmad-bmm-check-implementation-readiness.md",
+      "accessCount": 1,
+      "lastAccessed": 1775734116271,
+      "type": "file"
+    },
+    {
+      "path": "_bmad-output\\planning-artifacts\\dev\\pretooluse-probe-2026-04-09.claude-packet.md",
+      "accessCount": 1,
+      "lastAccessed": 1775740426901,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

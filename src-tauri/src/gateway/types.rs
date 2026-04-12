@@ -4,6 +4,65 @@ use crate::gateway::errors::GatewayErrorSummary;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum GatewayDiscoverySource {
+    LanScan,
+    ManualSaved,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GatewayDiscoveryConfidence {
+    High,
+    Medium,
+    Low,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GatewayDiscoveryProbeStage {
+    TcpOpen,
+    WebSocketOpen,
+    ProtocolVerified,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayDiscoveredCandidate {
+    pub id: String,
+    pub label: String,
+    pub source: GatewayDiscoverySource,
+    pub ws_url: String,
+    pub http_url: Option<String>,
+    pub host: String,
+    pub port: u16,
+    pub is_paired_hint: Option<bool>,
+    pub last_seen_at_ms: i64,
+    pub confidence: GatewayDiscoveryConfidence,
+    pub confidence_score: u8,
+    pub probe_stage: GatewayDiscoveryProbeStage,
+    pub protocol_verified: bool,
+    pub protocol_signal: Option<String>,
+    pub matched_seed_subnet: bool,
+    pub matched_seed_host: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewaySavedEndpoint {
+    pub id: String,
+    pub label: String,
+    pub ws_url: String,
+    pub http_url: Option<String>,
+    pub origin_key: String,
+    pub host: String,
+    pub port: u16,
+    pub was_user_selected: bool,
+    pub last_connected_at_ms: Option<i64>,
+    pub last_success_at_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum GatewayAuthMode {
     #[serde(alias = "none")]
     PairedDevice,

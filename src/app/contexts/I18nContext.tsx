@@ -6,6 +6,7 @@ import {
   useEffect,
 } from "react";
 import { getSingletonValue } from "./contextSingleton";
+import { EVOLUTION_RUNTIME_DICT } from "./evolutionI18n";
 
 export type LangCode =
   | "en"
@@ -2522,6 +2523,126 @@ const DICT: Record<string, string[]> = {
     "重新运行设置向导",
     "重新執行設定精靈",
   ],
+  "config.discovery.title": [
+    "LAN Gateways",
+    "局域网 Gateway",
+    "區域網 Gateway",
+  ],
+  "config.discovery.desc": [
+    "Scan the current LAN, adopt one visible Gateway explicitly, and keep saved endpoints manageable.",
+    "扫描当前局域网，显式采用可见 Gateway，并管理已保存 endpoint。",
+    "掃描目前區域網，顯式採用可見 Gateway，並管理已保存 endpoint。",
+  ],
+  "config.discovery.scan": [
+    "Scan LAN Gateways",
+    "扫描局域网 Gateway",
+    "掃描區域網 Gateway",
+  ],
+  "config.discovery.scanning": [
+    "Scanning...",
+    "扫描中...",
+    "掃描中...",
+  ],
+  "config.discovery.savedTitle": [
+    "Saved endpoints",
+    "已保存 endpoint",
+    "已保存 endpoint",
+  ],
+  "config.discovery.savedEmpty": [
+    "No saved Gateway endpoints yet.",
+    "当前还没有已保存的 Gateway endpoint。",
+    "目前還沒有已保存的 Gateway endpoint。",
+  ],
+  "config.discovery.candidatesTitle": [
+    "Discovered candidates",
+    "扫描候选",
+    "掃描候選",
+  ],
+  "config.discovery.candidatesEmpty": [
+    "No LAN Gateway candidates found yet. Run a scan to refresh the list.",
+    "当前还没有 LAN Gateway 候选，请先执行扫描。",
+    "目前還沒有 LAN Gateway 候選，請先執行掃描。",
+  ],
+  "config.discovery.use": [
+    "Use this gateway",
+    "使用此 Gateway",
+    "使用此 Gateway",
+  ],
+  "config.discovery.remove": [
+    "Remove",
+    "移除",
+    "移除",
+  ],
+  "config.discovery.preferred": [
+    "Preferred",
+    "当前首选",
+    "目前首選",
+  ],
+  "config.discovery.lastSeen": [
+    "Last seen",
+    "最近发现",
+    "最近發現",
+  ],
+  "config.discovery.lastSuccess": [
+    "Last success",
+    "最近成功连接",
+    "最近成功連線",
+  ],
+  "config.discovery.confidenceHigh": [
+    "High confidence",
+    "高可信",
+    "高可信",
+  ],
+  "config.discovery.confidenceMedium": [
+    "Medium confidence",
+    "中可信",
+    "中可信",
+  ],
+  "config.discovery.confidenceLow": [
+    "Low confidence",
+    "低可信",
+    "低可信",
+  ],
+  "config.discovery.protocolVerified": [
+    "Protocol verified",
+    "协议已验证",
+    "協議已驗證",
+  ],
+  "config.discovery.seedSubnet": [
+    "Known subnet",
+    "匹配已知网段",
+    "匹配已知網段",
+  ],
+  "config.discovery.seedHost": [
+    "Known host",
+    "匹配已知地址",
+    "匹配已知位址",
+  ],
+  "config.discovery.score": [
+    "Score",
+    "评分",
+    "評分",
+  ],
+  "config.discovery.signal": [
+    "Signal",
+    "信号",
+    "訊號",
+  ],
+  "config.discovery.never": [
+    "Never",
+    "从未",
+    "從未",
+  ],
+  "config.discovery.authHint": [
+    "Complete the current auth fields before adopting a LAN Gateway.",
+    "采用 LAN Gateway 之前，请先补齐当前认证字段。",
+    "採用 LAN Gateway 之前，請先補齊目前認證欄位。",
+  ],
+  "config.discovery.removeConfirm": [
+    "Remove saved Gateway endpoint: {0}?",
+    "确认移除已保存 Gateway endpoint：{0}？",
+    "確認移除已保存 Gateway endpoint：{0}？",
+  ],
 
   "config.tab.general": ["General", "通用设置", "通用設定"],
   "config.tab.connection": ["Connection", "连接配置", "連接配置"],
@@ -2940,6 +3061,8 @@ const DICT: Record<string, string[]> = {
     "應用全局設定",
   ],
 };
+
+Object.assign(DICT, EVOLUTION_RUNTIME_DICT);
 
 interface I18nContextType {
   lang: LangCode;

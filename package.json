@@ -11,7 +11,10 @@
     "visual:ci": "node scripts/visual-regression-ci.mjs",
     "tauri": "tauri",
     "lint": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:release-hardening:frontend": "vitest run src/app/components/views/memorySemanticState.test.ts src/app/components/views/MemoryKnowledgePanel.test.tsx",
+    "test:release-hardening:gateway": "cargo test gateway::store --manifest-path src-tauri/Cargo.toml -- --nocapture && cargo test gateway::discovery --manifest-path src-tauri/Cargo.toml -- --nocapture",
+    "test:release-hardening": "npm run lint && npm run test:release-hardening:frontend && npm run test:release-hardening:gateway && npm run build"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "1.2.3",
@@ -69,6 +72,7 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "4.7.0",
+    "bmad-speckit-sdd-flow": "file:../BMAD-Speckit-SDD-Flow",
     "jsdom": "^29.0.1",
     "playwright": "^1.59.1",
     "tailwindcss": "4.1.12",

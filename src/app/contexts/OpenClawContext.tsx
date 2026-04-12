@@ -55,6 +55,42 @@ interface GatewayStatusSnapshot {
   canRetryWithDeviceToken: boolean;
 }
 
+export type GatewayDiscoverySource = 'lan_scan' | 'manual_saved';
+export type GatewayDiscoveryConfidence = 'high' | 'medium' | 'low';
+export type GatewayDiscoveryProbeStage = 'tcp_open' | 'websocket_open' | 'protocol_verified';
+
+export interface GatewayDiscoveredCandidate {
+  id: string;
+  label: string;
+  source: GatewayDiscoverySource;
+  wsUrl: string;
+  httpUrl?: string | null;
+  host: string;
+  port: number;
+  isPairedHint?: boolean | null;
+  lastSeenAtMs: number;
+  confidence: GatewayDiscoveryConfidence;
+  confidenceScore: number;
+  probeStage: GatewayDiscoveryProbeStage;
+  protocolVerified: boolean;
+  protocolSignal?: string | null;
+  matchedSeedSubnet: boolean;
+  matchedSeedHost: boolean;
+}
+
+export interface GatewaySavedEndpoint {
+  id: string;
+  label: string;
+  wsUrl: string;
+  httpUrl?: string | null;
+  originKey: string;
+  host: string;
+  port: number;
+  wasUserSelected: boolean;
+  lastConnectedAtMs?: number | null;
+  lastSuccessAtMs?: number | null;
+}
+
 interface GatewayAgentIdentitySummary {
   name?: string | null;
   theme?: string | null;
@@ -320,6 +356,178 @@ export interface GatewayAgentsListResult {
   agents: GatewayAgentSummary[];
 }
 
+export type EvolutionTemplateKind =
+  | 'conservative'
+  | 'aggressive'
+  | 'knowledge_injection'
+  | 'custom_template';
+export type EvolutionOperationStatus = 'success' | 'failed' | 'cancelled' | 'rolled_back';
+export type EvolutionOperationKind = 'execute' | 'rollback';
+export type EvolutionOperationType =
+  | 'optimize'
+  | 'inject_knowledge'
+  | 'custom_transform'
+  | 'restore_snapshot';
+export type EvolutionRuntimeState =
+  | 'preview_ready'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
+
+export interface EvolutionKnowledgeInjectionInput {
+  sourceRef: string;
+  additionalSourceRefs?: string[];
+  knowledgeBody: string;
+  capabilityTags: string[];
+}
+
+export interface EvolutionCustomTemplateInput {
+  sourceRef: string;
+  additionalSourceRefs?: string[];
+  scriptBody: string;
+  capabilityTags: string[];
+}
+export type EvolutionRuntimePhase =
+  | 'preview_ready'
+  | 'validating_preview'
+  | 'snapshotting'
+  | 'applying_changes'
+  | 'reindexing'
+  | 'finalizing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface EvolutionPreviewChange {
+  id: string;
+  group: string;
+  type: string;
+  title: string;
+  desc: string;
+  impact: string;
+}
+
+export interface EvolutionPreviewResult {
+  operationId: string;
+  agentId: string;
+  nodeLabel: string;
+  template: EvolutionTemplateKind;
+  operationType: EvolutionOperationType;
+  sourceDocument: string;
+  riskLevel: string;
+  requiresConfirmation: boolean;
+  unsafeApply: boolean;
+  unsafeReasons: string[];
+  sourceRef?: string | null;
+  sourceRefs: string[];
+  capabilityTags: string[];
+  changes: EvolutionPreviewChange[];
+  bytesBefore: number;
+  bytesAfter: number;
+  snapshotId: string;
+  createdAtMs: number;
+}
+
+export interface EvolutionHistoryEntry {
+  operationId: string;
+  operationKind: EvolutionOperationKind;
+  operationType: EvolutionOperationType;
+  status: EvolutionOperationStatus;
+  agentId: string;
+  nodeLabel: string;
+  template: EvolutionTemplateKind;
+  snapshotId: string;
+  sourceDocument: string;
+  sourceRef?: string | null;
+  sourceRefs: string[];
+  capabilityTags: string[];
+  summary: string;
+  bytesBefore: number;
+  bytesAfter: number;
+  durationMs?: number | null;
+  createdAtMs: number;
+}
+
+export interface EvolutionExecuteResult {
+  operationId: string;
+  snapshotId: string;
+  historyEntry: EvolutionHistoryEntry;
+}
+
+export interface EvolutionRollbackResult {
+  operationId: string;
+  restoredSnapshotId: string;
+  historyEntry: EvolutionHistoryEntry;
+}
+
+export interface EvolutionOperationStatusSnapshot {
+  operationId: string;
+  agentId: string;
+  nodeLabel: string;
+  template: EvolutionTemplateKind;
+  operationType: EvolutionOperationType;
+  sourceDocument: string;
+  snapshotId: string;
+  riskLevel: string;
+  sourceRef?: string | null;
+  sourceRefs: string[];
+  capabilityTags: string[];
+  runtimeState: EvolutionRuntimeState;
+  phase: EvolutionRuntimePhase;
+  progressPct: number;
+  message: string;
+  canCancel: boolean;
+  previewStale: boolean;
+  conflictDetected: boolean;
+  overrideApplied: boolean;
+  activeConflictOperationId?: string | null;
+  updatedAtMs: number;
+  createdAtMs: number;
+  historyEntry?: EvolutionHistoryEntry | null;
+}
+
+export interface EvolutionAuditEntry {
+  operationId: string;
+  operationKind: EvolutionOperationKind;
+  operationType: EvolutionOperationType;
+  status: EvolutionOperationStatus;
+  agentId: string;
+  nodeLabel: string;
+  template: EvolutionTemplateKind;
+  snapshotId: string;
+  sourceDocument: string;
+  riskLevel: string;
+  sourceRef?: string | null;
+  sourceRefs: string[];
+  capabilityTags: string[];
+  message: string;
+  startedAtMs: number;
+  endedAtMs: number;
+  durationMs: number;
+}
+
+export interface EvolutionMetricBucket {
+  key: string;
+  count: number;
+}
+
+export interface EvolutionAuditSummary {
+  agentId: string;
+  totalOperations: number;
+  successCount: number;
+  failedCount: number;
+  cancelledCount: number;
+  rolledBackCount: number;
+  highRiskCount: number;
+  unsafeBlockedCount: number;
+  averageDurationMs?: number | null;
+  statusBreakdown: EvolutionMetricBucket[];
+  templateBreakdown: EvolutionMetricBucket[];
+  operationTypeBreakdown: EvolutionMetricBucket[];
+  recentEntries: EvolutionAuditEntry[];
+}
+
 interface GatewayConnectConfig {
   gatewayUrl: string;
   authMode: AuthMode;
@@ -351,6 +559,12 @@ interface OpenClawContextType {
   setShowReminder: (show: boolean) => void;
   nodes: Node[];
   agents: Agent[];
+  discoveredGateways: GatewayDiscoveredCandidate[];
+  savedEndpoints: GatewaySavedEndpoint[];
+  scanLanGateways: (timeoutMs?: number) => Promise<GatewayDiscoveredCandidate[]>;
+  useDiscoveredGateway: (candidate: GatewayDiscoveredCandidate, mode: AuthMode, secret: string) => Promise<boolean>;
+  removeSavedEndpoint: (endpointId: string) => Promise<boolean>;
+  refreshSavedEndpoints: () => Promise<GatewaySavedEndpoint[]>;
 }
 
 const OpenClawContext = createContext<OpenClawContextType | undefined>(undefined);
@@ -468,6 +682,29 @@ export async function gatewayAgentIdentityGet(agentId: string) {
 
 export async function gatewayAgentsList() {
   return invokeGateway<GatewayAgentsListResult>('gateway_agents_list');
+}
+
+export async function gatewayDiscover(seedUrl?: string, timeoutMs = 2400) {
+  return invokeGateway<GatewayDiscoveredCandidate[]>('gateway_discover', {
+    seedUrl,
+    timeoutMs,
+  });
+}
+
+export async function gatewaySavedEndpoints() {
+  return invokeGateway<GatewaySavedEndpoint[]>('gateway_saved_endpoints');
+}
+
+export async function gatewaySelectEndpoint(candidate: GatewayDiscoveredCandidate) {
+  return invokeGateway<GatewaySavedEndpoint>('gateway_select_endpoint', {
+    candidate,
+  });
+}
+
+export async function gatewayRemoveSavedEndpoint(endpointId: string) {
+  return invokeGateway<boolean>('gateway_remove_saved_endpoint', {
+    endpointId,
+  });
 }
 
 export async function gatewayAgentSoulGet(agentId: string) {
@@ -615,6 +852,69 @@ export async function gatewayAgentSettingsGet(agentId: string) {
   });
 }
 
+export async function evolutionPreview(
+  agentId: string,
+  nodeLabel: string,
+  template: EvolutionTemplateKind,
+  knowledgeInput?: EvolutionKnowledgeInjectionInput,
+  customInput?: EvolutionCustomTemplateInput,
+) {
+  return invokeGateway<EvolutionPreviewResult>('evolution_preview', {
+    agentId,
+    nodeLabel,
+    template,
+    knowledgeInput,
+    customInput,
+  });
+}
+
+export async function evolutionExecute(operationId: string) {
+  return invokeGateway<EvolutionExecuteResult>('evolution_execute', {
+    operationId,
+  });
+}
+
+export async function evolutionExecuteStart(
+  operationId: string,
+  overrideRiskAck = false,
+) {
+  return invokeGateway<EvolutionOperationStatusSnapshot>('evolution_execute_start', {
+    operationId,
+    overrideRiskAck,
+  });
+}
+
+export async function evolutionOperationStatus(operationId: string) {
+  return invokeGateway<EvolutionOperationStatusSnapshot>('evolution_operation_status', {
+    operationId,
+  });
+}
+
+export async function evolutionCancel(operationId: string) {
+  return invokeGateway<EvolutionOperationStatusSnapshot>('evolution_cancel', {
+    operationId,
+  });
+}
+
+export async function evolutionHistoryList(agentId: string) {
+  return invokeGateway<EvolutionHistoryEntry[]>('evolution_history_list', {
+    agentId,
+  });
+}
+
+export async function evolutionAuditSummary(agentId: string) {
+  return invokeGateway<EvolutionAuditSummary>('evolution_audit_summary', {
+    agentId,
+  });
+}
+
+export async function evolutionRollback(agentId: string, snapshotId: string) {
+  return invokeGateway<EvolutionRollbackResult>('evolution_rollback', {
+    agentId,
+    snapshotId,
+  });
+}
+
 // Identity-facing fields are file-backed to keep the UI aligned with IDENTITY.md.
 export async function gatewayAgentWorkspaceIdentitySet(agentId: string, content: string) {
   return invokeGateway<void>('gateway_agent_workspace_identity_set', {
@@ -663,6 +963,16 @@ export async function gatewayExportMarkdownDocument(suggestedFileName: string, c
   });
 }
 
+export async function gatewayExportMarkdownDocumentQuick(
+  suggestedFileName: string,
+  content: string,
+) {
+  return invokeGateway<string>('export_markdown_document_quick', {
+    suggestedFileName,
+    content,
+  });
+}
+
 function isConnectedPhase(phase: GatewayConnectionPhase) {
   return phase === 'connected';
 }
@@ -676,6 +986,22 @@ function resolveOrigin(origin: string | null | undefined, fallback?: string) {
     return fallback;
   }
 
+  return null;
+}
+
+function resolveSavedEndpointUrl(endpoint: GatewaySavedEndpoint | null | undefined) {
+  if (!endpoint) {
+    return null;
+  }
+  if (endpoint.httpUrl && endpoint.httpUrl.trim().length > 0) {
+    return endpoint.httpUrl;
+  }
+  if (endpoint.wsUrl.startsWith('ws://')) {
+    return endpoint.wsUrl.replace(/^ws:\/\//, 'http://');
+  }
+  if (endpoint.wsUrl.startsWith('wss://')) {
+    return endpoint.wsUrl.replace(/^wss:\/\//, 'https://');
+  }
   return null;
 }
 
@@ -754,6 +1080,8 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
   const [showReminder, setShowReminder] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [discoveredGateways, setDiscoveredGateways] = useState<GatewayDiscoveredCandidate[]>([]);
+  const [savedEndpoints, setSavedEndpoints] = useState<GatewaySavedEndpoint[]>([]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.url, gatewayUrl);
@@ -785,6 +1113,20 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const hydrateGatewayState = async () => {
+      let nextSavedEndpoints: GatewaySavedEndpoint[] = [];
+      if (isTauriRuntimeAvailable()) {
+        try {
+          nextSavedEndpoints = await gatewaySavedEndpoints();
+          if (!cancelled) {
+            setSavedEndpoints(nextSavedEndpoints);
+          }
+        } catch {
+          if (!cancelled) {
+            setSavedEndpoints([]);
+          }
+        }
+      }
+
       try {
         const snapshot = await invokeGateway<GatewayStatusSnapshot>('gateway_status');
         if (cancelled) {
@@ -793,6 +1135,34 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
 
         const origin = resolveOrigin(snapshot.gatewayOrigin, gatewayUrl);
         if (!isConnectedPhase(snapshot.phase) || !origin) {
+          const preferredSavedEndpoint = nextSavedEndpoints.find((endpoint) => endpoint.wasUserSelected) ?? null;
+          const reconnectUrl = resolveSavedEndpointUrl(preferredSavedEndpoint) ?? gatewayUrl;
+          const shouldAttemptReconnect =
+            reconnectUrl.trim().length > 0 &&
+            (preferredSavedEndpoint !== null || isConfigured || gatewayUrl !== DEFAULT_GATEWAY_URL);
+          if (shouldAttemptReconnect) {
+            const success = await connectAndLoadAgents(reconnectUrl, authMode, authSecret, false);
+            if (cancelled) {
+              return;
+            }
+            if (success) {
+              if (reconnectUrl !== gatewayUrl) {
+                setGatewayUrl(reconnectUrl);
+              }
+              try {
+                const refreshedEndpoints = await gatewaySavedEndpoints();
+                if (!cancelled) {
+                  setSavedEndpoints(refreshedEndpoints);
+                }
+              } catch {
+                if (!cancelled) {
+                  setSavedEndpoints([]);
+                }
+              }
+              return;
+            }
+          }
+
           setIsConnected(false);
           setConnectedOrigin(origin);
           setGrantedScopes(snapshot.grantedScopes ?? []);
@@ -815,6 +1185,13 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
           setLastError(null);
           setNodes([node]);
           setAgents(mapAgents(agentsList, node.id));
+          if (nextSavedEndpoints.length === 0 && isTauriRuntimeAvailable()) {
+            try {
+              setSavedEndpoints(await gatewaySavedEndpoints());
+            } catch {
+              setSavedEndpoints([]);
+            }
+          }
         } catch (error) {
           if (cancelled) {
             return;
@@ -846,7 +1223,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [gatewayUrl]);
+  }, [authMode, authSecret, gatewayUrl, isConfigured]);
 
   const setHasSkippedSetup = (skipped: boolean) => {
     setHasSkippedSetupState(skipped);
@@ -907,6 +1284,11 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         const agentsList = await gatewayAgentsList();
         setGrantedScopes(snapshot.grantedScopes ?? []);
         applyConnectedState(origin, agentsList);
+        try {
+          setSavedEndpoints(await gatewaySavedEndpoints());
+        } catch {
+          setSavedEndpoints([]);
+        }
 
         if (persistConfig) {
           setGatewayUrl(url);
@@ -968,6 +1350,39 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshSavedEndpoints = async () => {
+    const next = await gatewaySavedEndpoints();
+    setSavedEndpoints(next);
+    return next;
+  };
+
+  const scanLanGateways = async (timeoutMs = 2400) => {
+    const next = await gatewayDiscover(connectedOrigin ?? gatewayUrl, timeoutMs);
+    setDiscoveredGateways(next);
+    return next;
+  };
+
+  const useDiscoveredGateway = async (
+    candidate: GatewayDiscoveredCandidate,
+    mode: AuthMode,
+    secret: string,
+  ) => {
+    const selected = await gatewaySelectEndpoint(candidate);
+    await refreshSavedEndpoints();
+    const connectUrl =
+      resolveSavedEndpointUrl(selected) ??
+      candidate.httpUrl ??
+      candidate.wsUrl.replace(/^ws:\/\//, 'http://').replace(/^wss:\/\//, 'https://');
+    setGatewayUrl(connectUrl);
+    return connectAndLoadAgents(connectUrl, mode, secret, true);
+  };
+
+  const removeSavedEndpoint = async (endpointId: string) => {
+    const removed = await gatewayRemoveSavedEndpoint(endpointId);
+    await refreshSavedEndpoints();
+    return removed;
+  };
+
   return (
     <OpenClawContext.Provider
       value={{
@@ -992,6 +1407,12 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         setShowReminder,
         nodes,
         agents,
+        discoveredGateways,
+        savedEndpoints,
+        scanLanGateways,
+        useDiscoveredGateway,
+        removeSavedEndpoint,
+        refreshSavedEndpoints,
       }}
     >
       {children}

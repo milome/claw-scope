@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useOpenClaw, type AuthMode } from '../../contexts/OpenClawContext';
-import { CheckCircle2, Server, Shield, Globe, TerminalSquare, RefreshCw, XCircle, ChevronDown, ChevronUp, AlertCircle, RotateCcw } from 'lucide-react';
+import { CheckCircle2, Server, Shield, Globe, TerminalSquare, RefreshCw, XCircle, ChevronDown, ChevronUp, AlertCircle, RotateCcw, Trash2, Wifi } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useI18n } from '../../contexts/I18nContext';
 
@@ -18,6 +18,11 @@ export function OpenClawConfigModule() {
     updateConfig,
     testConnection,
     reopenSetupWizard,
+    discoveredGateways,
+    savedEndpoints,
+    scanLanGateways,
+    useDiscoveredGateway,
+    removeSavedEndpoint,
   } = useOpenClaw();
 
   const [url, setUrl] = useState(gatewayUrl);
@@ -27,6 +32,9 @@ export function OpenClawConfigModule() {
   const [testResult, setTestResult] = useState<'none' | 'success' | 'fail'>('none');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [applyingCandidateId, setApplyingCandidateId] = useState<string | null>(null);
+  const [removingEndpointId, setRemovingEndpointId] = useState<string | null>(null);
   const authSecretRequired = authMode !== 'paired_device' && authSecret.trim().length === 0;
   const authSecretRequiredMessage = authMode === 'token' ? t('setup.auth.requiredToken') : t('setup.auth.requiredPassword');
 
@@ -61,6 +69,64 @@ export function OpenClawConfigModule() {
     const success = await updateConfig(url, authMode, authSecret);
     setIsSaving(false);
     setTestResult(success ? 'none' : 'fail');
+  };
+
+  const handleScanLan = async () => {
+    setIsDiscovering(true);
+    try {
+      await scanLanGateways();
+    } finally {
+      setIsDiscovering(false);
+    }
+  };
+
+  const handleUseGateway = async (candidate: (typeof discoveredGateways)[number]) => {
+    setApplyingCandidateId(candidate.id);
+    try {
+      const success = await useDiscoveredGateway(candidate, authMode, authSecret);
+      setTestResult(success ? 'success' : 'fail');
+    } finally {
+      setApplyingCandidateId(null);
+    }
+  };
+
+  const handleRemoveEndpoint = async (endpointId: string, label: string) => {
+    if (!globalThis.confirm?.(t('config.discovery.removeConfirm', label))) {
+      return;
+    }
+    setRemovingEndpointId(endpointId);
+    try {
+      await removeSavedEndpoint(endpointId);
+    } finally {
+      setRemovingEndpointId(null);
+    }
+  };
+
+  const formatTimestamp = (value?: number | null) => {
+    if (!value) {
+      return t('config.discovery.never');
+    }
+    return new Date(value).toLocaleString();
+  };
+
+  const candidateConfidenceLabel = (confidence: (typeof discoveredGateways)[number]['confidence']) => {
+    if (confidence === 'high') {
+      return t('config.discovery.confidenceHigh');
+    }
+    if (confidence === 'medium') {
+      return t('config.discovery.confidenceMedium');
+    }
+    return t('config.discovery.confidenceLow');
+  };
+
+  const candidateConfidenceClass = (confidence: (typeof discoveredGateways)[number]['confidence']) => {
+    if (confidence === 'high') {
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300';
+    }
+    if (confidence === 'medium') {
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
+    }
+    return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
   };
 
   const hasChanges = url !== gatewayUrl || authMode !== savedAuthMode || authSecret !== savedAuthSecret;
@@ -200,6 +266,134 @@ export function OpenClawConfigModule() {
               {authMode === 'paired_device' && (
                 <p className="text-xs text-slate-500 mt-2">{t('setup.auth.pairedDeviceHint')}</p>
               )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-5 space-y-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t('config.discovery.title')}</h3>
+                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{t('config.discovery.desc')}</p>
+                </div>
+                <button
+                  onClick={handleScanLan}
+                  disabled={isDiscovering}
+                  className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isDiscovering ? 'animate-spin' : ''}`} />
+                  {isDiscovering ? t('config.discovery.scanning') : t('config.discovery.scan')}
+                </button>
+              </div>
+
+              {authSecretRequired ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+                  {t('config.discovery.authHint')}
+                </div>
+              ) : null}
+
+              <div className="space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                  {t('config.discovery.savedTitle')}
+                </div>
+                {savedEndpoints.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                    {t('config.discovery.savedEmpty')}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {savedEndpoints.map((endpoint) => (
+                      <div key={endpoint.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{endpoint.label}</span>
+                              {endpoint.wasUserSelected ? (
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                  {t('config.discovery.preferred')}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">
+                              {endpoint.httpUrl ?? endpoint.wsUrl}
+                            </div>
+                            <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                              {t('config.discovery.lastSuccess')}: {formatTimestamp(endpoint.lastSuccessAtMs)}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => void handleRemoveEndpoint(endpoint.id, endpoint.label)}
+                            disabled={removingEndpointId === endpoint.id}
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:border-red-300 hover:text-red-600 disabled:opacity-60 disabled:cursor-not-allowed dark:border-slate-700 dark:text-slate-300 dark:hover:border-red-700 dark:hover:text-red-300"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            {t('config.discovery.remove')}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                  {t('config.discovery.candidatesTitle')}
+                </div>
+                {discoveredGateways.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                    {t('config.discovery.candidatesEmpty')}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {discoveredGateways.map((candidate) => (
+                      <div key={candidate.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                              <Wifi className="w-4 h-4 text-sky-500" />
+                              <span>{candidate.label}</span>
+                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${candidateConfidenceClass(candidate.confidence)}`}>
+                                {candidateConfidenceLabel(candidate.confidence)}
+                              </span>
+                              {candidate.protocolVerified ? (
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                  {t('config.discovery.protocolVerified')}
+                                </span>
+                              ) : null}
+                              {candidate.matchedSeedHost ? (
+                                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                                  {t('config.discovery.seedHost')}
+                                </span>
+                              ) : candidate.matchedSeedSubnet ? (
+                                <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                  {t('config.discovery.seedSubnet')}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">
+                              {candidate.httpUrl ?? candidate.wsUrl}
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                              {t('config.discovery.lastSeen')}: {formatTimestamp(candidate.lastSeenAtMs)}
+                              <span>{t('config.discovery.score')}: {candidate.confidenceScore}</span>
+                              {candidate.protocolSignal ? (
+                                <span>{t('config.discovery.signal')}: {candidate.protocolSignal}</span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => void handleUseGateway(candidate)}
+                            disabled={authSecretRequired || applyingCandidateId === candidate.id}
+                            className="inline-flex items-center gap-2 rounded-lg bg-[#165DFF] px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {applyingCandidateId === candidate.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Server className="w-3.5 h-3.5" />}
+                            {t('config.discovery.use')}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="pt-2">

@@ -7,12 +7,14 @@ use url::Url;
 
 use crate::gateway::{
     connector,
+    discovery,
     endpoint::GatewayEndpoint,
     errors::GatewayErrorSummary,
     state::GatewayAppState,
     types::{
         GatewayAgentFileGetResult, GatewayAgentIdentityResult, GatewayAgentMemoryIndexResult,
         GatewayAgentMemoryResult,
+        GatewayDiscoveredCandidate, GatewaySavedEndpoint,
         GatewayAgentMemoryRuntimeStatusResult, GatewayAgentMemorySearchResult,
         GatewayAgentMemoryStatusResult,
         GatewayAgentMemoryTimelineAccessResult, GatewayAgentMemoryTimelineResult,
@@ -20,6 +22,7 @@ use crate::gateway::{
         GatewayStatusSnapshot,
     },
 };
+use crate::gateway::store::{load_saved_endpoints, remove_saved_endpoint, resolve_store_paths, select_saved_endpoint};
 
 #[tauri::command]
 pub async fn gateway_status(
@@ -42,6 +45,38 @@ pub async fn gateway_connect(
 ) -> Result<GatewayStatusSnapshot, GatewayErrorSummary> {
     connector::connect(state.inner().clone(), config)
         .await
+        .map_err(|error| GatewayErrorSummary::from_error(&error))
+}
+
+#[tauri::command]
+pub async fn gateway_discover(
+    seed_url: Option<String>,
+    timeout_ms: Option<u64>,
+) -> Result<Vec<GatewayDiscoveredCandidate>, GatewayErrorSummary> {
+    discovery::discover_lan_candidates(seed_url.as_deref(), timeout_ms)
+        .await
+        .map_err(|error| GatewayErrorSummary::from_error(&error))
+}
+
+#[tauri::command]
+pub async fn gateway_saved_endpoints() -> Result<Vec<GatewaySavedEndpoint>, GatewayErrorSummary> {
+    load_saved_endpoints(&resolve_store_paths())
+        .map_err(|error| GatewayErrorSummary::from_error(&error))
+}
+
+#[tauri::command]
+pub async fn gateway_select_endpoint(
+    candidate: GatewayDiscoveredCandidate,
+) -> Result<GatewaySavedEndpoint, GatewayErrorSummary> {
+    select_saved_endpoint(&resolve_store_paths(), &candidate)
+        .map_err(|error| GatewayErrorSummary::from_error(&error))
+}
+
+#[tauri::command]
+pub async fn gateway_remove_saved_endpoint(
+    endpoint_id: String,
+) -> Result<bool, GatewayErrorSummary> {
+    remove_saved_endpoint(&resolve_store_paths(), endpoint_id.as_str())
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
 
@@ -378,10 +413,64 @@ pub async fn export_markdown_document(
     Ok(Some(output_path.display().to_string()))
 }
 
+#[tauri::command]
+pub async fn export_markdown_document_quick(
+    suggested_file_name: String,
+    content: String,
+) -> Result<String, GatewayErrorSummary> {
+    let output_root = export_markdown_root().map_err(|error| {
+        GatewayErrorSummary::new(
+            "export",
+            Some("EXPORT_ROOT_RESOLVE_FAILED".to_string()),
+            format!("无法解析快速导出目录: {error}"),
+            false,
+            Some("请检查本机用户目录或应用数据目录权限。".to_string()),
+        )
+    })?;
+
+    std::fs::create_dir_all(&output_root).map_err(|error| {
+        GatewayErrorSummary::new(
+            "export",
+            Some("EXPORT_ROOT_CREATE_FAILED".to_string()),
+            format!("无法创建快速导出目录: {error}"),
+            false,
+            Some("请检查目标目录是否可写。".to_string()),
+        )
+    })?;
+
+    let file_name = ensure_markdown_extension(PathBuf::from(suggested_file_name));
+    let output_path = output_root.join(file_name);
+    std::fs::write(&output_path, content.as_bytes()).map_err(|error| {
+        GatewayErrorSummary::new(
+            "export",
+            Some("EXPORT_QUICK_WRITE_FAILED".to_string()),
+            format!("快速导出失败: {error}"),
+            false,
+            Some("请检查目标目录是否可写，然后重试。".to_string()),
+        )
+    })?;
+
+    Ok(output_path.display().to_string())
+}
+
 fn ensure_markdown_extension(mut path: PathBuf) -> PathBuf {
     if path.extension().is_none() {
         path.set_extension("md");
     }
 
     path
+}
+
+fn export_markdown_root() -> Result<PathBuf, std::io::Error> {
+    if let Some(app_data) = std::env::var_os("APPDATA") {
+        return Ok(PathBuf::from(app_data)
+            .join("claw-scope")
+            .join("exports"));
+    }
+
+    if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+        return Ok(PathBuf::from(home).join("claw-scope-exports"));
+    }
+
+    Ok(std::env::current_dir()?.join("exports"))
 }

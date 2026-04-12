@@ -6,6 +6,7 @@ authors = ["milome"]
 license = "MIT"
 repository = ""
 edition = "2024"
+default-run = "claw-scope"
 
 [lib]
 name = "claw_scope"
@@ -33,3 +34,10 @@ url = "2"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+opt-level = 1
+codegen-units = 256
+lto = false
+panic = "abort"
+debug = 0

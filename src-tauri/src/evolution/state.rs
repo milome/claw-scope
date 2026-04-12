@@ -1,0 +1,189 @@
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
+
+use tokio::sync::Mutex;
+
+use crate::evolution::types::{EvolutionOperationStatusSnapshot, EvolutionPreviewResult, EvolutionRuntimeState};
+
+#[derive(Debug, Clone)]
+pub struct PendingEvolutionOperation {
+    pub preview: EvolutionPreviewResult,
+    pub original_content: String,
+    pub next_content: String,
+}
+
+#[derive(Debug)]
+pub struct RuntimeEvolutionOperation {
+    pub status: Arc<Mutex<EvolutionOperationStatusSnapshot>>,
+    cancel_requested: Arc<AtomicBool>,
+}
+
+impl RuntimeEvolutionOperation {
+    pub fn new(snapshot: EvolutionOperationStatusSnapshot) -> Self {
+        Self {
+            status: Arc::new(Mutex::new(snapshot)),
+            cancel_requested: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn request_cancel(&self) {
+        self.cancel_requested.store(true, Ordering::SeqCst);
+    }
+
+    pub fn is_cancel_requested(&self) -> bool {
+        self.cancel_requested.load(Ordering::SeqCst)
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct EvolutionAppState {
+    pending: Arc<Mutex<HashMap<String, PendingEvolutionOperation>>>,
+    runtime: Arc<Mutex<HashMap<String, Arc<RuntimeEvolutionOperation>>>>,
+}
+
+impl EvolutionAppState {
+    pub async fn insert_pending(&self, operation: PendingEvolutionOperation) {
+        self.pending
+            .lock()
+            .await
+            .insert(operation.preview.operation_id.clone(), operation);
+    }
+
+    pub async fn take_pending(&self, operation_id: &str) -> Option<PendingEvolutionOperation> {
+        self.pending.lock().await.remove(operation_id)
+    }
+
+    pub async fn insert_runtime(
+        &self,
+        snapshot: EvolutionOperationStatusSnapshot,
+    ) -> Arc<RuntimeEvolutionOperation> {
+        let operation_id = snapshot.operation_id.clone();
+        let operation = Arc::new(RuntimeEvolutionOperation::new(snapshot));
+        self.runtime
+            .lock()
+            .await
+            .insert(operation_id, Arc::clone(&operation));
+        operation
+    }
+
+    pub async fn runtime_operation(
+        &self,
+        operation_id: &str,
+    ) -> Option<Arc<RuntimeEvolutionOperation>> {
+        self.runtime.lock().await.get(operation_id).cloned()
+    }
+
+    pub async fn runtime_status_snapshot(
+        &self,
+        operation_id: &str,
+    ) -> Option<EvolutionOperationStatusSnapshot> {
+        let operation = self.runtime_operation(operation_id).await?;
+        Some(operation.status.lock().await.clone())
+    }
+
+    pub async fn has_running_operation_for_agent(
+        &self,
+        agent_id: &str,
+        ignore_operation_id: &str,
+    ) -> Option<String> {
+        let operations = {
+            let runtime = self.runtime.lock().await;
+            runtime.values().cloned().collect::<Vec<_>>()
+        };
+
+        for operation in operations {
+            let snapshot = operation.status.lock().await.clone();
+            if snapshot.operation_id == ignore_operation_id {
+                continue;
+            }
+            if snapshot.agent_id == agent_id && snapshot.runtime_state == EvolutionRuntimeState::Running {
+                return Some(snapshot.operation_id);
+            }
+        }
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::evolution::types::{
+        EvolutionOperationStatusSnapshot, EvolutionOperationType, EvolutionRuntimePhase,
+        EvolutionRuntimeState, EvolutionTemplateKind,
+    };
+
+    fn runtime_snapshot(operation_id: &str, agent_id: &str) -> EvolutionOperationStatusSnapshot {
+        EvolutionOperationStatusSnapshot {
+            operation_id: operation_id.to_string(),
+            agent_id: agent_id.to_string(),
+            node_label: agent_id.to_string(),
+            template: EvolutionTemplateKind::Conservative,
+            operation_type: EvolutionOperationType::Optimize,
+            source_document: "MEMORY.md".to_string(),
+            snapshot_id: format!("snap-{operation_id}"),
+            risk_level: "low".to_string(),
+            source_ref: None,
+            source_refs: Vec::new(),
+            capability_tags: Vec::new(),
+            runtime_state: EvolutionRuntimeState::Running,
+            phase: EvolutionRuntimePhase::ValidatingPreview,
+            progress_pct: 5,
+            message: "testing".to_string(),
+            can_cancel: true,
+            preview_stale: false,
+            conflict_detected: false,
+            override_applied: false,
+            active_conflict_operation_id: None,
+            updated_at_ms: 1,
+            created_at_ms: 1,
+            history_entry: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn insert_runtime_exposes_status_snapshot() {
+        let state = EvolutionAppState::default();
+        state.insert_runtime(runtime_snapshot("op-a", "agent-a")).await;
+
+        let snapshot = state
+            .runtime_status_snapshot("op-a")
+            .await
+            .expect("status snapshot");
+        assert_eq!(snapshot.operation_id, "op-a");
+        assert_eq!(snapshot.agent_id, "agent-a");
+        assert_eq!(snapshot.runtime_state, EvolutionRuntimeState::Running);
+    }
+
+    #[tokio::test]
+    async fn detects_running_conflict_for_same_agent() {
+        let state = EvolutionAppState::default();
+        state.insert_runtime(runtime_snapshot("op-a", "agent-a")).await;
+        state.insert_runtime(runtime_snapshot("op-b", "agent-b")).await;
+
+        let conflict = state
+            .has_running_operation_for_agent("agent-a", "op-z")
+            .await
+            .expect("expected conflict");
+        assert_eq!(conflict, "op-a");
+
+        let no_conflict = state
+            .has_running_operation_for_agent("agent-a", "op-a")
+            .await;
+        assert!(no_conflict.is_none());
+    }
+
+    #[tokio::test]
+    async fn request_cancel_sets_cancel_flag() {
+        let state = EvolutionAppState::default();
+        let runtime = state.insert_runtime(runtime_snapshot("op-a", "agent-a")).await;
+        assert!(!runtime.is_cancel_requested());
+        runtime.request_cancel();
+        assert!(runtime.is_cancel_requested());
+    }
+}

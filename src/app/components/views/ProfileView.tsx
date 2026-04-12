@@ -336,11 +336,11 @@ function resolveStatusDotClass(status: AgentStatusKey) {
 function resolveStatusTextClass(status: AgentStatusKey) {
   switch (status) {
     case "active":
-      return "text-emerald-400";
+      return "text-emerald-600 dark:text-emerald-400";
     case "standby":
-      return "text-amber-400";
+      return "text-amber-600 dark:text-amber-400";
     default:
-      return "text-slate-400";
+      return "text-slate-500 dark:text-slate-400";
   }
 }
 
@@ -1143,9 +1143,9 @@ function CodeBlockPanel({
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-sm dark:border-slate-700">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 px-4 py-2">
-        <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400">
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-950">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-100 px-4 py-2 dark:border-slate-800 dark:bg-slate-900">
+        <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
           {language || "code"}
         </div>
         <CopyCodeButton copied={copied} onCopy={() => void handleCopy()} />
@@ -1157,15 +1157,15 @@ function CodeBlockPanel({
           </div>
         ) : null}
         {showLeftShadow ? (
-          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-slate-950 via-slate-950/85 to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-white via-white/90 to-transparent dark:from-slate-950 dark:via-slate-950/85" />
         ) : null}
         {showRightShadow ? (
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-slate-950 via-slate-950/85 to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-white via-white/90 to-transparent dark:from-slate-950 dark:via-slate-950/85" />
         ) : null}
         <pre
           ref={scrollRef}
           onScroll={updateShadows}
-          className="overflow-x-auto px-4 py-4 text-[12px] leading-6 text-slate-100"
+          className="overflow-x-auto px-4 py-4 text-[12px] leading-6 text-slate-800 dark:text-slate-100"
         >
           <code>
             {renderCodeTextWithHighlights(
@@ -3053,8 +3053,8 @@ export function ProfileView() {
               {/* Card Body */}
               <div className="relative flex shrink-0 w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_22px_52px_rgba(15,23,42,0.08)] transition-colors before:pointer-events-none before:absolute before:inset-x-8 before:top-0 before:h-0.5 before:rounded-full before:bg-gradient-to-r before:from-sky-400 before:via-cyan-400 before:to-violet-400 dark:border-slate-800 dark:bg-slate-900 dark:before:from-sky-300 dark:before:via-cyan-300 dark:before:to-violet-300 md:flex-row md:rounded-3xl">
                 {/* Visual Identity Left */}
-                <div className="relative w-full shrink-0 overflow-hidden border-b border-slate-700/80 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 text-center text-white md:sticky md:top-0 md:w-[320px] md:self-start md:border-b-0 md:border-r md:border-slate-800/80 md:p-8 md:text-left rtl:md:text-right items-center md:items-start rtl:md:items-end after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-white/10 md:after:bottom-auto md:after:inset-y-8 md:after:left-auto md:after:right-0 md:after:h-auto md:after:w-px md:after:bg-gradient-to-b md:after:from-sky-400/35 md:after:via-white/12 md:after:to-violet-400/20 rtl:md:after:left-0 rtl:md:after:right-auto flex flex-col">
-                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)] bg-[size:20px_20px]" />
+                <div className="relative flex w-full shrink-0 flex-col items-center overflow-hidden border-b border-slate-200 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(240,249,255,0.96),rgba(245,243,255,0.94))] p-6 text-center text-slate-900 md:sticky md:top-0 md:w-[320px] md:self-start md:items-start md:border-b-0 md:border-r md:border-slate-200 md:p-8 md:text-left dark:border-slate-800/80 dark:bg-gradient-to-br dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 dark:text-white rtl:md:items-end rtl:md:text-right after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-slate-200/80 dark:after:bg-white/10 md:after:bottom-auto md:after:inset-y-8 md:after:left-auto md:after:right-0 md:after:h-auto md:after:w-px md:after:bg-gradient-to-b md:after:from-sky-300/50 md:after:via-slate-200/80 md:after:to-violet-300/45 dark:md:after:from-sky-400/35 dark:md:after:via-white/12 dark:md:after:to-violet-400/20 rtl:md:after:left-0 rtl:md:after:right-auto">
+                  <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:20px_20px] dark:bg-[linear-gradient(to_right,#ffffff0a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff0a_1px,transparent_1px)]" />
 
                   <div className="relative z-10 flex flex-col items-center gap-5 md:items-start rtl:md:items-end w-full">
                     <AgentAvatar
@@ -3068,18 +3068,18 @@ export function ProfileView() {
                       <h2 className="text-2xl md:text-3xl font-bold tracking-tight mb-2 md:mb-1">
                         {activeAgent.name}
                       </h2>
-                      <div className="mb-6 flex flex-wrap items-center justify-center gap-2 text-xs font-mono text-slate-300 md:mb-4 md:justify-start md:text-sm md:text-slate-400">
-                        <div className="flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-sky-200 md:rounded md:px-2 md:py-1">
+                      <div className="mb-6 flex flex-wrap items-center justify-center gap-2 text-xs font-mono text-slate-600 md:mb-4 md:justify-start md:text-sm dark:text-slate-400">
+                        <div className="flex items-center gap-1.5 rounded-full border border-sky-200 bg-white/90 px-3 py-1.5 text-sky-700 shadow-sm md:rounded md:px-2 md:py-1 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200">
                           <Network className="w-3.5 h-3.5" /> {activeAgent.node}
                         </div>
-                        <div className="flex items-center gap-1.5 rounded-full border border-slate-600 bg-slate-800/70 px-3 py-1.5 text-slate-200 md:rounded md:px-2 md:py-1">
-                          <Hash className="w-3.5 h-3.5 text-sky-300" />{" "}
+                        <div className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-slate-700 shadow-sm md:rounded md:px-2 md:py-1 dark:border-slate-600 dark:bg-slate-800/70 dark:text-slate-200">
+                          <Hash className="w-3.5 h-3.5 text-sky-500 dark:text-sky-300" />{" "}
                           {activeAgent.id}
                         </div>
                       </div>
 
-                      <div className="w-full flex md:flex-col justify-around md:justify-start gap-0 md:gap-3 bg-slate-950/60 md:bg-slate-950/40 p-4 rounded-2xl md:rounded-xl border border-slate-800 backdrop-blur-sm">
-                        <div className="flex flex-col md:flex-row items-center gap-1.5 md:gap-2.5 text-xs text-slate-300 font-medium">
+                      <div className="flex w-full justify-around gap-0 rounded-2xl border border-slate-200 bg-white/88 p-4 backdrop-blur-sm md:flex-col md:justify-start md:gap-3 md:rounded-xl dark:border-slate-800 dark:bg-slate-950/40">
+                        <div className="flex flex-col items-center gap-1.5 text-xs font-medium text-slate-700 md:flex-row md:gap-2.5 dark:text-slate-300">
                           <Activity
                             className={`w-5 h-5 md:w-4 md:h-4 ${resolveStatusTextClass(activeAgent.statusKey)}`}
                           />
@@ -3088,9 +3088,9 @@ export function ProfileView() {
                           </span>
                           {activeAgent.status}
                         </div>
-                        <div className="hidden md:block w-px h-6 bg-slate-700"></div>
-                        <div className="flex flex-col md:flex-row items-center gap-1.5 md:gap-2.5 text-xs text-slate-300 font-medium">
-                          <Terminal className="w-5 h-5 md:w-4 md:h-4 text-sky-400" />
+                        <div className="hidden h-6 w-px bg-slate-200 dark:bg-slate-700 md:block"></div>
+                        <div className="flex flex-col items-center gap-1.5 text-xs font-medium text-slate-700 md:flex-row md:gap-2.5 dark:text-slate-300">
+                          <Terminal className="w-5 h-5 md:w-4 md:h-4 text-sky-500 dark:text-sky-400" />
                           <span className="hidden md:inline">
                             {t("profile.core")}:{" "}
                           </span>
