@@ -20,7 +20,7 @@ use crate::{
         },
         types::{
             EvolutionAuditEntry, EvolutionAuditSummary, EvolutionExecuteResult,
-            EvolutionCustomTemplateInput, EvolutionHistoryEntry,
+            EvolutionCustomTemplateInput, EvolutionHistoryEntry, EvolutionLocalizedMessage,
             EvolutionKnowledgeInjectionInput, EvolutionMetricBucket, EvolutionOperationKind,
             EvolutionOperationStatus, EvolutionOperationStatusSnapshot, EvolutionOperationType,
             EvolutionPreviewChange, EvolutionPreviewResult, EvolutionRollbackResult,
@@ -241,6 +241,10 @@ async fn cancel_operation<R: Runtime>(
         operation.request_cancel();
         status.can_cancel = false;
         status.message = "已收到取消请求，正在等待安全中止点。".to_string();
+        status.message_i18n = Some(localized_message(
+            "evo.message.runtime.cancelRequested",
+            Vec::new(),
+        ));
         status.updated_at_ms = Utc::now().timestamp_millis();
         status.clone()
     };
@@ -376,6 +380,10 @@ pub async fn evolution_rollback(
     let _ = connector::agent_memory_index(gateway_state.inner().clone(), agent_id.as_str(), true)
         .await;
 
+    let rollback_message_i18n = localized_message(
+        "evo.message.rollback.restored",
+        vec![snapshot.snapshot_id.clone()],
+    );
     let history_entry = EvolutionHistoryEntry {
         operation_id: random_id("evo-rb"),
         operation_kind: EvolutionOperationKind::Rollback,
@@ -390,6 +398,7 @@ pub async fn evolution_rollback(
         source_refs: Vec::new(),
         capability_tags: Vec::new(),
         summary: format!("rollback restored snapshot {}", snapshot.snapshot_id),
+        summary_i18n: Some(rollback_message_i18n.clone()),
         bytes_before: snapshot.content.len(),
         bytes_after: snapshot.content.len(),
         duration_ms: Some((Utc::now().timestamp_millis() - started_at_ms).max(0) as u64),
@@ -418,6 +427,7 @@ pub async fn evolution_rollback(
             override_reason_code: None,
             capability_tags: Vec::new(),
             message: history_entry.summary.clone(),
+            message_i18n: Some(rollback_message_i18n),
             started_at_ms,
             ended_at_ms: history_entry.created_at_ms,
             duration_ms: history_entry.duration_ms.unwrap_or_default(),
@@ -459,11 +469,16 @@ async fn start_execute_operation<R: Runtime>(
         } else {
             pending.preview.unsafe_reasons.join(" ")
         };
+        let unsafe_message_i18n = localized_message(
+            "evo.message.preflight.unsafeApply",
+            vec![unsafe_reason.clone()],
+        );
         let _ = append_audit(
             &store_paths,
             &build_preflight_blocked_audit_entry(
                 &pending.preview,
                 unsafe_reason.as_str(),
+                Some(unsafe_message_i18n),
                 "EVOLUTION_UNSAFE_APPLY_BLOCKED",
             ),
         );
@@ -485,6 +500,10 @@ async fn start_execute_operation<R: Runtime>(
             &build_preflight_blocked_audit_entry(
                 &pending.preview,
                 message,
+                Some(localized_message(
+                    "evo.message.preflight.confirmationRequired",
+                    Vec::new(),
+                )),
                 "EVOLUTION_HIGH_RISK_CONFIRMATION_REQUIRED",
             ),
         );
@@ -503,13 +522,20 @@ async fn start_execute_operation<R: Runtime>(
         .await
     {
         let store_paths = EvolutionStorePaths::resolve();
-        let (blocked_reason_code, message) = match conflict.kind {
+        let (blocked_reason_code, message, message_i18n) = match conflict.kind {
             EvolutionRuntimeConflictKind::SourceRefConflict => (
                 "EVOLUTION_RUNTIME_SOURCE_REF_CONFLICT",
                 format!(
                     "当前节点已有运行中的 Evolution 正在占用本次来源引用 {}，阻断本次预检执行：{}",
                     conflict.overlapping_source_refs.join(", "),
                     conflict.operation_id
+                ),
+                localized_message(
+                    "evo.message.preflight.runtimeSourceRefConflict",
+                    vec![
+                        conflict.overlapping_source_refs.join(", "),
+                        conflict.operation_id.clone(),
+                    ],
                 ),
             ),
             EvolutionRuntimeConflictKind::SourceDocumentConflict => (
@@ -519,12 +545,23 @@ async fn start_execute_operation<R: Runtime>(
                     pending.preview.source_document,
                     conflict.operation_id
                 ),
+                localized_message(
+                    "evo.message.preflight.runtimeSourceDocumentConflict",
+                    vec![
+                        pending.preview.source_document.clone(),
+                        conflict.operation_id.clone(),
+                    ],
+                ),
             ),
             EvolutionRuntimeConflictKind::AgentRuntimeConflict => (
                 "EVOLUTION_RUNTIME_AGENT_CONFLICT",
                 format!(
                     "当前节点已有 Evolution 操作正在执行，阻断本次预检执行：{}",
                     conflict.operation_id
+                ),
+                localized_message(
+                    "evo.message.preflight.runtimeAgentConflict",
+                    vec![conflict.operation_id.clone()],
                 ),
             ),
         };
@@ -533,6 +570,7 @@ async fn start_execute_operation<R: Runtime>(
             &build_preflight_blocked_audit_entry(
                 &pending.preview,
                 message.as_str(),
+                Some(message_i18n),
                 blocked_reason_code,
             ),
         );
@@ -558,7 +596,7 @@ async fn start_execute_operation<R: Runtime>(
 
     if current_content != pending.original_content {
         let store_paths = EvolutionStorePaths::resolve();
-        let (blocked_reason_code, message) = classify_preflight_drift(
+        let (blocked_reason_code, message, message_i18n) = classify_preflight_drift(
             &pending.preview,
             pending.original_content.as_str(),
             current_content.as_str(),
@@ -569,6 +607,7 @@ async fn start_execute_operation<R: Runtime>(
             &build_preflight_blocked_audit_entry(
                 &pending.preview,
                 message.as_str(),
+                Some(message_i18n),
                 blocked_reason_code,
             ),
         );
@@ -587,6 +626,7 @@ async fn start_execute_operation<R: Runtime>(
         EvolutionRuntimePhase::ValidatingPreview,
         5,
         "已完成预览校验，准备进入执行阶段。",
+        Some(localized_message("evo.message.runtime.validated", Vec::new())),
         true,
         false,
         false,
@@ -630,6 +670,7 @@ async fn execute_operation_task<R: Runtime>(
         EvolutionRuntimePhase::Snapshotting,
         20,
         "正在创建回滚快照。",
+        Some(localized_message("evo.message.runtime.snapshotting", Vec::new())),
         true,
         None,
     )
@@ -640,6 +681,10 @@ async fn execute_operation_task<R: Runtime>(
             &pending.preview,
             EvolutionOperationStatus::Cancelled,
             "cancelled before apply",
+            Some(localized_message(
+                "evo.message.execute.cancelled.beforeApply",
+                Vec::new(),
+            )),
             pending.preview.bytes_before,
             pending.preview.bytes_before,
             Some(elapsed_ms(started_at_ms)),
@@ -651,6 +696,10 @@ async fn execute_operation_task<R: Runtime>(
                 &pending.preview,
                 &history_entry,
                 "已在应用变更前取消本次 Evolution。",
+                Some(localized_message(
+                    "evo.message.execute.cancelled.beforeApply",
+                    Vec::new(),
+                )),
                 started_at_ms,
                 override_applied,
             ),
@@ -661,6 +710,10 @@ async fn execute_operation_task<R: Runtime>(
             EvolutionRuntimeState::Cancelled,
             EvolutionRuntimePhase::Cancelled,
             "已在应用变更前取消本次 Evolution。",
+            Some(localized_message(
+                "evo.message.execute.cancelled.beforeApply",
+                Vec::new(),
+            )),
             Some(history_entry),
         )
         .await;
@@ -677,10 +730,15 @@ async fn execute_operation_task<R: Runtime>(
         reason: format!("execute:{:?}", pending.preview.template),
     };
     if let Err(error) = store_snapshot(&store_paths, &snapshot) {
+        let error_message = error.to_string();
         let history_entry = build_terminal_history_entry(
             &pending.preview,
             EvolutionOperationStatus::Failed,
             format!("failed to create snapshot: {error}").as_str(),
+            Some(localized_message(
+                "evo.message.execute.failed.snapshotCreate",
+                vec![error_message.clone()],
+            )),
             pending.preview.bytes_before,
             pending.preview.bytes_before,
             Some(elapsed_ms(started_at_ms)),
@@ -692,6 +750,10 @@ async fn execute_operation_task<R: Runtime>(
                 &pending.preview,
                 &history_entry,
                 "创建回滚快照失败，执行已终止。",
+                Some(localized_message(
+                    "evo.message.execute.failed.snapshotCreate",
+                    vec![error_message.clone()],
+                )),
                 started_at_ms,
                 override_applied,
             ),
@@ -702,6 +764,10 @@ async fn execute_operation_task<R: Runtime>(
             EvolutionRuntimeState::Failed,
             EvolutionRuntimePhase::Failed,
             "创建回滚快照失败，执行已终止。",
+            Some(localized_message(
+                "evo.message.execute.failed.snapshotCreate",
+                vec![error_message],
+            )),
             Some(history_entry),
         )
         .await;
@@ -714,6 +780,7 @@ async fn execute_operation_task<R: Runtime>(
         EvolutionRuntimePhase::ApplyingChanges,
         55,
         "正在写入进化后的文档内容。",
+        Some(localized_message("evo.message.runtime.applyingChanges", Vec::new())),
         false,
         None,
     )
@@ -724,6 +791,10 @@ async fn execute_operation_task<R: Runtime>(
             &pending.preview,
             EvolutionOperationStatus::Cancelled,
             "cancelled after snapshot, before apply",
+            Some(localized_message(
+                "evo.message.execute.cancelled.beforeWrite",
+                Vec::new(),
+            )),
             pending.preview.bytes_before,
             pending.preview.bytes_before,
             Some(elapsed_ms(started_at_ms)),
@@ -735,6 +806,10 @@ async fn execute_operation_task<R: Runtime>(
                 &pending.preview,
                 &history_entry,
                 "已在写入变更前取消本次 Evolution。",
+                Some(localized_message(
+                    "evo.message.execute.cancelled.beforeWrite",
+                    Vec::new(),
+                )),
                 started_at_ms,
                 override_applied,
             ),
@@ -745,6 +820,10 @@ async fn execute_operation_task<R: Runtime>(
             EvolutionRuntimeState::Cancelled,
             EvolutionRuntimePhase::Cancelled,
             "已在写入变更前取消本次 Evolution。",
+            Some(localized_message(
+                "evo.message.execute.cancelled.beforeWrite",
+                Vec::new(),
+            )),
             Some(history_entry),
         )
         .await;
@@ -759,10 +838,15 @@ async fn execute_operation_task<R: Runtime>(
     )
     .await
     {
+        let error_message = error.to_string();
         let history_entry = build_terminal_history_entry(
             &pending.preview,
             EvolutionOperationStatus::Failed,
             format!("failed during apply: {error}").as_str(),
+            Some(localized_message(
+                "evo.message.execute.failed.apply",
+                vec![error_message.clone()],
+            )),
             pending.preview.bytes_before,
             pending.preview.bytes_before,
             Some(elapsed_ms(started_at_ms)),
@@ -774,6 +858,10 @@ async fn execute_operation_task<R: Runtime>(
                 &pending.preview,
                 &history_entry,
                 "写入目标文档失败，Evolution 已终止。",
+                Some(localized_message(
+                    "evo.message.execute.failed.applyWriteTarget",
+                    Vec::new(),
+                )),
                 started_at_ms,
                 override_applied,
             ),
@@ -784,6 +872,10 @@ async fn execute_operation_task<R: Runtime>(
             EvolutionRuntimeState::Failed,
             EvolutionRuntimePhase::Failed,
             "写入目标文档失败，Evolution 已终止。",
+            Some(localized_message(
+                "evo.message.execute.failed.applyWriteTarget",
+                Vec::new(),
+            )),
             Some(history_entry),
         )
         .await;
@@ -796,6 +888,7 @@ async fn execute_operation_task<R: Runtime>(
         EvolutionRuntimePhase::Reindexing,
         80,
         "正在触发索引刷新与后处理。",
+        Some(localized_message("evo.message.runtime.reindexing", Vec::new())),
         false,
         None,
     )
@@ -817,6 +910,7 @@ async fn execute_operation_task<R: Runtime>(
         EvolutionRuntimePhase::Finalizing,
         95,
         "正在收尾并写入历史记录。",
+        Some(localized_message("evo.message.runtime.finalizing", Vec::new())),
         false,
         None,
     )
@@ -824,7 +918,7 @@ async fn execute_operation_task<R: Runtime>(
 
     let ended_at_ms = Utc::now().timestamp_millis();
     let duration_ms = (ended_at_ms - started_at_ms).max(0) as u64;
-    let summary = build_success_summary(&pending.preview, index_warning.as_deref());
+    let (summary, summary_i18n) = build_success_summary(&pending.preview, index_warning.as_deref());
 
     let history_entry = EvolutionHistoryEntry {
         operation_id: pending.preview.operation_id.clone(),
@@ -840,16 +934,22 @@ async fn execute_operation_task<R: Runtime>(
         source_refs: pending.preview.source_refs.clone(),
         capability_tags: pending.preview.capability_tags.clone(),
         summary,
+        summary_i18n: Some(summary_i18n),
         bytes_before: pending.preview.bytes_before,
         bytes_after: pending.preview.bytes_after,
         duration_ms: Some(duration_ms),
         created_at_ms: ended_at_ms,
     };
     if let Err(error) = append_history(&store_paths, &history_entry) {
+        let error_message = error.to_string();
         let failure_entry = build_terminal_history_entry(
             &pending.preview,
             EvolutionOperationStatus::Failed,
             format!("failed to append history: {error}").as_str(),
+            Some(localized_message(
+                "evo.message.execute.failed.historyAppend",
+                vec![error_message.clone()],
+            )),
             pending.preview.bytes_before,
             pending.preview.bytes_after,
             Some(elapsed_ms(started_at_ms)),
@@ -861,6 +961,10 @@ async fn execute_operation_task<R: Runtime>(
                 &pending.preview,
                 &failure_entry,
                 "Evolution 已写入文档，但写入历史记录失败。",
+                Some(localized_message(
+                    "evo.message.execute.failed.historyAppendAudit",
+                    Vec::new(),
+                )),
                 started_at_ms,
                 override_applied,
             ),
@@ -871,6 +975,10 @@ async fn execute_operation_task<R: Runtime>(
             EvolutionRuntimeState::Failed,
             EvolutionRuntimePhase::Failed,
             "Evolution 已写入文档，但写入历史记录失败。",
+            Some(localized_message(
+                "evo.message.execute.failed.historyAppendAudit",
+                Vec::new(),
+            )),
             Some(failure_entry),
         )
         .await;
@@ -883,6 +991,7 @@ async fn execute_operation_task<R: Runtime>(
             &pending.preview,
             &history_entry,
             "Evolution 执行完成。",
+            Some(localized_message("evo.message.execute.completed", Vec::new())),
             started_at_ms,
             override_applied,
         ),
@@ -894,6 +1003,7 @@ async fn execute_operation_task<R: Runtime>(
         EvolutionRuntimeState::Succeeded,
         EvolutionRuntimePhase::Completed,
         "Evolution 执行完成。",
+        Some(localized_message("evo.message.execute.completed", Vec::new())),
         Some(history_entry),
     )
     .await;
@@ -1038,11 +1148,12 @@ fn classify_preflight_drift(
     original_content: &str,
     current_content: &str,
     next_content: &str,
-) -> (&'static str, String) {
+) -> (&'static str, String, EvolutionLocalizedMessage) {
     if current_content == next_content {
         return (
             "EVOLUTION_ALREADY_APPLIED",
             "当前目标文档已经等于本次 preview 的目标结果，说明该 Evolution 结果已被应用。".to_string(),
+            localized_message("evo.message.preflight.alreadyApplied", Vec::new()),
         );
     }
 
@@ -1061,12 +1172,17 @@ fn classify_preflight_drift(
                 "当前 preview 已失效，目标文档在预览后出现了本次来源引用 {}，存在外部写入或重复应用风险。",
                 conflicting_refs.join(", ")
             ),
+            localized_message(
+                "evo.message.preflight.sourceRefConflict",
+                vec![conflicting_refs.join(", ")],
+            ),
         );
     }
 
     (
         "EVOLUTION_PREVIEW_STALE",
         "当前 preview 已失效，目标文档在预览后发生了变化。".to_string(),
+        localized_message("evo.message.preflight.previewStale", Vec::new()),
     )
 }
 
@@ -1749,32 +1865,85 @@ fn resolve_source_document(documents: &[GatewayAgentFileEntry]) -> Option<&Gatew
 fn build_success_summary(
     preview: &EvolutionPreviewResult,
     index_warning: Option<&str>,
-) -> String {
-    let base = match preview.operation_type {
-        EvolutionOperationType::InjectKnowledge => format!(
-            "injected knowledge from {} · {} bytes → {} bytes ({})",
-            summarize_source_refs(&preview.source_refs, preview.source_ref.as_deref()),
-            preview.bytes_before,
-            preview.bytes_after,
-            preview.risk_level
-        ),
-        EvolutionOperationType::CustomTransform => format!(
-            "custom template from {} · {} bytes → {} bytes ({})",
-            summarize_source_refs(&preview.source_refs, preview.source_ref.as_deref()),
-            preview.bytes_before,
-            preview.bytes_after,
-            preview.risk_level
-        ),
-        EvolutionOperationType::Optimize | EvolutionOperationType::RestoreSnapshot => format!(
-            "{} bytes → {} bytes ({})",
-            preview.bytes_before, preview.bytes_after, preview.risk_level
+) -> (String, EvolutionLocalizedMessage) {
+    let (base, message_i18n) = match preview.operation_type {
+        EvolutionOperationType::CustomTransform => {
+            let source_summary =
+                summarize_source_refs(&preview.source_refs, preview.source_ref.as_deref());
+            (
+                format!(
+                    "custom template from {} · {} bytes → {} bytes ({})",
+                    source_summary, preview.bytes_before, preview.bytes_after, preview.risk_level
+                ),
+                localized_message(
+                    "evo.message.execute.success.custom",
+                    vec![
+                        source_summary,
+                        preview.bytes_before.to_string(),
+                        preview.bytes_after.to_string(),
+                        preview.risk_level.clone(),
+                    ],
+                ),
+            )
+        }
+        EvolutionOperationType::InjectKnowledge => {
+            let source_summary =
+                summarize_source_refs(&preview.source_refs, preview.source_ref.as_deref());
+            (
+                format!(
+                    "injected knowledge from {} · {} bytes → {} bytes ({})",
+                    source_summary, preview.bytes_before, preview.bytes_after, preview.risk_level
+                ),
+                localized_message(
+                    "evo.message.execute.success.inject",
+                    vec![
+                        source_summary,
+                        preview.bytes_before.to_string(),
+                        preview.bytes_after.to_string(),
+                        preview.risk_level.clone(),
+                    ],
+                ),
+            )
+        }
+        EvolutionOperationType::Optimize | EvolutionOperationType::RestoreSnapshot => (
+            format!(
+                "{} bytes → {} bytes ({})",
+                preview.bytes_before, preview.bytes_after, preview.risk_level
+            ),
+            localized_message(
+                "evo.message.execute.success.optimize",
+                vec![
+                    preview.bytes_before.to_string(),
+                    preview.bytes_after.to_string(),
+                    preview.risk_level.clone(),
+                ],
+            ),
         ),
     };
 
     if let Some(warning) = index_warning {
-        format!("{base} · index warning: {warning}")
+        let key = match preview.operation_type {
+            EvolutionOperationType::InjectKnowledge => "evo.message.execute.success.inject.indexWarning",
+            EvolutionOperationType::CustomTransform => "evo.message.execute.success.custom.indexWarning",
+            EvolutionOperationType::Optimize | EvolutionOperationType::RestoreSnapshot => {
+                "evo.message.execute.success.optimize.indexWarning"
+            }
+        };
+        let mut args = message_i18n.args.clone();
+        args.push(warning.to_string());
+        (
+            format!("{base} · index warning: {warning}"),
+            localized_message(key, args),
+        )
     } else {
-        base
+        (base, message_i18n)
+    }
+}
+
+fn localized_message(key: &str, args: Vec<String>) -> EvolutionLocalizedMessage {
+    EvolutionLocalizedMessage {
+        key: key.to_string(),
+        args,
     }
 }
 
@@ -1782,6 +1951,7 @@ fn build_audit_entry(
     preview: &EvolutionPreviewResult,
     history_entry: &EvolutionHistoryEntry,
     message: &str,
+    message_i18n: Option<EvolutionLocalizedMessage>,
     started_at_ms: i64,
     override_applied: bool,
 ) -> EvolutionAuditEntry {
@@ -1808,6 +1978,7 @@ fn build_audit_entry(
         },
         capability_tags: history_entry.capability_tags.clone(),
         message: message.to_string(),
+        message_i18n,
         started_at_ms,
         ended_at_ms: history_entry.created_at_ms,
         duration_ms: history_entry.duration_ms.unwrap_or_else(|| elapsed_ms(started_at_ms)),
@@ -1817,6 +1988,7 @@ fn build_audit_entry(
 fn build_preflight_blocked_audit_entry(
     preview: &EvolutionPreviewResult,
     message: &str,
+    message_i18n: Option<EvolutionLocalizedMessage>,
     blocked_reason_code: &str,
 ) -> EvolutionAuditEntry {
     let now = Utc::now().timestamp_millis();
@@ -1839,6 +2011,7 @@ fn build_preflight_blocked_audit_entry(
         override_reason_code: None,
         capability_tags: preview.capability_tags.clone(),
         message: message.to_string(),
+        message_i18n,
         started_at_ms: now,
         ended_at_ms: now,
         duration_ms: 0,
@@ -2024,6 +2197,7 @@ fn build_status_snapshot(
     phase: EvolutionRuntimePhase,
     progress_pct: u8,
     message: &str,
+    message_i18n: Option<EvolutionLocalizedMessage>,
     can_cancel: bool,
     preview_stale: bool,
     conflict_detected: bool,
@@ -2047,6 +2221,7 @@ fn build_status_snapshot(
         phase,
         progress_pct,
         message: message.to_string(),
+        message_i18n,
         can_cancel,
         preview_stale,
         conflict_detected,
@@ -2064,6 +2239,7 @@ async fn update_runtime_status<R: Runtime>(
     phase: EvolutionRuntimePhase,
     progress_pct: u8,
     message: &str,
+    message_i18n: Option<EvolutionLocalizedMessage>,
     can_cancel: bool,
     history_entry: Option<EvolutionHistoryEntry>,
 ) -> EvolutionOperationStatusSnapshot {
@@ -2073,6 +2249,7 @@ async fn update_runtime_status<R: Runtime>(
         status.phase = phase;
         status.progress_pct = progress_pct;
         status.message = message.to_string();
+        status.message_i18n = message_i18n;
         status.can_cancel = can_cancel;
         status.updated_at_ms = Utc::now().timestamp_millis();
         if let Some(entry) = history_entry {
@@ -2090,6 +2267,7 @@ async fn set_terminal_status<R: Runtime>(
     runtime_state: EvolutionRuntimeState,
     phase: EvolutionRuntimePhase,
     message: &str,
+    message_i18n: Option<EvolutionLocalizedMessage>,
     history_entry: Option<EvolutionHistoryEntry>,
 ) -> EvolutionOperationStatusSnapshot {
     let next_snapshot = {
@@ -2098,6 +2276,7 @@ async fn set_terminal_status<R: Runtime>(
         status.phase = phase;
         status.progress_pct = 100;
         status.message = message.to_string();
+        status.message_i18n = message_i18n;
         status.can_cancel = false;
         status.updated_at_ms = Utc::now().timestamp_millis();
         status.history_entry = history_entry;
@@ -2111,6 +2290,7 @@ fn build_terminal_history_entry(
     preview: &EvolutionPreviewResult,
     status: EvolutionOperationStatus,
     summary: &str,
+    summary_i18n: Option<EvolutionLocalizedMessage>,
     bytes_before: usize,
     bytes_after: usize,
     duration_ms: Option<u64>,
@@ -2129,6 +2309,7 @@ fn build_terminal_history_entry(
         source_refs: preview.source_refs.clone(),
         capability_tags: preview.capability_tags.clone(),
         summary: summary.to_string(),
+        summary_i18n,
         bytes_before,
         bytes_after,
         duration_ms,
@@ -2322,8 +2503,9 @@ mod tests {
             created_at_ms: 1,
         };
 
-        let summary = build_success_summary(&preview, None);
+        let (summary, summary_i18n) = build_success_summary(&preview, None);
         assert!(summary.contains("injected knowledge from doc://ops-playbook (+1 more refs)"));
+        assert_eq!(summary_i18n.key, "evo.message.execute.success.inject");
     }
 
     #[test]
@@ -2352,6 +2534,10 @@ mod tests {
         let entry = build_preflight_blocked_audit_entry(
             &preview,
             "unsafe blocked",
+            Some(localized_message(
+                "evo.message.preflight.unsafeApply",
+                vec!["unsafe blocked".to_string()],
+            )),
             "EVOLUTION_UNSAFE_APPLY_BLOCKED",
         );
 
@@ -2385,6 +2571,10 @@ mod tests {
             override_reason_code: None,
             capability_tags: vec!["memory".to_string()],
             message: "当前 preview 已失效，目标文档在预览后发生了变化。".to_string(),
+            message_i18n: Some(localized_message(
+                "evo.message.preflight.previewStale",
+                Vec::new(),
+            )),
             started_at_ms: 1,
             ended_at_ms: 1,
             duration_ms: 0,
@@ -2408,6 +2598,7 @@ mod tests {
             override_reason_code: Some("EVOLUTION_HIGH_RISK_CONFIRMATION_OVERRIDE".to_string()),
             capability_tags: Vec::new(),
             message: "Evolution 执行完成。".to_string(),
+            message_i18n: Some(localized_message("evo.message.execute.completed", Vec::new())),
             started_at_ms: 2,
             ended_at_ms: 4,
             duration_ms: 2,
@@ -2460,6 +2651,7 @@ mod tests {
             source_refs: Vec::new(),
             capability_tags: Vec::new(),
             summary: "done".to_string(),
+            summary_i18n: Some(localized_message("evo.message.execute.completed", Vec::new())),
             bytes_before: 100,
             bytes_after: 80,
             duration_ms: Some(10),
@@ -2470,6 +2662,7 @@ mod tests {
             &preview,
             &history_entry,
             "Evolution 执行完成。",
+            Some(localized_message("evo.message.execute.completed", Vec::new())),
             1,
             true,
         );
@@ -2503,6 +2696,7 @@ mod tests {
             override_reason_code: Some("EVOLUTION_HIGH_RISK_CONFIRMATION_OVERRIDE".to_string()),
             capability_tags: Vec::new(),
             message: "recent".to_string(),
+            message_i18n: None,
             started_at_ms: now - 50,
             ended_at_ms: now,
             duration_ms: 50,
@@ -2543,10 +2737,12 @@ mod tests {
             created_at_ms: 1,
         };
 
-        let (code, message) = classify_preflight_drift(&preview, "before", "after", "after");
+        let (code, message, message_i18n) =
+            classify_preflight_drift(&preview, "before", "after", "after");
 
         assert_eq!(code, "EVOLUTION_ALREADY_APPLIED");
         assert!(message.contains("已经等于本次 preview 的目标结果"));
+        assert_eq!(message_i18n.key, "evo.message.preflight.alreadyApplied");
     }
 
     #[test]
@@ -2575,7 +2771,7 @@ mod tests {
             created_at_ms: 1,
         };
 
-        let (code, message) = classify_preflight_drift(
+        let (code, message, message_i18n) = classify_preflight_drift(
             &preview,
             "before",
             "before\ncustom://shared-playbook",
@@ -2584,5 +2780,6 @@ mod tests {
 
         assert_eq!(code, "EVOLUTION_SOURCE_REF_CONFLICT");
         assert!(message.contains("custom://shared-playbook"));
+        assert_eq!(message_i18n.key, "evo.message.preflight.sourceRefConflict");
     }
 }

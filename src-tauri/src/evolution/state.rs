@@ -171,6 +171,7 @@ mod tests {
             phase: EvolutionRuntimePhase::ValidatingPreview,
             progress_pct: 5,
             message: "testing".to_string(),
+            message_i18n: None,
             can_cancel: true,
             preview_stale: false,
             conflict_detected: false,

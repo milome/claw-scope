@@ -443,6 +443,7 @@ export interface EvolutionHistoryEntry {
   sourceRefs: string[];
   capabilityTags: string[];
   summary: string;
+  summaryI18n?: EvolutionLocalizedMessage | null;
   bytesBefore: number;
   bytesAfter: number;
   durationMs?: number | null;
@@ -477,6 +478,7 @@ export interface EvolutionOperationStatusSnapshot {
   phase: EvolutionRuntimePhase;
   progressPct: number;
   message: string;
+  messageI18n?: EvolutionLocalizedMessage | null;
   canCancel: boolean;
   previewStale: boolean;
   conflictDetected: boolean;
@@ -506,9 +508,15 @@ export interface EvolutionAuditEntry {
   overrideReasonCode?: string | null;
   capabilityTags: string[];
   message: string;
+  messageI18n?: EvolutionLocalizedMessage | null;
   startedAtMs: number;
   endedAtMs: number;
   durationMs: number;
+}
+
+export interface EvolutionLocalizedMessage {
+  key: string;
+  args: string[];
 }
 
 export interface EvolutionMetricBucket {

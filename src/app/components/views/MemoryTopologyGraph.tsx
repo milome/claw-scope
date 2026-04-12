@@ -17,6 +17,7 @@ import type {
 } from "../../contexts/OpenClawContext";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { renderEvolutionHistorySummary } from "./evolutionMessageI18n";
 
 interface TopologyProps {
   currentNode: { name: string } | undefined;
@@ -81,32 +82,38 @@ function joinOrDash(values: string[] | undefined) {
   return values && values.length > 0 ? values.join(", ") : "—";
 }
 
-function formatOperationType(value?: EvolutionOperationType | string | null) {
+function formatOperationType(
+  value: EvolutionOperationType | string | null | undefined,
+  t: (key: string, ...args: (string | number)[]) => string,
+) {
   switch (value) {
     case "inject_knowledge":
-      return "知识注入";
+      return t("evo.historySheet.operation.inject");
     case "custom_transform":
-      return "自定义模板";
+      return t("evo.historySheet.operation.custom");
     case "restore_snapshot":
-      return "回滚恢复";
+      return t("evo.historySheet.operation.restore");
     case "optimize":
     default:
-      return "结构优化";
+      return t("evo.historySheet.operation.optimize");
   }
 }
 
-function formatHistoryStatus(status?: EvolutionHistoryEntry["status"] | null) {
+function formatHistoryStatus(
+  status: EvolutionHistoryEntry["status"] | null | undefined,
+  t: (key: string, ...args: (string | number)[]) => string,
+) {
   switch (status) {
     case "failed":
-      return "失败";
+      return t("evo.historySheet.status.failed");
     case "cancelled":
-      return "已取消";
+      return t("evo.historySheet.status.cancelled");
     case "rolled_back":
-      return "已回滚";
+      return t("evo.historySheet.status.rolled_back");
     case "success":
-      return "成功";
+      return t("evo.historySheet.status.success");
     default:
-      return "等待中";
+      return t("evo.graph.status.pending");
   }
 }
 
@@ -191,7 +198,9 @@ export function MemoryTopologyGraph({
     previewResult?.snapshotId ??
     latestHistoryEntry?.snapshotId ??
     "—";
-  const latestHistorySummary = latestHistoryEntry?.summary ?? "No linked history yet";
+  const latestHistorySummary = latestHistoryEntry
+    ? renderEvolutionHistorySummary(latestHistoryEntry, t)
+    : "No linked history yet";
   const previewChangeCount = previewResult?.changes.length ?? 0;
   const bytesBefore = previewResult?.bytesBefore ?? latestHistoryEntry?.bytesBefore ?? 0;
   const bytesAfter = previewResult?.bytesAfter ?? latestHistoryEntry?.bytesAfter ?? bytesBefore;
@@ -227,7 +236,7 @@ export function MemoryTopologyGraph({
         details: [
           { label: "Source Refs", value: joinOrDash(sourceRefs) },
           { label: "Capability Tags", value: joinOrDash(capabilityTags) },
-          { label: "Operation Type", value: formatOperationType(previewResult?.operationType ?? latestHistoryEntry?.operationType) },
+          { label: "Operation Type", value: formatOperationType(previewResult?.operationType ?? latestHistoryEntry?.operationType, t) },
         ],
       },
       {
@@ -282,7 +291,7 @@ export function MemoryTopologyGraph({
       {
         id: "history",
         label: "History Record",
-        meta: formatHistoryStatus(latestHistoryEntry?.status),
+        meta: formatHistoryStatus(latestHistoryEntry?.status, t),
         x: 612,
         y: 84,
         icon: History,
@@ -295,7 +304,7 @@ export function MemoryTopologyGraph({
               : "neutral",
         description: "执行完成后写入的历史记录，是 graph 与 history sheet 的对接点。",
         details: [
-          { label: "History Status", value: formatHistoryStatus(latestHistoryEntry?.status) },
+          { label: "History Status", value: formatHistoryStatus(latestHistoryEntry?.status, t) },
           { label: "Operation Kind", value: latestHistoryEntry?.operationKind ?? "—" },
           { label: "Summary", value: latestHistorySummary },
         ],
@@ -530,7 +539,7 @@ export function MemoryTopologyGraph({
               History Status
             </div>
             <div className="font-mono text-sm text-slate-700 dark:text-slate-200">
-              {formatHistoryStatus(latestHistoryEntry?.status)}
+              {formatHistoryStatus(latestHistoryEntry?.status, t)}
             </div>
           </div>
         </div>
@@ -573,7 +582,7 @@ export function MemoryTopologyGraph({
 
           <div className="mb-3 flex flex-wrap gap-2">
             <Badge variant="outline" className="border-slate-200 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-              {formatOperationType(runtimeStatus?.operationType ?? previewResult?.operationType ?? latestHistoryEntry?.operationType ?? null)}
+              {formatOperationType(runtimeStatus?.operationType ?? previewResult?.operationType ?? latestHistoryEntry?.operationType ?? null, t)}
             </Badge>
             <Badge variant="outline" className="border-slate-200 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
               {previewChangeCount} preview changes

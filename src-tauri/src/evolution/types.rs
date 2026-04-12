@@ -146,6 +146,8 @@ pub struct EvolutionHistoryEntry {
     #[serde(default)]
     pub capability_tags: Vec<String>,
     pub summary: String,
+    #[serde(default)]
+    pub summary_i18n: Option<EvolutionLocalizedMessage>,
     pub bytes_before: usize,
     pub bytes_after: usize,
     #[serde(default)]
@@ -191,6 +193,8 @@ pub struct EvolutionOperationStatusSnapshot {
     pub phase: EvolutionRuntimePhase,
     pub progress_pct: u8,
     pub message: String,
+    #[serde(default)]
+    pub message_i18n: Option<EvolutionLocalizedMessage>,
     pub can_cancel: bool,
     pub preview_stale: bool,
     pub conflict_detected: bool,
@@ -239,9 +243,19 @@ pub struct EvolutionAuditEntry {
     pub override_reason_code: Option<String>,
     pub capability_tags: Vec<String>,
     pub message: String,
+    #[serde(default)]
+    pub message_i18n: Option<EvolutionLocalizedMessage>,
     pub started_at_ms: i64,
     pub ended_at_ms: i64,
     pub duration_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EvolutionLocalizedMessage {
+    pub key: String,
+    #[serde(default)]
+    pub args: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

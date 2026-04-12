@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   CheckCircle2, Play, AlertTriangle, Network,
   ChevronDown, Activity, History, Undo2, ShieldAlert, Database,
-  Split, Search, Loader2, Cpu, X, Server, Check, Flame, FileCode2
+  Split, Search, Loader2, Cpu, X, Server, Check, Flame, FileCode2, Info
 } from "lucide-react";
 import { useI18n } from "../../contexts/I18nContext";
 import {
@@ -35,16 +35,26 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { MemoryTopologyGraph } from "./MemoryTopologyGraph";
 import { EvolutionHistorySheet } from "./EvolutionHistorySheet";
 import { buildEvolutionAuditReportMarkdown } from "./evolutionAuditReport";
+import { formatKnowledgePackExample, parseKnowledgeInjectionPack } from "./evolutionKnowledgePack";
+import {
+  renderEvolutionHistorySummary,
+  renderEvolutionRuntimeMessage,
+} from "./evolutionMessageI18n";
 
 type EvoState = "idle" | "analyzing" | "diff-ready" | "executing" | "success" | "failed" | "cancelled";
 type TemplateType = EvolutionTemplateKind | null;
 
-function normalizeUiErrorMessage(error: unknown) {
+function normalizeUiErrorMessage(
+  error: unknown,
+  fallbackMessage = "Evolution request failed",
+) {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
   }
@@ -63,44 +73,65 @@ function normalizeUiErrorMessage(error: unknown) {
       return record.code;
     }
   }
-  return "Evolution request failed";
+  return fallbackMessage;
 }
 
-function formatRelativeTime(createdAtMs: number) {
+function formatRelativeTime(
+  createdAtMs: number,
+  t: (key: string, ...args: (string | number)[]) => string,
+) {
   const diffMs = Date.now() - createdAtMs;
   const diffMinutes = Math.floor(diffMs / 60000);
-  if (diffMinutes < 1) return "just now";
-  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffMinutes < 1) return t("evo.time.just_now");
+  if (diffMinutes < 60) return t("evo.time.min_ago", diffMinutes);
   const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours} hrs ago`;
+  if (diffHours < 24) return t("evo.time.hr_ago", diffHours);
   const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} days ago`;
+  return t("evo.time.day_ago", diffDays);
 }
 
-function formatHistoryStatus(entry: EvolutionHistoryEntry) {
+function formatHistoryStatus(entry: EvolutionHistoryEntry, t: (key: string, ...args: (string | number)[]) => string) {
   switch (entry.status) {
     case "rolled_back":
-      return "Rolled Back";
+      return t("evo.historySheet.status.rolled_back");
     case "failed":
-      return "Failed";
+      return t("evo.historySheet.status.failed");
     case "cancelled":
-      return "Cancelled";
+      return t("evo.historySheet.status.cancelled");
     default:
-      return "Success";
+      return t("evo.historySheet.status.success");
   }
 }
 
-function formatTemplateLabel(template: EvolutionTemplateKind | null) {
+function formatTemplateLabel(template: EvolutionTemplateKind | null, t: (key: string, ...args: (string | number)[]) => string) {
   switch (template) {
     case "aggressive":
-      return "激进型重构";
+      return t("evo.template.aggressive.title");
     case "knowledge_injection":
-      return "知识注入";
+      return t("evo.template.knowledge.title");
     case "custom_template":
-      return "自定义模板";
+      return t("evo.template.custom.title");
     case "conservative":
     default:
-      return "保守型修剪";
+      return t("evo.template.conservative.title");
+  }
+}
+
+function formatKnowledgeWarning(
+  warning: string,
+  t: (key: string, ...args: (string | number)[]) => string,
+) {
+  switch (warning) {
+    case "empty_pack":
+      return t("evo.knowledge.warning.empty_pack");
+    case "missing_delimiter":
+      return t("evo.knowledge.warning.missing_delimiter");
+    case "missing_source_ref":
+      return t("evo.knowledge.warning.missing_source_ref");
+    case "missing_body":
+      return t("evo.knowledge.warning.missing_body");
+    default:
+      return warning;
   }
 }
 
@@ -143,7 +174,7 @@ function mapRuntimePhaseToStep(phase: EvolutionOperationStatusSnapshot["phase"])
 }
 
 export function EvolutionView() {
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
   const { nodes, agents, isConnected } = useOpenClaw();
   const evolutionNodes = isConnected && agents.length > 0
     ? agents.map((agent) => ({
@@ -177,6 +208,10 @@ export function EvolutionView() {
   const [knowledgeAdditionalSourcesInput, setKnowledgeAdditionalSourcesInput] = useState("");
   const [knowledgeTagsInput, setKnowledgeTagsInput] = useState("");
   const [knowledgeBody, setKnowledgeBody] = useState("");
+  const [knowledgeEntryMode, setKnowledgeEntryMode] = useState<"quick_paste" | "manual">("quick_paste");
+  const [knowledgePackText, setKnowledgePackText] = useState("");
+  const [knowledgeMetaExpanded, setKnowledgeMetaExpanded] = useState(false);
+  const [lastHydratedPackText, setLastHydratedPackText] = useState("");
   const [customSourceRef, setCustomSourceRef] = useState("custom://playbook");
   const [customAdditionalSourcesInput, setCustomAdditionalSourcesInput] = useState("");
   const [customTagsInput, setCustomTagsInput] = useState("custom, safe");
@@ -198,7 +233,7 @@ export function EvolutionView() {
   ];
 
   const currentNode = evolutionNodes.find((n) => n.id === activeNode);
-  const knowledgeCapabilityTags = useMemo(
+  const manualKnowledgeCapabilityTags = useMemo(
     () =>
       knowledgeTagsInput
         .split(",")
@@ -206,7 +241,7 @@ export function EvolutionView() {
         .filter(Boolean),
     [knowledgeTagsInput],
   );
-  const knowledgeAdditionalSources = useMemo(
+  const manualKnowledgeAdditionalSources = useMemo(
     () =>
       knowledgeAdditionalSourcesInput
         .split(",")
@@ -214,17 +249,40 @@ export function EvolutionView() {
         .filter(Boolean),
     [knowledgeAdditionalSourcesInput],
   );
-  const knowledgeInput =
+  const manualKnowledgeInput = useMemo(
+    () =>
+      ({
+        sourceRef: knowledgeSourceRef.trim(),
+        additionalSourceRefs: manualKnowledgeAdditionalSources,
+        knowledgeBody: knowledgeBody.trim(),
+        capabilityTags: manualKnowledgeCapabilityTags,
+      } satisfies EvolutionKnowledgeInjectionInput),
+    [
+      knowledgeSourceRef,
+      manualKnowledgeAdditionalSources,
+      knowledgeBody,
+      manualKnowledgeCapabilityTags,
+    ],
+  );
+  const parsedKnowledgePack = useMemo(
+    () => parseKnowledgeInjectionPack(knowledgePackText),
+    [knowledgePackText],
+  );
+  const effectiveKnowledgeInput =
     template === "knowledge_injection"
-      ? ({
-          sourceRef: knowledgeSourceRef.trim(),
-          additionalSourceRefs: knowledgeAdditionalSources,
-          knowledgeBody: knowledgeBody.trim(),
-          capabilityTags: knowledgeCapabilityTags,
-        } satisfies EvolutionKnowledgeInjectionInput)
+      ? (knowledgeEntryMode === "quick_paste"
+          ? ({
+              sourceRef: parsedKnowledgePack.sourceRef,
+              additionalSourceRefs: parsedKnowledgePack.additionalSourceRefs,
+              knowledgeBody: parsedKnowledgePack.knowledgeBody,
+              capabilityTags: parsedKnowledgePack.capabilityTags,
+            } satisfies EvolutionKnowledgeInjectionInput)
+          : manualKnowledgeInput)
       : undefined;
   const canPreviewKnowledgeInjection =
-    !!knowledgeInput?.sourceRef && !!knowledgeInput.knowledgeBody;
+    knowledgeEntryMode === "quick_paste"
+      ? !!parsedKnowledgePack.sourceRef && !!parsedKnowledgePack.knowledgeBody
+      : !!manualKnowledgeInput.sourceRef && !!manualKnowledgeInput.knowledgeBody;
   const customCapabilityTags = useMemo(
     () =>
       customTagsInput
@@ -255,13 +313,22 @@ export function EvolutionView() {
 
   const loadKnowledgeExample = () => {
     const uniqueSource = `playbook://memory-search-v1/${Date.now()}`;
+    const nextExampleText = formatKnowledgePackExample({
+      sourceRef: uniqueSource,
+      additionalSourceRefs: ["doc://team-playbook", "qmd://memory-search-notes"],
+      capabilityTags: ["memory", "search", "retrieval"],
+      knowledgeBody:
+        "Use memory_search before local fallback. Index rebuild is required after new memory ingestion.",
+    });
     setTemplate("knowledge_injection");
+    setKnowledgeEntryMode("quick_paste");
+    setKnowledgePackText(nextExampleText);
     setKnowledgeSourceRef(uniqueSource);
     setKnowledgeAdditionalSourcesInput("doc://team-playbook, qmd://memory-search-notes");
     setKnowledgeTagsInput("memory, search, retrieval");
-    setKnowledgeBody(
-      "Use memory_search before local fallback. Index rebuild is required after new memory ingestion.",
-    );
+    setKnowledgeBody("Use memory_search before local fallback. Index rebuild is required after new memory ingestion.");
+    setKnowledgeMetaExpanded(true);
+    setLastHydratedPackText("");
     setPreviewResult(null);
     setActionError(null);
     setState("idle");
@@ -313,13 +380,14 @@ export function EvolutionView() {
 
   const handleExportAuditReport = async () => {
     if (!auditSummary) {
-      toast.error("当前没有可导出的 Evolution 审计数据。");
+      toast.error(t("evo.export.none"));
       return;
     }
 
     const lines = buildEvolutionAuditReportMarkdown(auditSummary, {
       generatedAt: new Date(),
       reportMode: "manual",
+      lang,
     });
 
     try {
@@ -328,24 +396,25 @@ export function EvolutionView() {
         lines,
       );
       if (result) {
-        toast.success(`审计报告已导出：${result}`);
+        toast.success(t("evo.export.manual.success", result));
       } else {
-        toast.info("已取消导出。");
+        toast.info(t("evo.export.cancelled"));
       }
     } catch (error) {
-      toast.error(normalizeUiErrorMessage(error));
+      toast.error(normalizeUiErrorMessage(error, t("evo.export.none")));
     }
   };
 
   const handleQuickExportAuditReport = async () => {
     if (!auditSummary) {
-      toast.error("当前没有可导出的 Evolution 审计数据。");
+      toast.error(t("evo.export.none"));
       return;
     }
 
     const lines = buildEvolutionAuditReportMarkdown(auditSummary, {
       generatedAt: new Date(),
       reportMode: "quick",
+      lang,
     });
 
     try {
@@ -353,9 +422,9 @@ export function EvolutionView() {
         `evolution-audit-${auditSummary.agentId}.md`,
         lines,
       );
-      toast.success(`审计报告已快速导出：${result}`);
+      toast.success(t("evo.export.quick.success", result));
     } catch (error) {
-      toast.error(normalizeUiErrorMessage(error));
+      toast.error(normalizeUiErrorMessage(error, t("evo.export.none")));
     }
   };
 
@@ -364,6 +433,28 @@ export function EvolutionView() {
       setActiveNode(evolutionNodes[0].id);
     }
   }, [currentNode, evolutionNodes]);
+
+  useEffect(() => {
+    if (knowledgeEntryMode !== "manual" || !knowledgePackText.trim()) {
+      return;
+    }
+    if (lastHydratedPackText === knowledgePackText) {
+      return;
+    }
+    setKnowledgeSourceRef(parsedKnowledgePack.sourceRef);
+    setKnowledgeAdditionalSourcesInput(parsedKnowledgePack.additionalSourceRefs.join(", "));
+    setKnowledgeTagsInput(parsedKnowledgePack.capabilityTags.join(", "));
+    setKnowledgeBody(parsedKnowledgePack.knowledgeBody);
+    setLastHydratedPackText(knowledgePackText);
+  }, [
+    knowledgeEntryMode,
+    knowledgePackText,
+    lastHydratedPackText,
+    parsedKnowledgePack.sourceRef,
+    parsedKnowledgePack.additionalSourceRefs,
+    parsedKnowledgePack.capabilityTags,
+    parsedKnowledgePack.knowledgeBody,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -391,7 +482,7 @@ export function EvolutionView() {
         setAuditSummary(nextAudit);
       } catch (error) {
         if (!cancelled) {
-          toast.error(normalizeUiErrorMessage(error));
+          toast.error(normalizeUiErrorMessage(error, t("evo.connection.required")));
         }
       } finally {
         if (!cancelled) {
@@ -434,12 +525,13 @@ export function EvolutionView() {
       setActiveOperationId(null);
       if (terminalToastKeyRef.current !== snapshot.operationId) {
         terminalToastKeyRef.current = snapshot.operationId;
+        const toastMessage = renderEvolutionRuntimeMessage(snapshot, t);
         if (snapshot.runtimeState === "succeeded") {
-          toast.success(snapshot.message);
+          toast.success(toastMessage);
         } else if (snapshot.runtimeState === "cancelled") {
-          toast.info(snapshot.message);
+          toast.info(toastMessage);
         } else {
-          toast.error(snapshot.message);
+          toast.error(toastMessage);
         }
       }
       setIsCancelling(false);
@@ -463,7 +555,7 @@ export function EvolutionView() {
         }
       } catch (error) {
         if (!disposed) {
-          const message = normalizeUiErrorMessage(error);
+          const message = normalizeUiErrorMessage(error, t("evo.connection.required"));
           setActionError(message);
           setState("failed");
         }
@@ -565,13 +657,13 @@ export function EvolutionView() {
         target.id,
         target.name,
         template,
-        knowledgeInput,
+        effectiveKnowledgeInput,
         customInput,
       );
       setPreviewResult(preview);
       setState("diff-ready");
     } catch (error) {
-      const message = normalizeUiErrorMessage(error);
+      const message = normalizeUiErrorMessage(error, t("evo.connection.required"));
       setActionError(message);
       setState("failed");
       toast.error(message);
@@ -608,7 +700,7 @@ export function EvolutionView() {
       setActiveOperationId(nextStatus.operationId);
       applyRuntimeSnapshot(nextStatus);
     } catch (error) {
-      const message = normalizeUiErrorMessage(error);
+      const message = normalizeUiErrorMessage(error, t("evo.connection.required"));
       setActionError(message);
       setState("failed");
       void loadAudit(previewResult.agentId);
@@ -626,7 +718,7 @@ export function EvolutionView() {
       const nextStatus = await evolutionCancel(activeOperationId);
       applyRuntimeSnapshot(nextStatus);
     } catch (error) {
-      const message = normalizeUiErrorMessage(error);
+      const message = normalizeUiErrorMessage(error, t("evo.connection.required"));
       setActionError(message);
       toast.error(message);
       setIsCancelling(false);
@@ -643,7 +735,7 @@ export function EvolutionView() {
       setState("success");
       toast.success(`${t("evo.rollback.success")}: ${result.restoredSnapshotId}`);
     } catch (error) {
-      const message = normalizeUiErrorMessage(error);
+      const message = normalizeUiErrorMessage(error, t("evo.connection.required"));
       setActionError(message);
       setState("failed");
       toast.error(message);
@@ -754,8 +846,18 @@ export function EvolutionView() {
                   <div className="flex items-center gap-2 mb-1.5">
                     <ShieldAlert className={`w-4 h-4 ${template === "conservative" ? "text-sky-400" : "text-slate-500"}`} />
                     <span className={`text-sm font-medium ${template === "conservative" ? "text-sky-700 dark:text-sky-100" : "text-slate-700 dark:text-slate-300"}`}>{t("evo.template.conservative.title")}</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="ml-auto inline-flex text-slate-400 hover:text-slate-600" onClick={(event) => event.stopPropagation()} aria-label={t("evo.tooltip.more")}>
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[240px]">
+                        {t("evo.template.conservative.desc")}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
-                  <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-500">{t("evo.template.conservative.desc")}</p>
+                  <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-500">{t("evo.template.conservative.descShort")}</p>
                 </div>
 
                 <div
@@ -778,8 +880,18 @@ export function EvolutionView() {
                   <div className="flex items-center gap-2 mb-1.5">
                     <Flame className={`w-4 h-4 ${template === "aggressive" ? "text-red-400" : "text-slate-500"}`} />
                     <span className={`text-sm font-medium ${template === "aggressive" ? "text-red-700 dark:text-red-100" : "text-slate-700 dark:text-slate-300"}`}>{t("evo.template.aggressive.title")}</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="ml-auto inline-flex text-slate-400 hover:text-slate-600" onClick={(event) => event.stopPropagation()} aria-label={t("evo.tooltip.more")}>
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[240px]">
+                        {t("evo.template.aggressive.desc")}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
-                  <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-500">{t("evo.template.aggressive.desc")}</p>
+                  <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-500">{t("evo.template.aggressive.descShort")}</p>
                 </div>
 
                 <div
@@ -806,10 +918,20 @@ export function EvolutionView() {
                         ? "border-violet-200 bg-white text-violet-600 dark:border-violet-900/50 dark:bg-violet-950/30 dark:text-violet-300"
                         : "border-slate-200 bg-white text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500"
                     }`}>
-                      live
+                      {t("evo.template.badge.live")}
                     </Badge>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="inline-flex text-slate-400 hover:text-slate-600" onClick={(event) => event.stopPropagation()} aria-label={t("evo.tooltip.more")}>
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[240px]">
+                        {t("evo.template.knowledge.desc")}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
-                  <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-500">{t("evo.template.knowledge.desc")}</p>
+                  <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-500">{t("evo.template.knowledge.descShort")}</p>
                   <div className="mt-3 flex flex-wrap justify-end gap-2">
                     <Button
                       type="button"
@@ -820,7 +942,7 @@ export function EvolutionView() {
                         loadKnowledgeExample();
                       }}
                     >
-                      载入知识示例
+                      {t("evo.knowledge.example")}
                     </Button>
                   </div>
                 </div>
@@ -843,40 +965,48 @@ export function EvolutionView() {
                 >
                   <div className="flex items-center gap-2 mb-1.5">
                     <FileCode2 className={`w-4 h-4 ${template === "custom_template" ? "text-amber-500" : "text-slate-600"}`} />
-                    <span className={`font-medium text-[13px] ${template === "custom_template" ? "text-amber-700 dark:text-amber-100" : "text-slate-500 dark:text-slate-400"}`}>自定义模板</span>
+                    <span className={`font-medium text-[13px] ${template === "custom_template" ? "text-amber-700 dark:text-amber-100" : "text-slate-500 dark:text-slate-400"}`}>{t("evo.template.custom.title")}</span>
                     <Badge className={`ml-auto text-[9px] uppercase tracking-wider ${
                       template === "custom_template"
                         ? "border-amber-200 bg-white text-amber-600 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300"
                         : "border-slate-200 bg-white text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500"
                     }`}>
-                      sandboxed
+                      {t("evo.template.badge.sandboxed")}
                     </Badge>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="inline-flex text-slate-400 hover:text-slate-600" onClick={(event) => event.stopPropagation()} aria-label={t("evo.tooltip.more")}>
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[240px]">
+                        {t("evo.template.custom.desc")}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
-                  <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-500">
-                    通过 declarative JSON 脚本安全地追加、替换或去重当前 MEMORY 文档内容。
-                  </p>
-                  <div className="mt-3 flex justify-end">
+                  <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-500">{t("evo.template.custom.descShort")}</p>
+                  <div className="mt-3 flex flex-wrap justify-end gap-2">
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-8 border-amber-200 bg-white/90 text-amber-700 hover:bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                      className="h-auto min-h-8 max-w-full whitespace-normal px-3 py-1.5 text-center text-[11px] leading-snug border-amber-200 bg-white/90 text-amber-700 hover:bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300 dark:hover:bg-amber-950/30 sm:max-w-[48%]"
                       onClick={(event) => {
                         event.stopPropagation();
                         loadCustomTemplateExample();
                       }}
                     >
-                      载入脚本示例
+                      {t("evo.custom.example")}
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-8 border-amber-200 bg-white/90 text-amber-700 hover:bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                      className="h-auto min-h-8 max-w-full whitespace-normal px-3 py-1.5 text-center text-[11px] leading-snug border-amber-200 bg-white/90 text-amber-700 hover:bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300 dark:hover:bg-amber-950/30 sm:max-w-[48%]"
                       onClick={(event) => {
                         event.stopPropagation();
                         loadCustomTemplateRemoveExample();
                       }}
                     >
-                      载入移除示例
+                      {t("evo.custom.removeExample")}
                     </Button>
                   </div>
                 </div>
@@ -884,66 +1014,241 @@ export function EvolutionView() {
 
               {template === "knowledge_injection" ? (
                 <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/80 p-3.5 shadow-sm dark:border-violet-900/40 dark:bg-violet-950/20">
-                  <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-600 dark:text-violet-300">
-                    <Database className="h-3.5 w-3.5" />
-                    Knowledge Injection Contract
+                  <div className="mb-3 grid gap-3">
+                    <div className="flex min-w-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-600 dark:text-violet-300">
+                      <Database className="h-3.5 w-3.5" />
+                      {t("evo.knowledge.contract.title")}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="inline-flex text-violet-400 hover:text-violet-600" aria-label={t("evo.tooltip.more")}>
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[240px]">
+                          {t("evo.knowledge.contract.tip")}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Tabs
+                      value={knowledgeEntryMode}
+                      onValueChange={(value) => {
+                        const nextMode = value as "quick_paste" | "manual";
+                        setKnowledgeEntryMode(nextMode);
+                      }}
+                      className="gap-0"
+                    >
+                      <TabsList className="grid h-8 w-full grid-cols-2 border border-violet-200 bg-white/80 dark:border-violet-900/40 dark:bg-violet-950/30">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <TabsTrigger value="quick_paste" className="min-w-0 truncate px-2 text-[10px] sm:text-[11px]">
+                              {t("evo.knowledge.mode.quick.short")}
+                            </TabsTrigger>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-[220px]">
+                            <div className="font-medium">{t("evo.knowledge.mode.quick.full")}</div>
+                            <div>{t("evo.knowledge.mode.quick.desc")}</div>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <TabsTrigger value="manual" className="min-w-0 truncate px-2 text-[10px] sm:text-[11px]">
+                              {t("evo.knowledge.mode.manual.short")}
+                            </TabsTrigger>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-[220px]">
+                            <div className="font-medium">{t("evo.knowledge.mode.manual.full")}</div>
+                            <div>{t("evo.knowledge.mode.manual.desc")}</div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TabsList>
+                    </Tabs>
                   </div>
-                  <div className="grid gap-3">
-                    <div>
-                      <label className="mb-1.5 block text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                        Source Ref
-                      </label>
-                      <Input
-                        value={knowledgeSourceRef}
-                        onChange={(event) => setKnowledgeSourceRef(event.target.value)}
-                        placeholder="例如：playbook://memory-search-v1"
-                        disabled={state === "analyzing" || state === "executing"}
-                        className="h-9 border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/70"
-                      />
+                  {knowledgeEntryMode === "quick_paste" ? (
+                    <div className="grid gap-3">
+                      <div>
+                        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                          <span>{t("evo.knowledge.field.pack")}</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button type="button" className="inline-flex text-slate-400 hover:text-slate-600" aria-label={t("evo.tooltip.more")}>
+                                <Info className="h-3 w-3" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[240px]">
+                              {t("evo.knowledge.help.pack")}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Textarea
+                          value={knowledgePackText}
+                          onChange={(event) => {
+                            setKnowledgePackText(event.target.value);
+                            setLastHydratedPackText("");
+                          }}
+                          placeholder={`Source Ref: playbook://memory-search-v1\nAdditional Sources: doc://team-playbook, qmd://memory-search-notes\nCapability Tags: memory, search, retrieval\n\n---\n${t("evo.knowledge.field.pack.placeholder")}`}
+                          disabled={state === "analyzing" || state === "executing"}
+                          className="min-h-[168px] border-slate-200 bg-white text-sm leading-6 dark:border-slate-800 dark:bg-slate-950/70"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="outline" className="border-violet-200 bg-white text-violet-700 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-violet-300">
+                          {parsedKnowledgePack.sourceRef ? t("evo.knowledge.summary.source.one") : t("evo.knowledge.summary.source.zero")}
+                        </Badge>
+                        <Badge variant="outline" className="border-violet-200 bg-white text-violet-700 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-violet-300">
+                          {t("evo.knowledge.summary.tags", parsedKnowledgePack.capabilityTags.length)}
+                        </Badge>
+                        <Badge variant="outline" className="border-violet-200 bg-white text-violet-700 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-violet-300">
+                          {t("evo.knowledge.summary.additional", parsedKnowledgePack.additionalSourceRefs.length)}
+                        </Badge>
+                        <Badge variant="outline" className="border-violet-200 bg-white text-violet-700 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-violet-300">
+                          {t("evo.knowledge.summary.bodyChars", parsedKnowledgePack.knowledgeBody.length)}
+                        </Badge>
+                      </div>
+                      {parsedKnowledgePack.warnings.length > 0 ? (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-[11px] text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+                          <div className="mb-1 font-semibold uppercase tracking-[0.14em]">
+                            {t("evo.knowledge.parse.title")}
+                          </div>
+                          <div className="space-y-1">
+                            {parsedKnowledgePack.warnings.map((warning) => (
+                              <div key={warning}>- {formatKnowledgeWarning(warning, t)}</div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      <Collapsible open={knowledgeMetaExpanded} onOpenChange={setKnowledgeMetaExpanded}>
+                        <CollapsibleTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="justify-between border-violet-200 bg-white/90 text-violet-700 hover:bg-violet-50 dark:border-violet-900/40 dark:bg-violet-950/20 dark:text-violet-300 dark:hover:bg-violet-950/30"
+                          >
+                            {t("evo.knowledge.meta.parsed")}
+                            <ChevronDown className={`h-4 w-4 transition-transform ${knowledgeMetaExpanded ? "rotate-180" : ""}`} />
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="pt-3">
+                          <div className="grid gap-3">
+                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300">
+                              <div className="mb-1 font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                                {t("evo.knowledge.field.source")}
+                              </div>
+                              <div className="break-all">{parsedKnowledgePack.sourceRef || "—"}</div>
+                            </div>
+                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300">
+                              <div className="mb-1 font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                                {t("evo.knowledge.field.tags")}
+                              </div>
+                              <div>{parsedKnowledgePack.capabilityTags.join(", ") || "—"}</div>
+                            </div>
+                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300">
+                              <div className="mb-1 font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                                {t("evo.knowledge.field.additional")}
+                              </div>
+                              <div className="break-all">{parsedKnowledgePack.additionalSourceRefs.join(", ") || "—"}</div>
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
                     </div>
-                    <div>
-                      <label className="mb-1.5 block text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                        Capability Tags
-                      </label>
-                      <Input
-                        value={knowledgeTagsInput}
-                        onChange={(event) => setKnowledgeTagsInput(event.target.value)}
-                        placeholder="memory, search, retrieval"
-                        disabled={state === "analyzing" || state === "executing"}
-                        className="h-9 border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/70"
-                      />
-                      <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
-                        用逗号分隔标签；这些标签会进入 history 与 audit。
-                      </p>
+                  ) : (
+                    <div className="grid gap-3">
+                      <div>
+                        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                          <span>{t("evo.knowledge.field.body")}</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button type="button" className="inline-flex text-slate-400 hover:text-slate-600" aria-label={t("evo.tooltip.more")}>
+                                <Info className="h-3 w-3" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[240px]">
+                              {t("evo.knowledge.help.body")}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Textarea
+                          value={knowledgeBody}
+                          onChange={(event) => setKnowledgeBody(event.target.value)}
+                          placeholder={t("evo.knowledge.field.body.placeholder")}
+                          disabled={state === "analyzing" || state === "executing"}
+                          className="min-h-[144px] border-slate-200 bg-white text-sm leading-6 dark:border-slate-800 dark:bg-slate-950/70"
+                        />
+                      </div>
+                      <div>
+                        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                          <span>{t("evo.knowledge.field.source")}</span>
+                        </div>
+                        <Input
+                          value={knowledgeSourceRef}
+                          onChange={(event) => setKnowledgeSourceRef(event.target.value)}
+                          placeholder={t("evo.knowledge.field.source.placeholder")}
+                          disabled={state === "analyzing" || state === "executing"}
+                          className="h-9 border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/70"
+                        />
+                      </div>
+                      <Collapsible open={knowledgeMetaExpanded} onOpenChange={setKnowledgeMetaExpanded}>
+                        <CollapsibleTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="justify-between border-violet-200 bg-white/90 text-violet-700 hover:bg-violet-50 dark:border-violet-900/40 dark:bg-violet-950/20 dark:text-violet-300 dark:hover:bg-violet-950/30"
+                          >
+                            {t("evo.knowledge.meta.advanced")}
+                            <ChevronDown className={`h-4 w-4 transition-transform ${knowledgeMetaExpanded ? "rotate-180" : ""}`} />
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="pt-3">
+                          <div className="grid gap-3">
+                            <div>
+                              <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                                <span>{t("evo.knowledge.field.tags")}</span>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button type="button" className="inline-flex text-slate-400 hover:text-slate-600" aria-label={t("evo.tooltip.more")}>
+                                      <Info className="h-3 w-3" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-[240px]">
+                                    {t("evo.knowledge.help.tags")}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
+                              <Input
+                                value={knowledgeTagsInput}
+                                onChange={(event) => setKnowledgeTagsInput(event.target.value)}
+                                placeholder={t("evo.knowledge.field.tags.placeholder")}
+                                disabled={state === "analyzing" || state === "executing"}
+                                className="h-9 border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/70"
+                              />
+                            </div>
+                            <div>
+                              <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                                <span>{t("evo.knowledge.field.additional")}</span>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button type="button" className="inline-flex text-slate-400 hover:text-slate-600" aria-label={t("evo.tooltip.more")}>
+                                      <Info className="h-3 w-3" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-[240px]">
+                                    {t("evo.knowledge.help.additional")}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
+                              <Input
+                                value={knowledgeAdditionalSourcesInput}
+                                onChange={(event) => setKnowledgeAdditionalSourcesInput(event.target.value)}
+                                placeholder={t("evo.knowledge.field.additional.placeholder")}
+                                disabled={state === "analyzing" || state === "executing"}
+                                className="h-9 border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/70"
+                              />
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
                     </div>
-                    <div>
-                      <label className="mb-1.5 block text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                        Additional Sources
-                      </label>
-                      <Input
-                        value={knowledgeAdditionalSourcesInput}
-                        onChange={(event) => setKnowledgeAdditionalSourcesInput(event.target.value)}
-                        placeholder="doc://team-playbook, qmd://memory-search-notes"
-                        disabled={state === "analyzing" || state === "executing"}
-                        className="h-9 border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/70"
-                      />
-                      <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
-                        可选；多个来源会一并写入 provenance。
-                      </p>
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                        Knowledge Body
-                      </label>
-                      <Textarea
-                        value={knowledgeBody}
-                        onChange={(event) => setKnowledgeBody(event.target.value)}
-                        placeholder="输入要注入 MEMORY.md 的结构化知识片段。"
-                        disabled={state === "analyzing" || state === "executing"}
-                        className="min-h-[128px] border-slate-200 bg-white text-sm leading-6 dark:border-slate-800 dark:bg-slate-950/70"
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
               ) : null}
 
@@ -951,12 +1256,12 @@ export function EvolutionView() {
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 shadow-sm dark:border-amber-900/40 dark:bg-amber-950/20">
                   <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">
                     <FileCode2 className="h-3.5 w-3.5" />
-                    Custom Template Sandbox
+                    {t("evo.custom.contract.title")}
                   </div>
                   <div className="grid gap-3">
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                        Source Ref
+                        {t("evo.knowledge.field.source")}
                       </label>
                       <Input
                         value={customSourceRef}
@@ -968,7 +1273,7 @@ export function EvolutionView() {
                     </div>
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                        Capability Tags
+                        {t("evo.knowledge.field.tags")}
                       </label>
                       <Input
                         value={customTagsInput}
@@ -980,7 +1285,7 @@ export function EvolutionView() {
                     </div>
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                        Additional Sources
+                        {t("evo.knowledge.field.additional")}
                       </label>
                       <Input
                         value={customAdditionalSourcesInput}
@@ -992,7 +1297,7 @@ export function EvolutionView() {
                     </div>
                     <div>
                       <label className="mb-1.5 block text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                        Script Body
+                        {t("evo.custom.field.script")}
                       </label>
                       <Textarea
                         value={customScriptBody}
@@ -1001,11 +1306,11 @@ export function EvolutionView() {
                         className="min-h-[160px] border-slate-200 bg-white font-mono text-[12px] leading-6 dark:border-slate-800 dark:bg-slate-950/70"
                       />
                       <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
-                        仅允许 declarative JSON：`append_block`、`replace_text`、`dedupe_lines`、`remove_blocks_by_source_ref`。最大 4 KB，无文件系统与网络权限。
+                        {t("evo.custom.help.script")}
                       </p>
                       {lastCustomAppendSourceRef ? (
                         <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
-                          最近一次脚本示例来源：{lastCustomAppendSourceRef}；`载入移除示例` 会复用它生成 remove proof。
+                          {t("evo.custom.help.lastSource", lastCustomAppendSourceRef)}
                         </p>
                       ) : null}
                     </div>
@@ -1048,10 +1353,10 @@ export function EvolutionView() {
                   {template === "aggressive"
                     ? t("evo.btn.execute.high")
                     : template === "knowledge_injection"
-                      ? "注入知识包"
+                      ? t("evo.knowledge.execute")
                       : template === "custom_template"
-                        ? "执行自定义模板"
-                      : t("evo.btn.execute.low")}
+                        ? t("evo.custom.execute")
+                        : t("evo.btn.execute.low")}
                 </Button>
                 <Button variant="outline" className="w-full border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200" onClick={() => { setState("idle"); setPreviewResult(null); setRuntimeStatus(null); setActiveOperationId(null); setActionError(null); setExecStep(-1); }}>
                   <X className="w-4 h-4 mr-2" /> {t("evo.btn.discard")}
@@ -1085,7 +1390,7 @@ export function EvolutionView() {
 
       <div className="relative flex flex-1 flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100/70 dark:bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_28%),linear-gradient(180deg,rgba(2,6,23,0.98),rgba(15,23,42,0.94))]">
         {state === "idle" ? (
-          <div className="animate-in fade-in duration-500 flex flex-1 flex-col items-center justify-center text-slate-500 dark:text-slate-500">
+          <div className="animate-in fade-in duration-500 flex flex-1 flex-col items-center justify-start px-8 pt-12 text-slate-500 dark:text-slate-500">
             <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm dark:border-slate-800/50 dark:bg-slate-900/50">
               <Cpu className="w-8 h-8 text-slate-500 dark:text-slate-600" />
             </div>
@@ -1142,17 +1447,13 @@ export function EvolutionView() {
                   <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
                     {template === "knowledge_injection" ? (
                       <>
-                        本次进化会向 <span className="font-medium text-slate-800 dark:text-slate-200">{currentNode?.name || "the node"}</span> 追加一个受管知识块，
-                        来源引用为 <span className="font-medium text-slate-800 dark:text-slate-200">{knowledgeInput?.sourceRef || "—"}</span>，
-                        并登记 {knowledgeCapabilityTags.length} 个 capability tags。
-                        {knowledgeAdditionalSources.length > 0 ? ` 另外还会记录 ${knowledgeAdditionalSources.length} 个附加来源。` : ""}
+                        {t("evo.summary.knowledge.compact", currentNode?.name || "the node")}
+                        <span className="ml-1 font-medium text-slate-800 dark:text-slate-200">{effectiveKnowledgeInput?.sourceRef || "—"}</span>
                       </>
                     ) : template === "custom_template" ? (
                       <>
-                        本次进化会在 declarative sandbox 中解释一份自定义 JSON 模板，
-                        来源引用为 <span className="font-medium text-slate-800 dark:text-slate-200">{customInput?.sourceRef || "—"}</span>，
-                        并仅允许对当前 MEMORY 文档执行受限的追加、替换或去重操作。
-                        {customAdditionalSources.length > 0 ? ` 该模板还会带上 ${customAdditionalSources.length} 个附加来源用于 provenance。` : ""}
+                        {t("evo.summary.custom.compact")}
+                        <span className="ml-1 font-medium text-slate-800 dark:text-slate-200">{customInput?.sourceRef || "—"}</span>
                       </>
                     ) : (
                       <>
@@ -1165,12 +1466,12 @@ export function EvolutionView() {
                     <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-500">
                       {previewResult.sourceDocument} · {previewResult.bytesBefore} bytes → {previewResult.bytesAfter} bytes
                       {previewResult.sourceRefs.length > 0
-                        ? ` · ${previewResult.sourceRefs.length} source refs`
+                        ? ` · ${t("evo.summary.sourceRefs", previewResult.sourceRefs.length)}`
                         : previewResult.sourceRef
-                          ? ` · source ${previewResult.sourceRef}`
+                          ? ` · ${t("evo.summary.sourceOne", previewResult.sourceRef)}`
                           : ""}
                       {previewResult.capabilityTags.length > 0
-                        ? ` · ${previewResult.capabilityTags.length} capability tags`
+                        ? ` · ${t("evo.summary.capabilityTags", previewResult.capabilityTags.length)}`
                         : ""}
                     </p>
                   ) : null}
@@ -1178,7 +1479,7 @@ export function EvolutionView() {
                     <div className="mt-3 grid gap-2 md:grid-cols-2">
                       <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
                         <div className="mb-1 font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                          Source Refs
+                          {t("evo.runtime.sourceRefs")}
                         </div>
                         <div className="break-all">
                           {previewResult.sourceRefs.length > 0
@@ -1188,7 +1489,7 @@ export function EvolutionView() {
                       </div>
                       <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
                         <div className="mb-1 font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                          Capability Tags
+                          {t("evo.knowledge.field.tags")}
                         </div>
                         <div>
                           {previewResult.capabilityTags.length > 0
@@ -1216,12 +1517,12 @@ export function EvolutionView() {
                     }`}>
                       <div className="mb-2 flex items-center gap-2 font-medium">
                         <AlertTriangle className="h-4 w-4" />
-                        {previewResult.unsafeApply ? "Unsafe Apply Blocked" : "Requires Confirmation"}
+                        {previewResult.unsafeApply ? t("evo.preview.blocked") : t("evo.preview.confirmation")}
                       </div>
                       <div className="space-y-1.5">
                         {previewResult.unsafeReasons.length > 0 ? previewResult.unsafeReasons.map((reason) => (
                           <div key={reason}>- {reason}</div>
-                        )) : <div>当前操作被提升为高风险，请在确认后执行。</div>}
+                        )) : <div>{t("evo.preview.confirmation.desc")}</div>}
                       </div>
                     </div>
                   ) : null}
@@ -1295,7 +1596,7 @@ export function EvolutionView() {
                   {runtimeStatus.progressPct}%
                 </span>
               </div>
-              <div>{runtimeStatus.message}</div>
+              <div>{renderEvolutionRuntimeMessage(runtimeStatus, t)}</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {runtimeStatus.previewStale ? (
                   <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
@@ -1315,7 +1616,7 @@ export function EvolutionView() {
               </div>
               {runtimeStatus.sourceRefs.length > 0 ? (
                 <div className="mt-2 break-all text-[11px] text-slate-500 dark:text-slate-400">
-                  Source Refs: {runtimeStatus.sourceRefs.join(", ")}
+                  {t("evo.runtime.sourceRefs")}: {runtimeStatus.sourceRefs.join(", ")}
                 </div>
               ) : null}
             </div>
@@ -1363,7 +1664,7 @@ export function EvolutionView() {
               <div className="text-xs text-slate-500 dark:text-slate-500">{t("evo.hist.empty")}</div>
             ) : null}
             {historyEntries.map((entry) => {
-              const statusLabel = formatHistoryStatus(entry);
+              const statusLabel = formatHistoryStatus(entry, t);
               const canRollback = entry.operationKind === "execute" && entry.status === "success";
               return (
               <div
@@ -1384,9 +1685,9 @@ export function EvolutionView() {
                         : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
                   }`}>{statusLabel}</span>
                 </div>
-                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-500">{entry.summary}</div>
+                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-500">{renderEvolutionHistorySummary(entry, t)}</div>
                 <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-500">
-                  <span>{formatRelativeTime(entry.createdAtMs)}</span>
+                  <span>{formatRelativeTime(entry.createdAtMs, t)}</span>
                   <div className="flex items-center gap-2">
                     <span className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[10px] opacity-70 dark:bg-slate-950">{entry.snapshotId}</span>
                     {canRollback ? (
@@ -1430,7 +1731,7 @@ export function EvolutionView() {
               <div className="flex items-center justify-between border-b border-slate-200 pb-2.5 text-sm dark:border-slate-800/60">
                 <span className="text-slate-500 dark:text-slate-400">{t("evo.dialog.tpl")}</span>
                 <Badge variant="outline" className="border-red-200 bg-red-50 font-medium text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
-                  {formatTemplateLabel(previewResult?.template ?? template)}
+                  {formatTemplateLabel(previewResult?.template ?? template, t)}
                 </Badge>
               </div>
               <div className="flex items-center justify-between border-b border-slate-200 pb-2.5 text-sm dark:border-slate-800/60">

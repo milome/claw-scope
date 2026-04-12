@@ -1,4 +1,6 @@
 import type { EvolutionAuditEntry, EvolutionAuditSummary } from "../../contexts/OpenClawContext";
+import { translateEvolutionCopy } from "../../contexts/evolutionI18n";
+import { renderEvolutionAuditMessage } from "./evolutionMessageI18n";
 
 export const EVOLUTION_AUDIT_REPORT_SCHEMA_VERSION = "evolution-audit-report.v2";
 
@@ -9,110 +11,149 @@ export type EvolutionOperatorHealth = {
   recommendations: string[];
 };
 
-function formatBlockedReasonLabel(code?: string | null) {
+type EvolutionTranslate = (key: string, ...args: (string | number)[]) => string;
+
+function formatBlockedReasonLabel(code: string | null | undefined, t: EvolutionTranslate) {
   switch (code) {
     case "EVOLUTION_UNSAFE_APPLY_BLOCKED":
-      return "Unsafe Apply Blocked";
+      return t("evo.reason.unsafeApplyBlocked");
     case "EVOLUTION_HIGH_RISK_CONFIRMATION_REQUIRED":
-      return "Confirmation Required";
+      return t("evo.reason.confirmationRequired");
     case "EVOLUTION_ACTIVE_CONFLICT":
     case "EVOLUTION_RUNTIME_AGENT_CONFLICT":
-      return "Active Agent Conflict";
+      return t("evo.reason.activeAgentConflict");
     case "EVOLUTION_RUNTIME_SOURCE_DOCUMENT_CONFLICT":
-      return "Source Document Conflict";
+      return t("evo.reason.sourceDocumentConflict");
     case "EVOLUTION_RUNTIME_SOURCE_REF_CONFLICT":
-      return "Source Ref Runtime Conflict";
+      return t("evo.reason.sourceRefRuntimeConflict");
     case "EVOLUTION_ALREADY_APPLIED":
-      return "Already Applied";
+      return t("evo.reason.alreadyApplied");
     case "EVOLUTION_SOURCE_REF_CONFLICT":
-      return "Source Ref Conflict";
+      return t("evo.reason.sourceRefConflict");
     case "EVOLUTION_PREVIEW_STALE":
-      return "Preview Stale";
+      return t("evo.reason.previewStale");
     default:
-      return code ?? "—";
+      return code ?? t("evo.reason.none");
   }
 }
 
-function formatOverrideReasonLabel(code?: string | null) {
+function formatOverrideReasonLabel(code: string | null | undefined, t: EvolutionTranslate) {
   switch (code) {
     case "EVOLUTION_HIGH_RISK_CONFIRMATION_OVERRIDE":
-      return "High Risk Confirmation Override";
+      return t("evo.override.highRiskConfirmation");
     default:
-      return code ?? "—";
+      return code ?? t("evo.reason.none");
   }
 }
 
-function formatOperationTypeLabel(operationType: string) {
+function formatOperationTypeLabel(operationType: string, t: EvolutionTranslate) {
   switch (operationType) {
     case "inject_knowledge":
-      return "知识注入";
+      return t("evo.historySheet.operation.inject");
     case "custom_transform":
-      return "自定义模板";
+      return t("evo.historySheet.operation.custom");
     case "restore_snapshot":
-      return "回滚恢复";
+      return t("evo.historySheet.operation.restore");
     case "optimize":
     default:
-      return "结构优化";
+      return t("evo.historySheet.operation.optimize");
   }
 }
 
-function formatStatusLabel(status: EvolutionAuditEntry["status"], preflightBlocked: boolean) {
+function formatTemplateLabel(template: string, t: EvolutionTranslate) {
+  switch (template) {
+    case "aggressive":
+      return t("evo.historySheet.template.aggressive");
+    case "knowledge_injection":
+      return t("evo.historySheet.template.knowledge");
+    case "custom_template":
+      return t("evo.historySheet.template.custom");
+    case "conservative":
+      return t("evo.historySheet.template.conservative");
+    default:
+      return template;
+  }
+}
+
+function formatReportModeLabel(mode: "manual" | "quick", t: EvolutionTranslate) {
+  switch (mode) {
+    case "quick":
+      return t("evo.report.mode.quick");
+    case "manual":
+    default:
+      return t("evo.report.mode.manual");
+  }
+}
+
+function formatStatusLabel(
+  status: EvolutionAuditEntry["status"],
+  preflightBlocked: boolean,
+  t: EvolutionTranslate,
+) {
   if (preflightBlocked) {
-    return "预检阻断";
+    return t("evo.historySheet.stats.preflightBlocked");
   }
   switch (status) {
     case "rolled_back":
-      return "已回滚";
+      return t("evo.historySheet.status.rolled_back");
     case "failed":
-      return "失败";
+      return t("evo.historySheet.status.failed");
     case "cancelled":
-      return "已取消";
+      return t("evo.historySheet.status.cancelled");
     case "success":
     default:
-      return "成功";
+      return t("evo.historySheet.status.success");
   }
 }
 
-function renderBuckets(title: string, buckets: { key: string; count: number }[], keyFormatter?: (key: string) => string) {
+function renderBuckets(
+  titleKey: string,
+  buckets: { key: string; count: number }[],
+  t: EvolutionTranslate,
+  keyFormatter?: (key: string) => string,
+) {
   return [
-    `## ${title}`,
+    `## ${t(titleKey)}`,
     ...(buckets.length > 0
       ? buckets.map((bucket) => `- ${keyFormatter ? keyFormatter(bucket.key) : bucket.key}: ${bucket.count}`)
-      : ["- none"]),
+      : [`- ${t("evo.historySheet.metrics.noData")}`]),
     "",
   ];
 }
 
-function renderAuditEntry(entry: EvolutionAuditEntry) {
+function renderAuditEntry(entry: EvolutionAuditEntry, t: EvolutionTranslate) {
   return [
     `### ${entry.operationId}`,
-    `- Status: ${formatStatusLabel(entry.status, entry.preflightBlocked)}`,
-    `- Operation Type: ${formatOperationTypeLabel(entry.operationType)}`,
-    `- Template: ${entry.template}`,
-    `- Snapshot: ${entry.snapshotId}`,
-    `- Source Ref: ${entry.sourceRef ?? "—"}`,
-    `- Source Refs: ${entry.sourceRefs.join(", ") || "—"}`,
-    `- Preflight Blocked: ${entry.preflightBlocked ? "yes" : "no"}`,
-    `- Blocked Reason: ${formatBlockedReasonLabel(entry.blockedReasonCode)}`,
-    `- Override Applied: ${entry.overrideApplied ? "yes" : "no"}`,
-    `- Override Reason: ${formatOverrideReasonLabel(entry.overrideReasonCode)}`,
-    `- Capability Tags: ${entry.capabilityTags.join(", ") || "—"}`,
-    `- Started At: ${new Date(entry.startedAtMs).toISOString()}`,
-    `- Ended At: ${new Date(entry.endedAtMs).toISOString()}`,
-    `- Duration: ${entry.durationMs} ms`,
-    `- Message: ${entry.message}`,
+    `- ${t("evo.historySheet.status.all")}: ${formatStatusLabel(entry.status, entry.preflightBlocked, t)}`,
+    `- ${t("evo.historySheet.detail.operationType")}: ${formatOperationTypeLabel(entry.operationType, t)}`,
+    `- ${t("evo.historySheet.detail.template")}: ${entry.template}`,
+    `- ${t("evo.historySheet.detail.snapshot")}: ${entry.snapshotId}`,
+    `- ${t("evo.historySheet.detail.sourceRef")}: ${entry.sourceRef ?? t("evo.reason.none")}`,
+    `- ${t("evo.historySheet.detail.sourceRefs")}: ${entry.sourceRefs.join(", ") || t("evo.reason.none")}`,
+    `- ${t("evo.historySheet.audit.preflight")}: ${entry.preflightBlocked ? t("evo.historySheet.audit.preflight.blocked") : t("evo.historySheet.audit.preflight.passed")}`,
+    `- ${t("evo.historySheet.audit.blockedReason")}: ${formatBlockedReasonLabel(entry.blockedReasonCode, t)}`,
+    `- ${t("evo.historySheet.audit.override")}: ${entry.overrideApplied ? t("evo.historySheet.audit.override.applied") : t("evo.historySheet.audit.override.no")}`,
+    `- ${t("evo.historySheet.audit.overrideReason")}: ${formatOverrideReasonLabel(entry.overrideReasonCode, t)}`,
+    `- ${t("evo.historySheet.audit.capabilityTags")}: ${entry.capabilityTags.join(", ") || t("evo.reason.none")}`,
+    `- ${t("evo.historySheet.audit.started")}: ${new Date(entry.startedAtMs).toISOString()}`,
+    `- ${t("evo.historySheet.audit.ended")}: ${new Date(entry.endedAtMs).toISOString()}`,
+    `- ${t("evo.historySheet.audit.duration")}: ${entry.durationMs} ms`,
+    `- ${t("evo.report.entry.message")}: ${renderEvolutionAuditMessage(entry, t)}`,
     "",
   ];
 }
 
-export function buildEvolutionOperatorHealth(auditSummary: EvolutionAuditSummary): EvolutionOperatorHealth {
+export function buildEvolutionOperatorHealth(
+  auditSummary: EvolutionAuditSummary,
+  t: EvolutionTranslate,
+): EvolutionOperatorHealth {
   if (auditSummary.totalOperations === 0) {
     return {
       score: 100,
-      statusLabel: "Cold Start",
+      statusLabel: t("evo.historySheet.metrics.coldStart"),
       statusTone: "slate",
       recommendations: [
-        "尚无 Evolution 审计数据；先完成至少一次 preview/execute 链路，再观察治理指标。",
+        t("evo.historySheet.metrics.noData"),
       ],
     };
   }
@@ -139,28 +180,28 @@ export function buildEvolutionOperatorHealth(auditSummary: EvolutionAuditSummary
 
   const recommendations: string[] = [];
   if (auditSummary.preflightBlockedCount > 0) {
-    recommendations.push("检查 blocked reasons，优先清理 stale preview / source ref conflict / unsafe apply。");
+    recommendations.push(`${t("evo.historySheet.metrics.blockedReasons")} -> ${t("evo.reason.previewStale")} / ${t("evo.reason.sourceRefConflict")} / ${t("evo.reason.unsafeApplyBlocked")}`);
   }
   if (auditSummary.overrideCount > 0) {
-    recommendations.push("复核 override 使用场景，确认高风险确认不是在掩盖真实冲突。");
+    recommendations.push(`${t("evo.historySheet.stats.overrides")} -> ${t("evo.override.highRiskConfirmation")}`);
   }
   if (auditSummary.failedCount > 0) {
-    recommendations.push("针对失败操作回查 history 与 audit trail，确认失败链是否可回滚。");
+    recommendations.push(`${t("evo.historySheet.title")} / ${t("evo.historySheet.audit.title")}`);
   }
   if (auditSummary.highRiskCount > 0 && auditSummary.overrideCount === 0) {
-    recommendations.push("高风险操作较多，但 override 使用较少；继续保持确认门禁。");
+    recommendations.push(t("evo.dialog.confirm"));
   }
   if (recommendations.length === 0) {
-    recommendations.push("当前治理信号平稳，可继续关注长期趋势与 dashboard 持久化。");
+    recommendations.push(t("evo.historySheet.metrics.dashboard"));
   }
 
   if (score >= 85 && successRate >= 0.8) {
-    return { score, statusLabel: "Healthy", statusTone: "emerald", recommendations };
+    return { score, statusLabel: t("evo.historySheet.status.success"), statusTone: "emerald", recommendations };
   }
   if (score >= 60) {
-    return { score, statusLabel: "Watch", statusTone: "amber", recommendations };
+    return { score, statusLabel: t("evo.historySheet.stats.auditFeed"), statusTone: "amber", recommendations };
   }
-  return { score, statusLabel: "Action Required", statusTone: "red", recommendations };
+  return { score, statusLabel: t("evo.historySheet.status.failed"), statusTone: "red", recommendations };
 }
 
 export function buildEvolutionAuditReportMarkdown(
@@ -168,74 +209,93 @@ export function buildEvolutionAuditReportMarkdown(
   options?: {
     generatedAt?: Date;
     reportMode?: "manual" | "quick";
+    lang?: string;
   },
 ) {
   const generatedAt = options?.generatedAt ?? new Date();
   const reportMode = options?.reportMode ?? "manual";
+  const t = (key: string, ...args: (string | number)[]) =>
+    translateEvolutionCopy(options?.lang ?? "en", key, ...args);
   const recentBlocked = auditSummary.recentEntries.filter((entry) => entry.preflightBlocked);
   const recentTerminal = auditSummary.recentEntries.filter((entry) => !entry.preflightBlocked);
-  const operatorHealth = buildEvolutionOperatorHealth(auditSummary);
+  const operatorHealth = buildEvolutionOperatorHealth(auditSummary, t);
 
   return [
-    `# Evolution Operator Report`,
+    `# ${t("evo.report.title")}`,
     ``,
-    `## Report Metadata`,
-    `- Schema Version: ${EVOLUTION_AUDIT_REPORT_SCHEMA_VERSION}`,
-    `- Report Mode: ${reportMode}`,
-    `- Generated At: ${generatedAt.toISOString()}`,
-    `- Agent: ${auditSummary.agentId}`,
+    `## ${t("evo.report.section.metadata")}`,
+    `- ${t("evo.report.meta.schemaVersion")}: ${EVOLUTION_AUDIT_REPORT_SCHEMA_VERSION}`,
+    `- ${t("evo.report.meta.reportMode")}: ${formatReportModeLabel(reportMode, t)}`,
+    `- ${t("evo.report.meta.generatedAt")}: ${generatedAt.toISOString()}`,
+    `- ${t("evo.report.meta.agent")}: ${auditSummary.agentId}`,
     ``,
-    `## Executive Summary`,
-    `- Total Operations: ${auditSummary.totalOperations}`,
-    `- Success Count: ${auditSummary.successCount}`,
-    `- Failed Count: ${auditSummary.failedCount}`,
-    `- Cancelled Count: ${auditSummary.cancelledCount}`,
-    `- Rolled Back Count: ${auditSummary.rolledBackCount}`,
-    `- Average Duration: ${auditSummary.averageDurationMs ?? "--"} ms`,
+    `## ${t("evo.report.section.summary")}`,
+    `- ${t("evo.report.summary.totalOperations")}: ${auditSummary.totalOperations}`,
+    `- ${t("evo.report.summary.successCount")}: ${auditSummary.successCount}`,
+    `- ${t("evo.report.summary.failedCount")}: ${auditSummary.failedCount}`,
+    `- ${t("evo.report.summary.cancelledCount")}: ${auditSummary.cancelledCount}`,
+    `- ${t("evo.report.summary.rolledBackCount")}: ${auditSummary.rolledBackCount}`,
+    `- ${t("evo.report.summary.averageDuration")}: ${auditSummary.averageDurationMs ?? "--"} ms`,
     ``,
-    `## Governance Signals`,
-    `- High Risk Count: ${auditSummary.highRiskCount}`,
-    `- Unsafe Blocked Count: ${auditSummary.unsafeBlockedCount}`,
-    `- Preflight Blocked Count: ${auditSummary.preflightBlockedCount}`,
-    `- Override Count: ${auditSummary.overrideCount}`,
+    `## ${t("evo.report.section.governance")}`,
+    `- ${t("evo.report.governance.highRiskCount")}: ${auditSummary.highRiskCount}`,
+    `- ${t("evo.report.governance.unsafeBlockedCount")}: ${auditSummary.unsafeBlockedCount}`,
+    `- ${t("evo.report.governance.preflightBlockedCount")}: ${auditSummary.preflightBlockedCount}`,
+    `- ${t("evo.report.governance.overrideCount")}: ${auditSummary.overrideCount}`,
     ``,
-    `## Operator Readiness`,
-    `- Status: ${operatorHealth.statusLabel}`,
-    `- Health Score: ${operatorHealth.score}`,
-    `- Recommendations:`,
+    `## ${t("evo.report.section.readiness")}`,
+    `- ${t("evo.report.readiness.status")}: ${operatorHealth.statusLabel}`,
+    `- ${t("evo.report.readiness.healthScore")}: ${operatorHealth.score}`,
+    `- ${t("evo.report.readiness.recommendations")}:`,
     ...operatorHealth.recommendations.map((item) => `  - ${item}`),
     ``,
-    `## Trend Snapshot`,
-    `- Last 24h Operations: ${auditSummary.last24hOperations}`,
-    `- Last 24h Failures: ${auditSummary.last24hFailures}`,
-    `- Last 24h Blocked: ${auditSummary.last24hBlocked}`,
-    `- Last 7d Operations: ${auditSummary.last7dOperations}`,
-    `- Last 7d Failures: ${auditSummary.last7dFailures}`,
-    `- Last 7d Overrides: ${auditSummary.last7dOverrides}`,
-    `- Recent Daily Breakdown:`,
+    `## ${t("evo.report.section.trend")}`,
+    `- ${t("evo.report.trend.last24hOperations")}: ${auditSummary.last24hOperations}`,
+    `- ${t("evo.report.trend.last24hFailures")}: ${auditSummary.last24hFailures}`,
+    `- ${t("evo.report.trend.last24hBlocked")}: ${auditSummary.last24hBlocked}`,
+    `- ${t("evo.report.trend.last7dOperations")}: ${auditSummary.last7dOperations}`,
+    `- ${t("evo.report.trend.last7dFailures")}: ${auditSummary.last7dFailures}`,
+    `- ${t("evo.report.trend.last7dOverrides")}: ${auditSummary.last7dOverrides}`,
+    `- ${t("evo.report.trend.recentDailyBreakdown")}:`,
     ...(auditSummary.recentDailyBreakdown.length > 0
       ? auditSummary.recentDailyBreakdown.map((bucket) => `  - ${bucket.key}: ${bucket.count}`)
-      : ["  - none"]),
+      : [`  - ${t("evo.historySheet.metrics.noData")}`]),
     ``,
-    ...renderBuckets("Status Breakdown", auditSummary.statusBreakdown),
-    ...renderBuckets("Template Breakdown", auditSummary.templateBreakdown),
-    ...renderBuckets("Operation Type Breakdown", auditSummary.operationTypeBreakdown, formatOperationTypeLabel),
     ...renderBuckets(
-      "Blocked Reason Breakdown",
-      auditSummary.blockedReasonBreakdown,
-      (key) => `${formatBlockedReasonLabel(key)} (${key})`,
+      "evo.report.section.statusBreakdown",
+      auditSummary.statusBreakdown,
+      t,
+      (key) => formatStatusLabel(key as EvolutionAuditEntry["status"], false, t),
     ),
-    `## Recent Preflight Blocked Attempts`,
+    ...renderBuckets(
+      "evo.report.section.templateBreakdown",
+      auditSummary.templateBreakdown,
+      t,
+      (key) => formatTemplateLabel(key, t),
+    ),
+    ...renderBuckets(
+      "evo.report.section.operationTypeBreakdown",
+      auditSummary.operationTypeBreakdown,
+      t,
+      (key) => formatOperationTypeLabel(key, t),
+    ),
+    ...renderBuckets(
+      "evo.report.section.blockedReasonBreakdown",
+      auditSummary.blockedReasonBreakdown,
+      t,
+      (key) => `${formatBlockedReasonLabel(key, t)} (${key})`,
+    ),
+    `## ${t("evo.report.section.recentPreflightBlocked")}`,
     ...(recentBlocked.length > 0
-      ? recentBlocked.flatMap((entry) => renderAuditEntry(entry))
-      : ["- none", ""]),
-    `## Recent Terminal Audit Entries`,
+      ? recentBlocked.flatMap((entry) => renderAuditEntry(entry, t))
+      : [`- ${t("evo.historySheet.metrics.noData")}`, ""]),
+    `## ${t("evo.report.section.recentTerminalAudit")}`,
     ...(recentTerminal.length > 0
-      ? recentTerminal.flatMap((entry) => renderAuditEntry(entry))
-      : ["- none", ""]),
-    `## Residual Note`,
-    `- This report is a point-in-time operator export, not a persistent dashboard.`,
-    `- If blocked reasons trend upward, continue investigating E5-S6 conflict/override residuals.`,
+      ? recentTerminal.flatMap((entry) => renderAuditEntry(entry, t))
+      : [`- ${t("evo.historySheet.metrics.noData")}`, ""]),
+    `## ${t("evo.report.section.residualNote")}`,
+    `- ${t("evo.report.residual.pointInTime")}`,
+    `- ${t("evo.report.residual.investigate")}`,
     "",
   ].join("\n");
 }

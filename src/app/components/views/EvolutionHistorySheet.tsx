@@ -8,70 +8,90 @@ import type {
   EvolutionOperationType,
   EvolutionTemplateKind,
 } from "../../contexts/OpenClawContext";
+import { useI18n } from "../../contexts/I18nContext";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Input } from "../ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "../ui/sheet";
 import { buildEvolutionOperatorHealth } from "./evolutionAuditReport";
+import {
+  renderEvolutionAuditMessage,
+  renderEvolutionHistorySummary,
+} from "./evolutionMessageI18n";
 
 type HistoryStatusFilter = "all" | "success" | "failed" | "cancelled" | "rolled_back";
 type HistoryTemplateFilter = "all" | EvolutionTemplateKind;
 type HistoryOperationFilter = "all" | EvolutionOperationType;
 
-function formatRelativeTime(createdAtMs: number) {
+function formatRelativeTime(createdAtMs: number, t: (key: string, ...args: (string | number)[]) => string) {
   const diffMs = Date.now() - createdAtMs;
   const diffMinutes = Math.floor(diffMs / 60000);
-  if (diffMinutes < 1) return "just now";
-  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffMinutes < 1) return t("evo.time.just_now");
+  if (diffMinutes < 60) return t("evo.time.min_ago", diffMinutes);
   const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours} hrs ago`;
+  if (diffHours < 24) return t("evo.time.hr_ago", diffHours);
   const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} days ago`;
+  return t("evo.time.day_ago", diffDays);
 }
 
 function formatAbsoluteTime(createdAtMs: number) {
   return new Date(createdAtMs).toLocaleString();
 }
 
-function formatTemplateLabel(template: EvolutionTemplateKind) {
+function formatTemplateLabel(template: EvolutionTemplateKind, t: (key: string, ...args: (string | number)[]) => string) {
   switch (template) {
     case "aggressive":
-      return "激进型重构";
+      return t("evo.template.aggressive.title");
     case "custom_template":
-      return "自定义模板";
+      return t("evo.template.custom.title");
     case "knowledge_injection":
-      return "知识注入";
+      return t("evo.template.knowledge.title");
     case "conservative":
     default:
-      return "保守型修剪";
+      return t("evo.template.conservative.title");
   }
 }
 
-function formatOperationTypeLabel(operationType: EvolutionOperationType) {
+function formatOperationTypeLabel(operationType: EvolutionOperationType, t: (key: string, ...args: (string | number)[]) => string) {
   switch (operationType) {
     case "custom_transform":
-      return "自定义模板";
+      return t("evo.historySheet.operation.custom");
     case "inject_knowledge":
-      return "知识注入";
+      return t("evo.historySheet.operation.inject");
     case "restore_snapshot":
-      return "回滚恢复";
+      return t("evo.historySheet.operation.restore");
     case "optimize":
     default:
-      return "结构优化";
+      return t("evo.historySheet.operation.optimize");
   }
 }
 
-function formatStatusLabel(status: EvolutionHistoryEntry["status"]) {
+function formatStatusLabel(status: EvolutionHistoryEntry["status"], t: (key: string, ...args: (string | number)[]) => string) {
   switch (status) {
     case "rolled_back":
-      return "已回滚";
+      return t("evo.historySheet.status.rolled_back");
     case "failed":
-      return "失败";
+      return t("evo.historySheet.status.failed");
     case "cancelled":
-      return "已取消";
+      return t("evo.historySheet.status.cancelled");
     case "success":
     default:
-      return "成功";
+      return t("evo.historySheet.status.success");
+  }
+}
+
+function formatTemplateBreakdownLabel(template: string, t: (key: string, ...args: (string | number)[]) => string) {
+  switch (template) {
+    case "aggressive":
+      return t("evo.historySheet.template.aggressive");
+    case "knowledge_injection":
+      return t("evo.historySheet.template.knowledge");
+    case "custom_template":
+      return t("evo.historySheet.template.custom");
+    case "conservative":
+      return t("evo.historySheet.template.conservative");
+    default:
+      return template;
   }
 }
 
@@ -88,20 +108,20 @@ function statusTone(status: EvolutionHistoryEntry["status"]) {
   }
 }
 
-function formatAuditEntryLabel(entry: EvolutionAuditEntry) {
+function formatAuditEntryLabel(entry: EvolutionAuditEntry, t: (key: string, ...args: (string | number)[]) => string) {
   if (entry.preflightBlocked) {
-    return "预检阻断";
+    return t("evo.historySheet.stats.preflightBlocked");
   }
   switch (entry.status) {
     case "rolled_back":
-      return "已回滚";
+      return t("evo.historySheet.status.rolled_back");
     case "failed":
-      return "失败";
+      return t("evo.historySheet.status.failed");
     case "cancelled":
-      return "已取消";
+      return t("evo.historySheet.status.cancelled");
     case "success":
     default:
-      return "成功";
+      return t("evo.historySheet.status.success");
   }
 }
 
@@ -121,36 +141,36 @@ function auditEntryTone(entry: EvolutionAuditEntry) {
   }
 }
 
-function formatBlockedReasonLabel(code?: string | null) {
+function formatBlockedReasonLabel(code: string | null | undefined, t: (key: string, ...args: (string | number)[]) => string) {
   switch (code) {
     case "EVOLUTION_UNSAFE_APPLY_BLOCKED":
-      return "Unsafe Apply Blocked";
+      return t("evo.reason.unsafeApplyBlocked");
     case "EVOLUTION_HIGH_RISK_CONFIRMATION_REQUIRED":
-      return "Confirmation Required";
+      return t("evo.reason.confirmationRequired");
     case "EVOLUTION_ACTIVE_CONFLICT":
     case "EVOLUTION_RUNTIME_AGENT_CONFLICT":
-      return "Active Agent Conflict";
+      return t("evo.reason.activeAgentConflict");
     case "EVOLUTION_RUNTIME_SOURCE_DOCUMENT_CONFLICT":
-      return "Source Document Conflict";
+      return t("evo.reason.sourceDocumentConflict");
     case "EVOLUTION_RUNTIME_SOURCE_REF_CONFLICT":
-      return "Source Ref Runtime Conflict";
+      return t("evo.reason.sourceRefRuntimeConflict");
     case "EVOLUTION_ALREADY_APPLIED":
-      return "Already Applied";
+      return t("evo.reason.alreadyApplied");
     case "EVOLUTION_SOURCE_REF_CONFLICT":
-      return "Source Ref Conflict";
+      return t("evo.reason.sourceRefConflict");
     case "EVOLUTION_PREVIEW_STALE":
-      return "Preview Stale";
+      return t("evo.reason.previewStale");
     default:
-      return code ?? "—";
+      return code ?? t("evo.reason.none");
   }
 }
 
-function formatOverrideReasonLabel(code?: string | null) {
+function formatOverrideReasonLabel(code: string | null | undefined, t: (key: string, ...args: (string | number)[]) => string) {
   switch (code) {
     case "EVOLUTION_HIGH_RISK_CONFIRMATION_OVERRIDE":
-      return "High Risk Confirmation Override";
+      return t("evo.override.highRiskConfirmation");
     default:
-      return code ?? "—";
+      return code ?? t("evo.reason.none");
   }
 }
 
@@ -179,6 +199,7 @@ export function EvolutionHistorySheet({
   onQuickExportReport,
   onRollback,
 }: EvolutionHistorySheetProps) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<HistoryStatusFilter>("all");
   const [templateFilter, setTemplateFilter] = useState<HistoryTemplateFilter>("all");
@@ -237,8 +258,8 @@ export function EvolutionHistorySheet({
     ? Math.round((auditSummary.successCount / auditSummary.totalOperations) * 100)
     : null;
   const operatorHealth = useMemo(
-    () => (auditSummary ? buildEvolutionOperatorHealth(auditSummary) : null),
-    [auditSummary],
+    () => (auditSummary ? buildEvolutionOperatorHealth(auditSummary, t) : null),
+    [auditSummary, t],
   );
   const operatorHealthTone =
     operatorHealth?.statusTone === "emerald"
@@ -260,10 +281,10 @@ export function EvolutionHistorySheet({
             <div>
               <SheetTitle className="flex items-center gap-2 text-base">
                 <History className="h-4 w-4 text-sky-500" />
-                Evolution 历史与审计
+                {t("evo.historySheet.title")}
               </SheetTitle>
               <SheetDescription>
-                查看完整历史、筛选记录，并核对最小 operator audit / metrics。
+                {t("evo.historySheet.desc")}
               </SheetDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -273,7 +294,7 @@ export function EvolutionHistorySheet({
                   className="h-9 border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-300"
                   onClick={() => void onQuickExportReport()}
                 >
-                  快速导出
+                  {t("evo.historySheet.export.quick")}
                 </Button>
               ) : null}
               {onExportReport ? (
@@ -282,7 +303,7 @@ export function EvolutionHistorySheet({
                   className="h-9 border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-300"
                   onClick={() => void onExportReport()}
                 >
-                  导出报告
+                  {t("evo.historySheet.export.full")}
                 </Button>
               ) : null}
             </div>
@@ -295,12 +316,12 @@ export function EvolutionHistorySheet({
               <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3.5 dark:border-slate-800 dark:bg-slate-900/70">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                   <Filter className="h-3.5 w-3.5 text-sky-500" />
-                  Filters
+                  {t("evo.historySheet.filters")}
                 </div>
                 <Input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="搜索节点、摘要、快照或标签"
+                  placeholder={t("evo.historySheet.search.placeholder")}
                   className="h-9 border-slate-200 bg-white text-sm dark:border-slate-700 dark:bg-slate-950/70"
                 />
                 <div className="grid grid-cols-3 gap-2">
@@ -309,33 +330,33 @@ export function EvolutionHistorySheet({
                     onChange={(event) => setStatusFilter(event.target.value as HistoryStatusFilter)}
                     className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-200"
                   >
-                    <option value="all">全部状态</option>
-                    <option value="success">成功</option>
-                    <option value="failed">失败</option>
-                    <option value="cancelled">已取消</option>
-                    <option value="rolled_back">已回滚</option>
+                    <option value="all">{t("evo.historySheet.status.all")}</option>
+                    <option value="success">{t("evo.historySheet.status.success")}</option>
+                    <option value="failed">{t("evo.historySheet.status.failed")}</option>
+                    <option value="cancelled">{t("evo.historySheet.status.cancelled")}</option>
+                    <option value="rolled_back">{t("evo.historySheet.status.rolled_back")}</option>
                   </select>
                   <select
                     value={templateFilter}
                     onChange={(event) => setTemplateFilter(event.target.value as HistoryTemplateFilter)}
                     className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-200"
                   >
-                    <option value="all">全部模板</option>
-                    <option value="conservative">保守型</option>
-                    <option value="aggressive">激进型</option>
-                    <option value="knowledge_injection">知识注入</option>
-                    <option value="custom_template">自定义模板</option>
+                    <option value="all">{t("evo.historySheet.template.all")}</option>
+                    <option value="conservative">{t("evo.historySheet.template.conservative")}</option>
+                    <option value="aggressive">{t("evo.historySheet.template.aggressive")}</option>
+                    <option value="knowledge_injection">{t("evo.historySheet.template.knowledge")}</option>
+                    <option value="custom_template">{t("evo.historySheet.template.custom")}</option>
                   </select>
                   <select
                     value={operationFilter}
                     onChange={(event) => setOperationFilter(event.target.value as HistoryOperationFilter)}
                     className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-200"
                   >
-                    <option value="all">全部类型</option>
-                    <option value="optimize">结构优化</option>
-                    <option value="inject_knowledge">知识注入</option>
-                    <option value="custom_transform">自定义模板</option>
-                    <option value="restore_snapshot">回滚恢复</option>
+                    <option value="all">{t("evo.historySheet.operation.all")}</option>
+                    <option value="optimize">{t("evo.historySheet.operation.optimize")}</option>
+                    <option value="inject_knowledge">{t("evo.historySheet.operation.inject")}</option>
+                    <option value="custom_transform">{t("evo.historySheet.operation.custom")}</option>
+                    <option value="restore_snapshot">{t("evo.historySheet.operation.restore")}</option>
                   </select>
                 </div>
               </div>
@@ -343,19 +364,19 @@ export function EvolutionHistorySheet({
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
                   <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                    Total Ops
+                    {t("evo.historySheet.stats.total")}
                   </div>
                   <div className="text-lg font-semibold">{auditSummary?.totalOperations ?? 0}</div>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
                   <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                    Success Rate
+                    {t("evo.historySheet.stats.successRate")}
                   </div>
                   <div className="text-lg font-semibold">{successRate ?? 0}%</div>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
                   <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                    Avg Duration
+                    {t("evo.historySheet.stats.avgDuration")}
                   </div>
                   <div className="text-lg font-semibold">
                     {auditSummary?.averageDurationMs != null ? `${auditSummary.averageDurationMs} ms` : "--"}
@@ -363,19 +384,19 @@ export function EvolutionHistorySheet({
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
                   <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                    Audit Feed
+                    {t("evo.historySheet.stats.auditFeed")}
                   </div>
-                  <div className="text-sm font-medium">{isAuditLoading ? "loading..." : `${auditSummary?.recentEntries.length ?? 0} recent`}</div>
+                  <div className="text-sm font-medium">{isAuditLoading ? t("evo.historySheet.loading") : t("evo.historySheet.stats.recentCount", auditSummary?.recentEntries.length ?? 0)}</div>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
                   <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                    Preflight Blocked
+                    {t("evo.historySheet.stats.preflightBlocked")}
                   </div>
                   <div className="text-sm font-medium">{auditSummary?.preflightBlockedCount ?? 0}</div>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
                   <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                    Overrides
+                    {t("evo.historySheet.stats.overrides")}
                   </div>
                   <div className="text-sm font-medium">{auditSummary?.overrideCount ?? 0}</div>
                 </div>
@@ -385,7 +406,7 @@ export function EvolutionHistorySheet({
             <div className="min-h-0 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
               {filteredEntries.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
-                  当前筛选条件下没有历史记录。
+                  {t("evo.historySheet.empty.filtered")}
                 </div>
               ) : null}
               {filteredEntries.map((entry) => {
@@ -404,20 +425,20 @@ export function EvolutionHistorySheet({
                   >
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{entry.nodeLabel}</span>
-                      <Badge className={statusTone(entry.status)}>{formatStatusLabel(entry.status)}</Badge>
+                      <Badge className={statusTone(entry.status)}>{formatStatusLabel(entry.status, t)}</Badge>
                     </div>
-                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{entry.summary}</div>
+                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{renderEvolutionHistorySummary(entry, t)}</div>
                     <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-                      <span>{formatTemplateLabel(entry.template)}</span>
+                      <span>{formatTemplateLabel(entry.template, t)}</span>
                       <span>·</span>
-                      <span>{formatOperationTypeLabel(entry.operationType)}</span>
+                      <span>{formatOperationTypeLabel(entry.operationType, t)}</span>
                       <span>·</span>
-                      <span>{formatRelativeTime(entry.createdAtMs)}</span>
+                      <span>{formatRelativeTime(entry.createdAtMs, t)}</span>
                     </div>
                     {canRollback ? (
                       <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 dark:text-sky-400">
                         <Undo2 className="h-3 w-3" />
-                        可从详情中回滚
+                        {t("evo.historySheet.rollback.available")}
                       </div>
                     ) : null}
                   </button>
@@ -436,52 +457,52 @@ export function EvolutionHistorySheet({
                         <Activity className="h-3.5 w-3.5 text-sky-500" />
                         Selected Operation
                       </div>
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50">{selectedEntry.summary}</h3>
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50">{renderEvolutionHistorySummary(selectedEntry, t)}</h3>
                     </div>
-                    <Badge className={statusTone(selectedEntry.status)}>{formatStatusLabel(selectedEntry.status)}</Badge>
+                    <Badge className={statusTone(selectedEntry.status)}>{formatStatusLabel(selectedEntry.status, t)}</Badge>
                   </div>
 
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">节点</div>
+                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.detail.node")}</div>
                       <div className="text-sm font-medium">{selectedEntry.nodeLabel}</div>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">模板</div>
-                      <div className="text-sm font-medium">{formatTemplateLabel(selectedEntry.template)}</div>
+                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.detail.template")}</div>
+                      <div className="text-sm font-medium">{formatTemplateLabel(selectedEntry.template, t)}</div>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">操作类型</div>
-                      <div className="text-sm font-medium">{formatOperationTypeLabel(selectedEntry.operationType)}</div>
+                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.detail.operationType")}</div>
+                      <div className="text-sm font-medium">{formatOperationTypeLabel(selectedEntry.operationType, t)}</div>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">源文档</div>
+                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.detail.sourceDocument")}</div>
                       <div className="font-mono text-sm">{selectedEntry.sourceDocument}</div>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">快照</div>
+                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.detail.snapshot")}</div>
                       <div className="font-mono text-sm">{selectedEntry.snapshotId}</div>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">字节变化</div>
+                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.detail.bytes")}</div>
                       <div className="text-sm font-medium">{selectedEntry.bytesBefore} → {selectedEntry.bytesAfter}</div>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">时间</div>
-                      <div className="text-sm font-medium">{formatRelativeTime(selectedEntry.createdAtMs)}</div>
+                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.detail.time")}</div>
+                      <div className="text-sm font-medium">{formatRelativeTime(selectedEntry.createdAtMs, t)}</div>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">耗时</div>
+                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.detail.duration")}</div>
                       <div className="text-sm font-medium">
                         {selectedEntry.durationMs != null ? `${selectedEntry.durationMs} ms` : "--"}
                       </div>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">来源引用</div>
-                      <div className="text-sm font-medium">{selectedEntry.sourceRef ?? "—"}</div>
+                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.detail.sourceRef")}</div>
+                      <div className="text-sm font-medium">{selectedEntry.sourceRef ?? t("evo.reason.none")}</div>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Source Refs</div>
+                      <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.detail.sourceRefs")}</div>
                       <div className="text-sm font-medium">
                         {selectedEntry.sourceRefs.length > 0
                           ? selectedEntry.sourceRefs.join(", ")
@@ -491,10 +512,10 @@ export function EvolutionHistorySheet({
                   </div>
 
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                    <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                      <Tags className="h-3.5 w-3.5 text-sky-500" />
-                      Capability Tags
-                    </div>
+                      <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                        <Tags className="h-3.5 w-3.5 text-sky-500" />
+                        {t("evo.historySheet.detail.tags")}
+                      </div>
                     <div className="flex flex-wrap gap-2">
                       {selectedEntry.capabilityTags.length > 0 ? (
                         selectedEntry.capabilityTags.map((tag) => (
@@ -507,14 +528,14 @@ export function EvolutionHistorySheet({
                           </Badge>
                         ))
                       ) : (
-                        <span className="text-sm text-slate-500 dark:text-slate-400">未记录 capability tags</span>
+                        <span className="text-sm text-slate-500 dark:text-slate-400">{t("evo.historySheet.metrics.noData")}</span>
                       )}
                     </div>
                   </div>
 
                   {selectedEntry.operationKind === "rollback" ? (
                     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
-                      该记录表示一次快照恢复操作，目标快照为 <span className="font-mono">{selectedEntry.snapshotId}</span>。
+                      {t("evo.historySheet.detail.rollbackNote", selectedEntry.snapshotId)}
                     </div>
                   ) : null}
 
@@ -526,7 +547,7 @@ export function EvolutionHistorySheet({
                         onClick={() => void onRollback(selectedEntry)}
                       >
                         <Undo2 className="mr-2 h-4 w-4" />
-                        从此记录回滚
+                        {t("evo.historySheet.detail.rollbackAction")}
                       </Button>
                     </div>
                   ) : null}
@@ -536,58 +557,58 @@ export function EvolutionHistorySheet({
                   <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
                     <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
                       <ShieldCheck className="h-3.5 w-3.5 text-sky-500" />
-                      Audit Trail
+                      {t("evo.historySheet.audit.title")}
                     </div>
                     {selectedAuditEntry ? (
                       <div className="space-y-3 text-sm">
                         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                          {selectedAuditEntry.message}
+                          {renderEvolutionAuditMessage(selectedAuditEntry, t)}
                         </div>
                         <div className="grid gap-3 md:grid-cols-2">
                           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Risk</div>
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.audit.risk")}</div>
                             <div className="font-medium">{selectedAuditEntry.riskLevel}</div>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Duration</div>
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.audit.duration")}</div>
                             <div className="font-medium">{selectedAuditEntry.durationMs} ms</div>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Started</div>
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.audit.started")}</div>
                             <div className="font-medium">{formatAbsoluteTime(selectedAuditEntry.startedAtMs)}</div>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Ended</div>
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.audit.ended")}</div>
                             <div className="font-medium">{formatAbsoluteTime(selectedAuditEntry.endedAtMs)}</div>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 md:col-span-2 dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Source Refs</div>
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.audit.sourceRefs")}</div>
                             <div className="font-medium break-all">
                               {selectedAuditEntry.sourceRefs.length > 0
                                 ? selectedAuditEntry.sourceRefs.join(", ")
-                                : selectedAuditEntry.sourceRef ?? "—"}
+                                : selectedAuditEntry.sourceRef ?? t("evo.reason.none")}
                             </div>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Preflight</div>
-                            <div className="font-medium">{selectedAuditEntry.preflightBlocked ? "blocked" : "passed"}</div>
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.audit.preflight")}</div>
+                            <div className="font-medium">{selectedAuditEntry.preflightBlocked ? t("evo.historySheet.audit.preflight.blocked") : t("evo.historySheet.audit.preflight.passed")}</div>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Blocked Reason</div>
-                            <div className="font-medium break-all">{formatBlockedReasonLabel(selectedAuditEntry.blockedReasonCode)}</div>
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.audit.blockedReason")}</div>
+                            <div className="font-medium break-all">{formatBlockedReasonLabel(selectedAuditEntry.blockedReasonCode, t)}</div>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Override</div>
-                            <div className="font-medium">{selectedAuditEntry.overrideApplied ? "applied" : "no"}</div>
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.audit.override")}</div>
+                            <div className="font-medium">{selectedAuditEntry.overrideApplied ? t("evo.historySheet.audit.override.applied") : t("evo.historySheet.audit.override.no")}</div>
                           </div>
                           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
-                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Override Reason</div>
-                            <div className="font-medium break-all">{formatOverrideReasonLabel(selectedAuditEntry.overrideReasonCode)}</div>
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">{t("evo.historySheet.audit.overrideReason")}</div>
+                            <div className="font-medium break-all">{formatOverrideReasonLabel(selectedAuditEntry.overrideReasonCode, t)}</div>
                           </div>
                         </div>
                         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/60">
                           <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-                            Capability Tags
+                            {t("evo.historySheet.audit.capabilityTags")}
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {selectedAuditEntry.capabilityTags.length > 0 ? (
@@ -601,14 +622,14 @@ export function EvolutionHistorySheet({
                                 </Badge>
                               ))
                             ) : (
-                              <span className="text-sm text-slate-500 dark:text-slate-400">未记录 capability tags</span>
+                              <span className="text-sm text-slate-500 dark:text-slate-400">{t("evo.historySheet.metrics.noData")}</span>
                             )}
                           </div>
                         </div>
                       </div>
                     ) : (
                       <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-400">
-                        当前记录尚未命中独立 audit entry。
+                        {t("evo.historySheet.audit.none")}
                       </div>
                     )}
                   </div>
@@ -616,57 +637,57 @@ export function EvolutionHistorySheet({
                   <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
                     <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
                       <Clock3 className="h-3.5 w-3.5 text-sky-500" />
-                      Metrics Breakdown
+                      {t("evo.historySheet.metrics.title")}
                     </div>
                     <div className="space-y-4">
                       <div className={`rounded-xl border px-4 py-3 ${operatorHealthTone}`}>
                         <div className="mb-2 flex items-center justify-between gap-3">
                           <div>
                             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-70">
-                              Operator Dashboard
+                              {t("evo.historySheet.metrics.dashboard")}
                             </div>
                             <div className="text-sm font-semibold">
-                              {operatorHealth?.statusLabel ?? "Cold Start"}
+                              {operatorHealth?.statusLabel ?? t("evo.historySheet.metrics.coldStart")}
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-[11px] uppercase tracking-[0.14em] opacity-70">Health Score</div>
+                            <div className="text-[11px] uppercase tracking-[0.14em] opacity-70">{t("evo.historySheet.metrics.healthScore")}</div>
                             <div className="text-lg font-semibold">{operatorHealth?.score ?? 100}</div>
                           </div>
                         </div>
                         <div className="space-y-1 text-xs leading-5">
-                          {(operatorHealth?.recommendations ?? ["尚无数据。"]).map((item) => (
+                          {(operatorHealth?.recommendations ?? [t("evo.historySheet.metrics.noData")]).map((item) => (
                             <div key={item}>- {item}</div>
                           ))}
                         </div>
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
                         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-                          Trend Snapshot
+                          {t("evo.historySheet.metrics.trend")}
                         </div>
                         <div className="grid gap-2 md:grid-cols-2">
                           <div className="flex items-center justify-between">
-                            <span>24h Ops</span>
+                            <span>{t("evo.historySheet.metrics.24hOps")}</span>
                             <span className="font-semibold">{auditSummary?.last24hOperations ?? 0}</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span>24h Failures</span>
+                            <span>{t("evo.historySheet.metrics.24hFailures")}</span>
                             <span className="font-semibold">{auditSummary?.last24hFailures ?? 0}</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span>24h Blocked</span>
+                            <span>{t("evo.historySheet.metrics.24hBlocked")}</span>
                             <span className="font-semibold">{auditSummary?.last24hBlocked ?? 0}</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span>7d Ops</span>
+                            <span>{t("evo.historySheet.metrics.7dOps")}</span>
                             <span className="font-semibold">{auditSummary?.last7dOperations ?? 0}</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span>7d Failures</span>
+                            <span>{t("evo.historySheet.metrics.7dFailures")}</span>
                             <span className="font-semibold">{auditSummary?.last7dFailures ?? 0}</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span>7d Overrides</span>
+                            <span>{t("evo.historySheet.metrics.7dOverrides")}</span>
                             <span className="font-semibold">{auditSummary?.last7dOverrides ?? 0}</span>
                           </div>
                         </div>
@@ -675,78 +696,78 @@ export function EvolutionHistorySheet({
                             <Badge key={bucket.key} variant="outline" className="border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                               {bucket.key}: {bucket.count}
                             </Badge>
-                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">暂无数据</span>}
+                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">{t("evo.historySheet.metrics.noData")}</span>}
                         </div>
                       </div>
                       <div>
                         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-                          Status
+                          {t("evo.historySheet.metrics.status")}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {auditSummary?.statusBreakdown.length ? auditSummary.statusBreakdown.map((bucket) => (
                             <Badge key={bucket.key} variant="outline" className="border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
-                              {bucket.key}: {bucket.count}
+                              {formatStatusLabel(bucket.key as EvolutionHistoryEntry["status"], t)}: {bucket.count}
                             </Badge>
-                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">暂无数据</span>}
+                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">{t("evo.historySheet.metrics.noData")}</span>}
                         </div>
                       </div>
                       <div>
                         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-                          By Template
+                          {t("evo.historySheet.metrics.byTemplate")}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {auditSummary?.templateBreakdown.length ? auditSummary.templateBreakdown.map((bucket) => (
                             <Badge key={bucket.key} variant="outline" className="border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
-                              {bucket.key}: {bucket.count}
+                              {formatTemplateBreakdownLabel(bucket.key, t)}: {bucket.count}
                             </Badge>
-                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">暂无数据</span>}
+                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">{t("evo.historySheet.metrics.noData")}</span>}
                         </div>
                       </div>
                       <div>
                         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-                          By Operation Type
+                          {t("evo.historySheet.metrics.byOperation")}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {auditSummary?.operationTypeBreakdown.length ? auditSummary.operationTypeBreakdown.map((bucket) => (
                             <Badge key={bucket.key} variant="outline" className="border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
-                              {bucket.key}: {bucket.count}
+                              {formatOperationTypeLabel(bucket.key as EvolutionOperationType, t)}: {bucket.count}
                             </Badge>
-                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">暂无数据</span>}
+                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">{t("evo.historySheet.metrics.noData")}</span>}
                         </div>
                       </div>
                       <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-950/60">
                         <div className="flex items-center justify-between">
-                          <span>High Risk Ops</span>
+                          <span>{t("evo.historySheet.metrics.highRisk")}</span>
                           <span className="font-semibold">{auditSummary?.highRiskCount ?? 0}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span>Unsafe Blocked</span>
+                          <span>{t("evo.historySheet.metrics.unsafeBlocked")}</span>
                           <span className="font-semibold">{auditSummary?.unsafeBlockedCount ?? 0}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span>Preflight Blocked</span>
+                          <span>{t("evo.historySheet.stats.preflightBlocked")}</span>
                           <span className="font-semibold">{auditSummary?.preflightBlockedCount ?? 0}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span>Overrides</span>
+                          <span>{t("evo.historySheet.stats.overrides")}</span>
                           <span className="font-semibold">{auditSummary?.overrideCount ?? 0}</span>
                         </div>
                       </div>
                       <div>
                         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-                          Blocked Reasons
+                          {t("evo.historySheet.metrics.blockedReasons")}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {auditSummary?.blockedReasonBreakdown.length ? auditSummary.blockedReasonBreakdown.map((bucket) => (
                             <Badge key={bucket.key} variant="outline" className="border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
-                              {bucket.key}: {bucket.count}
+                              {formatBlockedReasonLabel(bucket.key, t)}: {bucket.count}
                             </Badge>
-                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">暂无数据</span>}
+                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">{t("evo.historySheet.metrics.noData")}</span>}
                         </div>
                       </div>
                       <div>
                         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-                          Recent Audit Feed
+                          {t("evo.historySheet.metrics.recentFeed")}
                         </div>
                         <div className="space-y-2">
                           {auditSummary?.recentEntries.length ? auditSummary.recentEntries.slice(0, 5).map((entry) => (
@@ -755,21 +776,21 @@ export function EvolutionHistorySheet({
                               className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/60"
                             >
                               <div className="mb-1 flex items-center justify-between gap-2">
-                                <Badge className={auditEntryTone(entry)}>{formatAuditEntryLabel(entry)}</Badge>
+                                <Badge className={auditEntryTone(entry)}>{formatAuditEntryLabel(entry, t)}</Badge>
                                 <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                                  {formatRelativeTime(entry.endedAtMs)}
+                                  {formatRelativeTime(entry.endedAtMs, t)}
                                 </span>
                               </div>
-                              <div className="text-xs text-slate-700 dark:text-slate-200">{entry.message}</div>
+                              <div className="text-xs text-slate-700 dark:text-slate-200">{renderEvolutionAuditMessage(entry, t)}</div>
                               <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400 break-all">
                                 {entry.preflightBlocked
-                                  ? formatBlockedReasonLabel(entry.blockedReasonCode)
+                                  ? formatBlockedReasonLabel(entry.blockedReasonCode, t)
                                   : entry.overrideApplied
-                                    ? formatOverrideReasonLabel(entry.overrideReasonCode)
-                                    : formatOperationTypeLabel(entry.operationType)}
+                                    ? formatOverrideReasonLabel(entry.overrideReasonCode, t)
+                                    : formatOperationTypeLabel(entry.operationType, t)}
                               </div>
                             </div>
-                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">暂无数据</span>}
+                          )) : <span className="text-sm text-slate-500 dark:text-slate-400">{t("evo.historySheet.metrics.noData")}</span>}
                         </div>
                       </div>
                     </div>
@@ -780,9 +801,9 @@ export function EvolutionHistorySheet({
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
                 <div className="mb-2 flex items-center gap-2 font-medium text-slate-700 dark:text-slate-200">
                   <Search className="h-4 w-4 text-sky-500" />
-                  选择一条历史记录以查看详情
+                  {t("evo.historySheet.detail.searchTitle")}
                 </div>
-                当前筛选结果为空，或尚未选择具体记录。
+                {t("evo.historySheet.detail.searchDesc")}
               </div>
             )}
           </div>
