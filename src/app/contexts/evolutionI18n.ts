@@ -64,6 +64,8 @@ const EVOLUTION_RUNTIME_RAW_DICT: Record<string, string[]> = {
   "evo.state.snap": ["Snapshot created:", "已创建快照:", "已創建快照:"],
   "evo.hist.title": ["Recent History", "近期历史", "近期歷史"],
   "evo.hist.view": ["View All", "查看全部", "查看全部"],
+  "evo.hist.expand": ["Show {0} More", "展开另外 {0} 条", "展開另外 {0} 條"],
+  "evo.hist.collapse": ["Collapse History", "收起历史", "收起歷史"],
   "evo.hist.rollback": ["Rollback", "回滚", "回滾"],
   "evo.hist.empty": ["No evolution history yet.", "暂无进化历史。", "暫無進化歷史。"],
   "evo.hist.loading": ["Loading history...", "正在加载历史...", "正在載入歷史..."],

@@ -176,6 +176,7 @@ function mapRuntimePhaseToStep(phase: EvolutionOperationStatusSnapshot["phase"])
 export function EvolutionView() {
   const { lang, t } = useI18n();
   const { nodes, agents, isConnected } = useOpenClaw();
+  const RECENT_HISTORY_COLLAPSED_COUNT = 3;
   const evolutionNodes = isConnected && agents.length > 0
     ? agents.map((agent) => ({
         id: agent.id,
@@ -221,6 +222,7 @@ export function EvolutionView() {
   );
   const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
   const [historySheetSelectionId, setHistorySheetSelectionId] = useState<string | null>(null);
+  const [isRecentHistoryExpanded, setIsRecentHistoryExpanded] = useState(false);
   const [auditSummary, setAuditSummary] = useState<EvolutionAuditSummary | null>(null);
   const [isAuditLoading, setIsAuditLoading] = useState(false);
   const terminalToastKeyRef = useRef<string | null>(null);
@@ -435,6 +437,10 @@ export function EvolutionView() {
   }, [currentNode, evolutionNodes]);
 
   useEffect(() => {
+    setIsRecentHistoryExpanded(false);
+  }, [activeNode]);
+
+  useEffect(() => {
     if (knowledgeEntryMode !== "manual" || !knowledgePackText.trim()) {
       return;
     }
@@ -600,6 +606,17 @@ export function EvolutionView() {
       regular: changes.filter((change) => change.group !== "high-risk"),
     };
   }, [previewResult]);
+  const visibleHistoryEntries = useMemo(
+    () =>
+      isRecentHistoryExpanded
+        ? historyEntries
+        : historyEntries.slice(0, RECENT_HISTORY_COLLAPSED_COUNT),
+    [historyEntries, isRecentHistoryExpanded, RECENT_HISTORY_COLLAPSED_COUNT],
+  );
+  const hiddenHistoryCount = Math.max(
+    historyEntries.length - RECENT_HISTORY_COLLAPSED_COUNT,
+    0,
+  );
 
   const resolvePreviewTarget = async () => {
     if (!isConnected || agents.length === 0) {
@@ -1663,7 +1680,7 @@ export function EvolutionView() {
             {!isHistoryLoading && historyEntries.length === 0 ? (
               <div className="text-xs text-slate-500 dark:text-slate-500">{t("evo.hist.empty")}</div>
             ) : null}
-            {historyEntries.map((entry) => {
+            {visibleHistoryEntries.map((entry) => {
               const statusLabel = formatHistoryStatus(entry, t);
               const canRollback = entry.operationKind === "execute" && entry.status === "success";
               return (
@@ -1703,6 +1720,25 @@ export function EvolutionView() {
               </div>
             );
             })}
+            {!isHistoryLoading && historyEntries.length > RECENT_HISTORY_COLLAPSED_COUNT ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="mt-1 h-auto w-full justify-between rounded-lg border border-dashed border-slate-200 px-3 py-2 text-[11px] font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-200"
+                onClick={() => setIsRecentHistoryExpanded((current) => !current)}
+              >
+                <span>
+                  {isRecentHistoryExpanded
+                    ? t("evo.hist.collapse")
+                    : t("evo.hist.expand", hiddenHistoryCount)}
+                </span>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${
+                    isRecentHistoryExpanded ? "rotate-180" : ""
+                  }`}
+                />
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
