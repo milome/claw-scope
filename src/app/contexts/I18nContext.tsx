@@ -1402,6 +1402,11 @@ const DICT: Record<string, string[]> = {
     "后续还可以继续在这里补充更多运行态 Agent 设置。",
     "後續還可以繼續在這裡補充更多執行態 Agent 設定。",
   ],
+  "config.agentSettings.partial": [
+    "Workspace/model/agentDir/default/bindings/groupChat/sandbox/tools/memorySearch writeback is enabled in this wave.",
+    "本 wave 已开放 workspace/model/agentDir/default/bindings/groupChat/sandbox/tools/memorySearch 写回。",
+    "本 wave 已開放 workspace/model/agentDir/default/bindings/groupChat/sandbox/tools/memorySearch 寫回。",
+  ],
   "config.agentSettings.loadFailed": [
     "Failed to load agent settings.",
     "加载 Agent 设置失败。",
@@ -1409,10 +1414,253 @@ const DICT: Record<string, string[]> = {
   ],
   "config.agentSettings.workspace": ["Workspace", "工作区", "工作區"],
   "config.agentSettings.model": ["Model", "模型", "模型"],
+  "config.agentSettings.agentDir": ["Agent Directory", "Agent 目录", "Agent 目錄"],
   "config.agentSettings.loading": ["Loading…", "加载中…", "載入中…"],
   "config.agentSettings.reload": ["Reload", "重新加载", "重新載入"],
   "config.agentSettings.save": ["Save", "保存", "儲存"],
   "config.agentSettings.unset": ["Unset", "未设置", "未設定"],
+  "config.agentSettings.workspacePlaceholder": [
+    "~/.openclaw/workspace-main",
+    "~/.openclaw/workspace-main",
+    "~/.openclaw/workspace-main",
+  ],
+  "config.agentSettings.modelPlaceholder": [
+    "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-sonnet-4-6",
+  ],
+  "config.agentSettings.agentDirPlaceholder": [
+    "~/.openclaw/agents/research",
+    "~/.openclaw/agents/research",
+    "~/.openclaw/agents/research",
+  ],
+  "config.agentSettings.defaultAgent": [
+    "Default Agent",
+    "默认 Agent",
+    "預設 Agent",
+  ],
+  "config.agentSettings.defaultAgentHint": [
+    "Selecting this agent as the default may require a config patch and gateway reload.",
+    "将该 Agent 设为默认可能需要 config patch，并触发 Gateway 重载。",
+    "將該 Agent 設為預設可能需要 config patch，並觸發 Gateway 重載。",
+  ],
+  "config.agentSettings.advancedPatchTitle": [
+    "Advanced JSON Patch Surface",
+    "高级 JSON Patch 面",
+    "高級 JSON Patch 面",
+  ],
+  "config.agentSettings.advancedPatchDesc": [
+    "Bindings are global. Sandbox and tools resolve from config defaults or agent overrides. Clearing an editor removes that branch.",
+    "bindings 是全局配置。sandbox 与 tools 会解析默认值或当前 agent 覆盖；清空编辑器会移除该分支。",
+    "bindings 是全域配置。sandbox 與 tools 會解析預設值或目前 agent 覆蓋；清空編輯器會移除該分支。",
+  ],
+  "config.agentSettings.bindings": [
+    "Bindings (Global)",
+    "Bindings（全局）",
+    "Bindings（全域）",
+  ],
+  "config.agentSettings.bindingsHint": [
+    "Inbound routing rules shared across the gateway.",
+    "整个 Gateway 共享的入站路由规则。",
+    "整個 Gateway 共用的入站路由規則。",
+  ],
+  "config.agentSettings.bindingsPlaceholder": [
+    "[\n  {\n    \"agentId\": \"research\",\n    \"match\": { \"channel\": \"telegram\" }\n  }\n]",
+    "[\n  {\n    \"agentId\": \"research\",\n    \"match\": { \"channel\": \"telegram\" }\n  }\n]",
+    "[\n  {\n    \"agentId\": \"research\",\n    \"match\": { \"channel\": \"telegram\" }\n  }\n]",
+  ],
+  "config.agentSettings.schemaTitle": [
+    "Schema",
+    "Schema",
+    "Schema",
+  ],
+  "config.agentSettings.schemaLoading": [
+    "Loading schema…",
+    "正在载入 schema…",
+    "正在載入 schema…",
+  ],
+  "config.agentSettings.schemaUnavailable": [
+    "Schema unavailable.",
+    "Schema 不可用。",
+    "Schema 不可用。",
+  ],
+  "config.agentSettings.schemaPath": [
+    "Path:",
+    "路径：",
+    "路徑：",
+  ],
+  "config.agentSettings.groupChat": [
+    "Group Chat",
+    "Group Chat",
+    "Group Chat",
+  ],
+  "config.agentSettings.groupChatHint": [
+    "Agent-level group chat coordination config. This stays as JSON until the upstream schema is stable.",
+    "Agent 级 group chat 协调配置；在上游 schema 稳定前保持 JSON 方式。",
+    "Agent 層級 group chat 協調配置；在上游 schema 穩定前保持 JSON 方式。",
+  ],
+  "config.agentSettings.groupChatPlaceholder": [
+    "{\n  \"enabled\": true,\n  \"mode\": \"managed\"\n}",
+    "{\n  \"enabled\": true,\n  \"mode\": \"managed\"\n}",
+    "{\n  \"enabled\": true,\n  \"mode\": \"managed\"\n}",
+  ],
+  "config.agentSettings.sandbox": ["Sandbox", "Sandbox", "Sandbox"],
+  "config.agentSettings.sandboxHint": [
+    "Agent-level sandbox branch. Falls back to agents.defaults.sandbox.",
+    "Agent 级 sandbox 分支；未配置时回退到 agents.defaults.sandbox。",
+    "Agent 層級 sandbox 分支；未配置時回退到 agents.defaults.sandbox。",
+  ],
+  "config.agentSettings.sandboxPlaceholder": [
+    "{\n  \"mode\": \"workspace-write\",\n  \"network\": \"deny\"\n}",
+    "{\n  \"mode\": \"workspace-write\",\n  \"network\": \"deny\"\n}",
+    "{\n  \"mode\": \"workspace-write\",\n  \"network\": \"deny\"\n}",
+  ],
+  "config.agentSettings.tools": ["Tools", "Tools", "Tools"],
+  "config.agentSettings.toolsHint": [
+    "Agent-level tools profile or allow/deny tree. This patches config, not TOOLS.md.",
+    "Agent 级 tools profile 或 allow/deny 树；这里修改的是 config，不是 TOOLS.md。",
+    "Agent 層級 tools profile 或 allow/deny 樹；這裡修改的是 config，不是 TOOLS.md。",
+  ],
+  "config.agentSettings.toolsPlaceholder": [
+    "{\n  \"profile\": \"safe\",\n  \"allow\": [\"memory_search\"]\n}",
+    "{\n  \"profile\": \"safe\",\n  \"allow\": [\"memory_search\"]\n}",
+    "{\n  \"profile\": \"safe\",\n  \"allow\": [\"memory_search\"]\n}",
+  ],
+  "config.agentSettings.memorySearchTitle": [
+    "Memory Search",
+    "Memory Search",
+    "Memory Search",
+  ],
+  "config.agentSettings.memorySearchDesc": [
+    "Configure retrieval behavior, providers, and hybrid ranking for this agent.",
+    "配置当前 Agent 的检索行为、provider 与 hybrid 排序策略。",
+    "配置目前 Agent 的檢索行為、provider 與 hybrid 排序策略。",
+  ],
+  "config.agentSettings.memorySearchEnabled": [
+    "Enable Memory Search",
+    "启用 Memory Search",
+    "啟用 Memory Search",
+  ],
+  "config.agentSettings.memorySearchEnabledHint": [
+    "Turns vector/semantic recall on or off for this agent.",
+    "控制当前 Agent 是否启用向量 / 语义召回。",
+    "控制目前 Agent 是否啟用向量 / 語義召回。",
+  ],
+  "config.agentSettings.memorySearchProvider": [
+    "Provider",
+    "Provider",
+    "Provider",
+  ],
+  "config.agentSettings.memorySearchProviderPlaceholder": [
+    "openai",
+    "openai",
+    "openai",
+  ],
+  "config.agentSettings.memorySearchModel": [
+    "Embedding Model",
+    "Embedding 模型",
+    "Embedding 模型",
+  ],
+  "config.agentSettings.memorySearchModelPlaceholder": [
+    "text-embedding-3-large",
+    "text-embedding-3-large",
+    "text-embedding-3-large",
+  ],
+  "config.agentSettings.memorySearchStorePath": [
+    "Store Path Template",
+    "存储路径模板",
+    "儲存路徑模板",
+  ],
+  "config.agentSettings.memorySearchStorePathPlaceholder": [
+    "~/.openclaw/memory/{agentId}.sqlite",
+    "~/.openclaw/memory/{agentId}.sqlite",
+    "~/.openclaw/memory/{agentId}.sqlite",
+  ],
+  "config.agentSettings.memorySearchSessionMemory": [
+    "Index Session Memory",
+    "索引 Session Memory",
+    "索引 Session Memory",
+  ],
+  "config.agentSettings.memorySearchSessionMemoryHint": [
+    "Maps to memorySearch.experimental.sessionMemory.",
+    "对应 memorySearch.experimental.sessionMemory。",
+    "對應 memorySearch.experimental.sessionMemory。",
+  ],
+  "config.agentSettings.memorySearchHybridEnabled": [
+    "Enable Hybrid Ranking",
+    "启用 Hybrid 排序",
+    "啟用 Hybrid 排序",
+  ],
+  "config.agentSettings.memorySearchHybridEnabledHint": [
+    "Maps to memorySearch.query.hybrid.enabled.",
+    "对应 memorySearch.query.hybrid.enabled。",
+    "對應 memorySearch.query.hybrid.enabled。",
+  ],
+  "config.agentSettings.memorySearchMmrEnabled": [
+    "Enable MMR Gate",
+    "启用 MMR 开关",
+    "啟用 MMR 開關",
+  ],
+  "config.agentSettings.memorySearchMmrEnabledHint": [
+    "Maps to memorySearch.query.mmr.enabled.",
+    "对应 memorySearch.query.mmr.enabled。",
+    "對應 memorySearch.query.mmr.enabled。",
+  ],
+  "config.agentSettings.memorySearchMmr": [
+    "MMR",
+    "MMR",
+    "MMR",
+  ],
+  "config.agentSettings.memorySearchMmrPlaceholder": [
+    "0.35",
+    "0.35",
+    "0.35",
+  ],
+  "config.agentSettings.memorySearchTemporalDecay": [
+    "Temporal Decay",
+    "时间衰减",
+    "時間衰減",
+  ],
+  "config.agentSettings.memorySearchTemporalDecayPlaceholder": [
+    "0.15",
+    "0.15",
+    "0.15",
+  ],
+  "config.agentSettings.memorySearchExtraPaths": [
+    "Extra Paths",
+    "额外路径",
+    "額外路徑",
+  ],
+  "config.agentSettings.memorySearchExtraPathsPlaceholder": [
+    "../team-docs",
+    "../team-docs",
+    "../team-docs",
+  ],
+  "config.agentSettings.memorySearchSources": [
+    "Sources",
+    "来源",
+    "來源",
+  ],
+  "config.agentSettings.memorySearchSourcesPlaceholder": [
+    "memory\nsessions",
+    "memory\nsessions",
+    "memory\nsessions",
+  ],
+  "config.agentSettings.memorySearchListHint": [
+    "One item per line. Leave empty to clear the explicit branch.",
+    "每行一个值；留空会清除显式配置分支。",
+    "每行一個值；留空會清除顯式配置分支。",
+  ],
+  "config.agentSettings.saveOk": [
+    "Agent settings saved.",
+    "Agent 设置已保存。",
+    "Agent 設定已保存。",
+  ],
+  "config.agentSettings.saveFail": [
+    "Failed to save agent settings.",
+    "保存 Agent 设置失败。",
+    "保存 Agent 設定失敗。",
+  ],
   "memory.diag.indexedShort": ["Indexed", "已索引", "已索引"],
   "memory.diag.totalShort": ["Total", "总数", "總數"],
   "memory.diag.chunks": ["Chunks", "分块", "分塊"],
@@ -2510,6 +2758,31 @@ const DICT: Record<string, string[]> = {
     "Custom System Proxy",
     "自定义系统代理 (Proxy)",
     "自訂系統代理 (Proxy)",
+  ],
+  "config.advanced.localClientNote": [
+    "These advanced settings are local to this ClawScope desktop client.",
+    "这些高级配置仅作用于当前 ClawScope 桌面端。",
+    "這些進階設定僅作用於目前的 ClawScope 桌面端。",
+  ],
+  "config.advanced.proxyDeferred": [
+    "Proxy value is stored locally in this wave, but current gateway transport does not enforce proxy routing yet.",
+    "本 wave 仅本地保存 proxy 值，当前 gateway transport 还不会真正走代理。",
+    "本 wave 僅本地保存 proxy 值，目前 gateway transport 尚未真正走代理。",
+  ],
+  "config.advanced.saveOk": [
+    "Advanced connection settings saved.",
+    "高级连接配置已保存。",
+    "進階連線設定已保存。",
+  ],
+  "config.advanced.saveFail": [
+    "Failed to save advanced connection settings.",
+    "保存高级连接配置失败。",
+    "保存進階連線設定失敗。",
+  ],
+  "config.advanced.savePartial": [
+    "Advanced settings were saved, but base connection update failed.",
+    "高级配置已保存，但基础连接更新失败。",
+    "進階設定已保存，但基礎連線更新失敗。",
   ],
   "config.test.ok": ["Test Passed", "测试通过", "測試通過"],
   "config.test.fail": [

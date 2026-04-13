@@ -12,17 +12,20 @@ use crate::gateway::{
     errors::GatewayErrorSummary,
     state::GatewayAppState,
     types::{
+        GatewayAdvancedConnectionConfig,
         GatewayAgentFileGetResult, GatewayAgentIdentityResult, GatewayAgentMemoryIndexResult,
         GatewayAgentMemoryResult,
         GatewayDiscoveredCandidate, GatewaySavedEndpoint,
+        GatewayConfigSchemaLookupResult,
         GatewayAgentMemoryRuntimeStatusResult, GatewayAgentMemorySearchResult,
         GatewayAgentMemoryStatusResult,
         GatewayAgentMemoryTimelineAccessResult, GatewayAgentMemoryTimelineResult,
-        GatewayAgentSettingsResult, GatewayAgentsListResult, GatewayConfigSetResult, GatewayConnectConfig,
+        GatewayAgentSettingsResult, GatewayAgentSettingsUpdateInput, GatewayAgentsListResult, GatewayConfigSetResult, GatewayConnectConfig,
         GatewayStatusSnapshot,
     },
 };
 use crate::gateway::store::{load_saved_endpoints, remove_saved_endpoint, resolve_store_paths, select_saved_endpoint};
+use crate::gateway::store::store_advanced_connection_config;
 
 #[tauri::command]
 pub async fn gateway_status(
@@ -50,10 +53,12 @@ pub async fn gateway_connect(
 
 #[tauri::command]
 pub async fn gateway_discover(
+    state: State<'_, GatewayAppState>,
     seed_url: Option<String>,
     timeout_ms: Option<u64>,
 ) -> Result<Vec<GatewayDiscoveredCandidate>, GatewayErrorSummary> {
-    discovery::discover_lan_candidates(seed_url.as_deref(), timeout_ms)
+    let effective_timeout_ms = timeout_ms.or(Some(state.advanced_config().timeout_ms));
+    discovery::discover_lan_candidates(seed_url.as_deref(), effective_timeout_ms)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -279,6 +284,26 @@ pub async fn gateway_agent_settings_get(
 }
 
 #[tauri::command]
+pub async fn gateway_agent_settings_set(
+    state: State<'_, GatewayAppState>,
+    input: GatewayAgentSettingsUpdateInput,
+) -> Result<GatewayAgentSettingsResult, GatewayErrorSummary> {
+    connector::agent_settings_set(state.inner().clone(), input)
+        .await
+        .map_err(|error| GatewayErrorSummary::from_error(&error))
+}
+
+#[tauri::command]
+pub async fn gateway_config_schema_lookup(
+    state: State<'_, GatewayAppState>,
+    path: String,
+) -> Result<GatewayConfigSchemaLookupResult, GatewayErrorSummary> {
+    connector::config_schema_lookup(state.inner().clone(), &path)
+        .await
+        .map_err(|error| GatewayErrorSummary::from_error(&error))
+}
+
+#[tauri::command]
 pub async fn gateway_config_set_local(
     state: State<'_, GatewayAppState>,
     key: String,
@@ -287,6 +312,33 @@ pub async fn gateway_config_set_local(
     connector::config_set_local(state.inner().clone(), &key, &value)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
+}
+
+#[tauri::command]
+pub async fn gateway_advanced_connection_config_get(
+    state: State<'_, GatewayAppState>,
+) -> Result<GatewayAdvancedConnectionConfig, GatewayErrorSummary> {
+    Ok(state.advanced_config())
+}
+
+#[tauri::command]
+pub async fn gateway_advanced_connection_config_set(
+    state: State<'_, GatewayAppState>,
+    config: GatewayAdvancedConnectionConfig,
+) -> Result<GatewayAdvancedConnectionConfig, GatewayErrorSummary> {
+    let normalized = GatewayAdvancedConnectionConfig {
+        timeout_ms: config.timeout_ms.clamp(1_000, 120_000),
+        heartbeat_ms: config.heartbeat_ms.clamp(1_000, 60_000),
+        proxy_url: config
+            .proxy_url
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+    };
+    let paths = resolve_store_paths();
+    store_advanced_connection_config(&paths, &normalized)
+        .map_err(|error| GatewayErrorSummary::from_error(&error))?;
+    state.replace_advanced_config(normalized.clone());
+    Ok(normalized)
 }
 
 #[tauri::command]

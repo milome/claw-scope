@@ -242,6 +242,12 @@ export interface GatewayConfigSetResult {
   stdout: string;
 }
 
+export interface GatewayAdvancedConnectionConfig {
+  timeoutMs: number;
+  heartbeatMs: number;
+  proxyUrl?: string | null;
+}
+
 export interface GatewayAgentMemorySearchEntry {
   id: string;
   path: string;
@@ -347,6 +353,98 @@ export interface GatewayAgentSettingsResult {
   agentId: string;
   workspace?: string | null;
   model?: string | null;
+  isDefault: boolean;
+  agentDir?: string | null;
+  bindingsJson?: string | null;
+  groupChatJson?: string | null;
+  sandboxJson?: string | null;
+  toolsJson?: string | null;
+  memorySearch: GatewayAgentMemorySearchSettingsResult;
+}
+
+export interface GatewayConfigSchemaUiHint {
+  label?: string | null;
+  help?: string | null;
+  tags: string[];
+  advanced?: boolean | null;
+  sensitive?: boolean | null;
+  placeholder?: string | null;
+}
+
+export interface GatewayConfigSchemaLookupChild {
+  key: string;
+  path: string;
+  nodeType?: string | null;
+  required: boolean;
+  hasChildren: boolean;
+  hint?: GatewayConfigSchemaUiHint | null;
+  hintPath?: string | null;
+}
+
+export interface GatewayConfigSchemaLookupResult {
+  path: string;
+  title?: string | null;
+  description?: string | null;
+  nodeType?: string | null;
+  enumValues: string[];
+  hint?: GatewayConfigSchemaUiHint | null;
+  hintPath?: string | null;
+  children: GatewayConfigSchemaLookupChild[];
+}
+
+export interface GatewayAgentMemorySearchSettingsResult {
+  enabled: boolean;
+  provider?: string | null;
+  model?: string | null;
+  extraPathsText: string;
+  sourcesText: string;
+  storePath?: string | null;
+  sessionMemoryEnabled: boolean;
+  hybridEnabled: boolean;
+  mmrEnabled: boolean;
+  mmr?: string | null;
+  temporalDecay?: string | null;
+}
+
+export interface GatewayAgentMemorySearchSettingsUpdateInput {
+  enabled?: boolean | null;
+  provider?: string | null;
+  clearProvider: boolean;
+  model?: string | null;
+  clearModel: boolean;
+  extraPathsText?: string | null;
+  clearExtraPaths: boolean;
+  sourcesText?: string | null;
+  clearSources: boolean;
+  storePath?: string | null;
+  clearStorePath: boolean;
+  sessionMemoryEnabled?: boolean | null;
+  hybridEnabled?: boolean | null;
+  mmrEnabled?: boolean | null;
+  mmr?: string | null;
+  clearMmr: boolean;
+  temporalDecay?: string | null;
+  clearTemporalDecay: boolean;
+}
+
+export interface GatewayAgentSettingsUpdateInput {
+  agentId: string;
+  workspace?: string | null;
+  model?: string | null;
+  clearWorkspace: boolean;
+  clearModel: boolean;
+  isDefault?: boolean | null;
+  agentDir?: string | null;
+  clearAgentDir: boolean;
+  bindingsJson?: string | null;
+  clearBindings: boolean;
+  groupChatJson?: string | null;
+  clearGroupChat: boolean;
+  sandboxJson?: string | null;
+  clearSandbox: boolean;
+  toolsJson?: string | null;
+  clearTools: boolean;
+  memorySearch?: GatewayAgentMemorySearchSettingsUpdateInput | null;
 }
 
 export interface GatewayAgentsListResult {
@@ -570,8 +668,11 @@ interface OpenClawContextType {
   connectedOrigin: string | null;
   grantedScopes: string[];
   lastError: GatewayErrorSummary | null;
+  advancedConnectionConfig: GatewayAdvancedConnectionConfig;
   setHasSkippedSetup: (skipped: boolean) => void;
   updateConfig: (url: string, mode: AuthMode, secret: string) => Promise<boolean>;
+  saveAdvancedConnectionConfig: (config: GatewayAdvancedConnectionConfig) => Promise<GatewayAdvancedConnectionConfig>;
+  saveAgentSettings: (input: GatewayAgentSettingsUpdateInput) => Promise<GatewayAgentSettingsResult>;
   testConnection: (url: string, mode: AuthMode, secret: string) => Promise<boolean>;
   disconnect: () => Promise<void>;
   refreshAgents: () => Promise<void>;
@@ -592,6 +693,11 @@ interface OpenClawContextType {
 const OpenClawContext = createContext<OpenClawContextType | undefined>(undefined);
 
 const DEFAULT_GATEWAY_URL = 'http://127.0.0.1:18789';
+const DEFAULT_GATEWAY_ADVANCED_CONFIG: GatewayAdvancedConnectionConfig = {
+  timeoutMs: 30000,
+  heartbeatMs: 5000,
+  proxyUrl: null,
+};
 const DEFAULT_CONNECT_ROLE = 'operator';
 const DEFAULT_CONNECT_SCOPES = ['operator.admin'];
 const AGENT_GRADIENTS = [
@@ -874,6 +980,18 @@ export async function gatewayAgentSettingsGet(agentId: string) {
   });
 }
 
+export async function gatewayAgentSettingsSet(input: GatewayAgentSettingsUpdateInput) {
+  return invokeGateway<GatewayAgentSettingsResult>('gateway_agent_settings_set', {
+    input,
+  });
+}
+
+export async function gatewayConfigSchemaLookup(path: string) {
+  return invokeGateway<GatewayConfigSchemaLookupResult>('gateway_config_schema_lookup', {
+    path,
+  });
+}
+
 export async function evolutionPreview(
   agentId: string,
   nodeLabel: string,
@@ -975,6 +1093,16 @@ export async function gatewayConfigSetLocal(key: string, value: string) {
   return invokeGateway<GatewayConfigSetResult>('gateway_config_set_local', {
     key,
     value,
+  });
+}
+
+export async function gatewayAdvancedConnectionConfigGet() {
+  return invokeGateway<GatewayAdvancedConnectionConfig>('gateway_advanced_connection_config_get');
+}
+
+export async function gatewayAdvancedConnectionConfigSet(config: GatewayAdvancedConnectionConfig) {
+  return invokeGateway<GatewayAdvancedConnectionConfig>('gateway_advanced_connection_config_set', {
+    config,
   });
 }
 
@@ -1099,6 +1227,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
   const [connectedOrigin, setConnectedOrigin] = useState<string | null>(null);
   const [grantedScopes, setGrantedScopes] = useState<string[]>([]);
   const [lastError, setLastError] = useState<GatewayErrorSummary | null>(null);
+  const [advancedConnectionConfig, setAdvancedConnectionConfig] = useState<GatewayAdvancedConnectionConfig>(DEFAULT_GATEWAY_ADVANCED_CONFIG);
   const [showReminder, setShowReminder] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -1135,6 +1264,19 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const hydrateGatewayState = async () => {
+      if (isTauriRuntimeAvailable()) {
+        try {
+          const nextAdvancedConfig = await gatewayAdvancedConnectionConfigGet();
+          if (!cancelled) {
+            setAdvancedConnectionConfig(nextAdvancedConfig);
+          }
+        } catch {
+          if (!cancelled) {
+            setAdvancedConnectionConfig(DEFAULT_GATEWAY_ADVANCED_CONFIG);
+          }
+        }
+      }
+
       let nextSavedEndpoints: GatewaySavedEndpoint[] = [];
       if (isTauriRuntimeAvailable()) {
         try {
@@ -1246,6 +1388,38 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [authMode, authSecret, gatewayUrl, isConfigured]);
+
+  useEffect(() => {
+    if (!isConnected || !isTauriRuntimeAvailable()) {
+      return;
+    }
+
+    let disposed = false;
+    const intervalId = window.setInterval(() => {
+      void invokeGateway<GatewayStatusSnapshot>('gateway_status')
+        .then((snapshot) => {
+          if (disposed) {
+            return;
+          }
+          const origin = resolveOrigin(snapshot.gatewayOrigin, connectedOrigin ?? gatewayUrl);
+          if (!isConnectedPhase(snapshot.phase) || !origin) {
+            applyDisconnectedState(snapshot.lastError ?? null, origin, snapshot.grantedScopes ?? []);
+            return;
+          }
+          setConnectedOrigin(origin);
+          setGrantedScopes(snapshot.grantedScopes ?? []);
+          setLastError(snapshot.lastError ?? null);
+        })
+        .catch(() => {
+          // Keep the last known connected state on transient heartbeat failures.
+        });
+    }, advancedConnectionConfig.heartbeatMs);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [advancedConnectionConfig.heartbeatMs, connectedOrigin, gatewayUrl, isConnected]);
 
   const setHasSkippedSetup = (skipped: boolean) => {
     setHasSkippedSetupState(skipped);
@@ -1378,7 +1552,17 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     return next;
   };
 
-  const scanLanGateways = async (timeoutMs = 2400) => {
+  const saveAdvancedConnectionConfig = async (config: GatewayAdvancedConnectionConfig) => {
+    const next = await gatewayAdvancedConnectionConfigSet(config);
+    setAdvancedConnectionConfig(next);
+    return next;
+  };
+
+  const saveAgentSettings = async (input: GatewayAgentSettingsUpdateInput) => {
+    return gatewayAgentSettingsSet(input);
+  };
+
+  const scanLanGateways = async (timeoutMs = advancedConnectionConfig.timeoutMs) => {
     const next = await gatewayDiscover(connectedOrigin ?? gatewayUrl, timeoutMs);
     setDiscoveredGateways(next);
     return next;
@@ -1418,8 +1602,11 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         connectedOrigin,
         grantedScopes,
         lastError,
+        advancedConnectionConfig,
         setHasSkippedSetup,
         updateConfig,
+        saveAdvancedConnectionConfig,
+        saveAgentSettings,
         testConnection,
         disconnect,
         refreshAgents,

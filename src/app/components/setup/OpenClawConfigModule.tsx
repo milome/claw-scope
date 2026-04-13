@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useOpenClaw, type AuthMode } from '../../contexts/OpenClawContext';
+import { useOpenClaw, type AuthMode, type GatewayAdvancedConnectionConfig } from '../../contexts/OpenClawContext';
 import { CheckCircle2, Server, Shield, Globe, TerminalSquare, RefreshCw, XCircle, ChevronDown, ChevronUp, AlertCircle, RotateCcw, Trash2, Wifi } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useI18n } from '../../contexts/I18nContext';
@@ -12,10 +12,12 @@ export function OpenClawConfigModule() {
     gatewayUrl,
     authMode: savedAuthMode,
     authSecret: savedAuthSecret,
+    advancedConnectionConfig,
     connectedOrigin,
     grantedScopes,
     lastError,
     updateConfig,
+    saveAdvancedConnectionConfig,
     testConnection,
     reopenSetupWizard,
     discoveredGateways,
@@ -35,6 +37,10 @@ export function OpenClawConfigModule() {
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [applyingCandidateId, setApplyingCandidateId] = useState<string | null>(null);
   const [removingEndpointId, setRemovingEndpointId] = useState<string | null>(null);
+  const [advancedTimeoutMs, setAdvancedTimeoutMs] = useState(String(advancedConnectionConfig.timeoutMs));
+  const [advancedHeartbeatMs, setAdvancedHeartbeatMs] = useState(String(advancedConnectionConfig.heartbeatMs));
+  const [advancedProxyUrl, setAdvancedProxyUrl] = useState(advancedConnectionConfig.proxyUrl ?? '');
+  const [saveFeedback, setSaveFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const authSecretRequired = authMode !== 'paired_device' && authSecret.trim().length === 0;
   const authSecretRequiredMessage = authMode === 'token' ? t('setup.auth.requiredToken') : t('setup.auth.requiredPassword');
 
@@ -43,6 +49,12 @@ export function OpenClawConfigModule() {
     setAuthMode(savedAuthMode);
     setAuthSecret(savedAuthSecret);
   }, [gatewayUrl, savedAuthMode, savedAuthSecret]);
+
+  useEffect(() => {
+    setAdvancedTimeoutMs(String(advancedConnectionConfig.timeoutMs));
+    setAdvancedHeartbeatMs(String(advancedConnectionConfig.heartbeatMs));
+    setAdvancedProxyUrl(advancedConnectionConfig.proxyUrl ?? '');
+  }, [advancedConnectionConfig]);
 
   const handleTestConnection = async () => {
     if (!url) {
@@ -66,9 +78,33 @@ export function OpenClawConfigModule() {
     }
 
     setIsSaving(true);
-    const success = await updateConfig(url, authMode, authSecret);
+    setSaveFeedback(null);
+
+    const nextAdvancedConfig: GatewayAdvancedConnectionConfig = {
+      timeoutMs: Number(advancedTimeoutMs) || advancedConnectionConfig.timeoutMs,
+      heartbeatMs: Number(advancedHeartbeatMs) || advancedConnectionConfig.heartbeatMs,
+      proxyUrl: advancedProxyUrl.trim() || null,
+    };
+
+    try {
+      await saveAdvancedConnectionConfig(nextAdvancedConfig);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('config.advanced.saveFail');
+      setIsSaving(false);
+      setSaveFeedback({ kind: 'error', message });
+      return;
+    }
+
+    const success = hasBaseChanges
+      ? await updateConfig(url, authMode, authSecret)
+      : true;
     setIsSaving(false);
     setTestResult(success ? 'none' : 'fail');
+    setSaveFeedback(
+      success
+        ? { kind: 'success', message: t('config.advanced.saveOk') }
+        : { kind: 'error', message: t('config.advanced.savePartial') },
+    );
   };
 
   const handleScanLan = async () => {
@@ -129,7 +165,12 @@ export function OpenClawConfigModule() {
     return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
   };
 
-  const hasChanges = url !== gatewayUrl || authMode !== savedAuthMode || authSecret !== savedAuthSecret;
+  const hasBaseChanges = url !== gatewayUrl || authMode !== savedAuthMode || authSecret !== savedAuthSecret;
+  const hasAdvancedChanges =
+    Number(advancedTimeoutMs || 0) !== advancedConnectionConfig.timeoutMs ||
+    Number(advancedHeartbeatMs || 0) !== advancedConnectionConfig.heartbeatMs ||
+    advancedProxyUrl.trim() !== (advancedConnectionConfig.proxyUrl ?? '');
+  const hasChanges = hasBaseChanges || hasAdvancedChanges;
   const connectedLabel = connectedOrigin ?? gatewayUrl;
   const statusDescription = isConnected
     ? `${t('config.status.connected')} ${connectedLabel}`
@@ -408,18 +449,24 @@ export function OpenClawConfigModule() {
                 {showAdvanced && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                     <div className="mt-4 p-5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl space-y-4">
+                      <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/20 dark:text-sky-300">
+                        {t('config.advanced.localClientNote')}
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('config.timeout')}</label>
-                          <input type="number" placeholder="30000" className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm" />
+                          <input type="number" value={advancedTimeoutMs} onChange={(e) => setAdvancedTimeoutMs(e.target.value)} placeholder="30000" min={1000} max={120000} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm" />
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('config.heartbeat')}</label>
-                          <input type="number" placeholder="5000" className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm" />
+                          <input type="number" value={advancedHeartbeatMs} onChange={(e) => setAdvancedHeartbeatMs(e.target.value)} placeholder="5000" min={1000} max={60000} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm" />
                         </div>
                         <div className="md:col-span-2">
                           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('config.proxy')}</label>
-                          <input type="text" placeholder="http://127.0.0.1:7890" className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm" />
+                          <input type="text" value={advancedProxyUrl} onChange={(e) => setAdvancedProxyUrl(e.target.value)} placeholder="http://127.0.0.1:7890" className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm" />
+                          <p className="mt-2 text-[11px] leading-5 text-amber-600 dark:text-amber-300">
+                            {t('config.advanced.proxyDeferred')}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -439,6 +486,16 @@ export function OpenClawConfigModule() {
                 {lastError.hint && <p className="mt-2 text-xs text-red-600 dark:text-red-300/80">{lastError.hint}</p>}
               </div>
             )}
+
+            {saveFeedback ? (
+              <div className={`rounded-xl border px-4 py-3 text-sm ${
+                saveFeedback.kind === 'success'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300'
+                  : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300'
+              }`}>
+                {saveFeedback.message}
+              </div>
+            ) : null}
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 self-start sm:self-auto">

@@ -12,9 +12,10 @@ use tokio::{
 use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 use crate::gateway::{
+    store::{load_advanced_connection_config, resolve_store_paths},
     endpoint::GatewayEndpoint,
     errors::GatewayError,
-    types::{GatewayAgentMemoryTimelineResult, GatewayStatusSnapshot},
+    types::{GatewayAdvancedConnectionConfig, GatewayAgentMemoryTimelineResult, GatewayStatusSnapshot},
 };
 
 pub type GatewaySocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -115,6 +116,7 @@ struct GatewayStateInner {
     snapshot: Mutex<GatewayStatusSnapshot>,
     session: AsyncMutex<Option<GatewayActiveConnection>>,
     timeline_probe_cache: Mutex<HashMap<String, CachedTimelineProbeResult>>,
+    advanced_config: Mutex<GatewayAdvancedConnectionConfig>,
 }
 
 #[derive(Clone)]
@@ -130,11 +132,19 @@ pub struct GatewayAppState {
 
 impl Default for GatewayAppState {
     fn default() -> Self {
+        let paths = resolve_store_paths();
+        let advanced_config =
+            load_advanced_connection_config(&paths).ok().flatten().unwrap_or(GatewayAdvancedConnectionConfig {
+                timeout_ms: 30_000,
+                heartbeat_ms: 5_000,
+                proxy_url: None,
+            });
         Self {
             inner: Arc::new(GatewayStateInner {
                 snapshot: Mutex::new(GatewayStatusSnapshot::idle()),
                 session: AsyncMutex::new(None),
                 timeline_probe_cache: Mutex::new(HashMap::new()),
+                advanced_config: Mutex::new(advanced_config),
             }),
         }
     }
@@ -231,6 +241,22 @@ impl GatewayAppState {
             .lock()
             .expect("timeline probe cache lock poisoned")
             .clear();
+    }
+
+    pub fn advanced_config(&self) -> GatewayAdvancedConnectionConfig {
+        self.inner
+            .advanced_config
+            .lock()
+            .expect("gateway advanced config lock poisoned")
+            .clone()
+    }
+
+    pub fn replace_advanced_config(&self, config: GatewayAdvancedConnectionConfig) {
+        *self
+            .inner
+            .advanced_config
+            .lock()
+            .expect("gateway advanced config lock poisoned") = config;
     }
 }
 

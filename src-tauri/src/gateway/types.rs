@@ -463,10 +463,125 @@ pub struct GatewayAgentMemoryTimelineResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct GatewayAgentMemorySearchSettingsResult {
+    pub enabled: bool,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub extra_paths_text: String,
+    pub sources_text: String,
+    pub store_path: Option<String>,
+    pub session_memory_enabled: bool,
+    pub hybrid_enabled: bool,
+    pub mmr_enabled: bool,
+    pub mmr: Option<String>,
+    pub temporal_decay: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayAgentMemorySearchSettingsUpdateInput {
+    pub enabled: Option<bool>,
+    pub provider: Option<String>,
+    pub clear_provider: bool,
+    pub model: Option<String>,
+    pub clear_model: bool,
+    pub extra_paths_text: Option<String>,
+    pub clear_extra_paths: bool,
+    pub sources_text: Option<String>,
+    pub clear_sources: bool,
+    pub store_path: Option<String>,
+    pub clear_store_path: bool,
+    pub session_memory_enabled: Option<bool>,
+    pub hybrid_enabled: Option<bool>,
+    pub mmr_enabled: Option<bool>,
+    pub mmr: Option<String>,
+    pub clear_mmr: bool,
+    pub temporal_decay: Option<String>,
+    pub clear_temporal_decay: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayConfigSchemaUiHint {
+    pub label: Option<String>,
+    pub help: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    pub advanced: Option<bool>,
+    pub sensitive: Option<bool>,
+    pub placeholder: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayConfigSchemaLookupChild {
+    pub key: String,
+    pub path: String,
+    pub node_type: Option<String>,
+    pub required: bool,
+    pub has_children: bool,
+    pub hint: Option<GatewayConfigSchemaUiHint>,
+    pub hint_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayConfigSchemaLookupResult {
+    pub path: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub node_type: Option<String>,
+    #[serde(default)]
+    pub enum_values: Vec<String>,
+    pub hint: Option<GatewayConfigSchemaUiHint>,
+    pub hint_path: Option<String>,
+    #[serde(default)]
+    pub children: Vec<GatewayConfigSchemaLookupChild>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct GatewayAgentSettingsResult {
     pub agent_id: String,
     pub workspace: Option<String>,
     pub model: Option<String>,
+    pub is_default: bool,
+    pub agent_dir: Option<String>,
+    pub bindings_json: Option<String>,
+    pub group_chat_json: Option<String>,
+    pub sandbox_json: Option<String>,
+    pub tools_json: Option<String>,
+    pub memory_search: GatewayAgentMemorySearchSettingsResult,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayAgentSettingsUpdateInput {
+    pub agent_id: String,
+    pub workspace: Option<String>,
+    pub model: Option<String>,
+    pub clear_workspace: bool,
+    pub clear_model: bool,
+    pub is_default: Option<bool>,
+    pub agent_dir: Option<String>,
+    pub clear_agent_dir: bool,
+    pub bindings_json: Option<String>,
+    pub clear_bindings: bool,
+    pub group_chat_json: Option<String>,
+    pub clear_group_chat: bool,
+    pub sandbox_json: Option<String>,
+    pub clear_sandbox: bool,
+    pub tools_json: Option<String>,
+    pub clear_tools: bool,
+    pub memory_search: Option<GatewayAgentMemorySearchSettingsUpdateInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayAdvancedConnectionConfig {
+    pub timeout_ms: u64,
+    pub heartbeat_ms: u64,
+    pub proxy_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

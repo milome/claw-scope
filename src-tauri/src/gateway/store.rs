@@ -8,7 +8,9 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use crate::gateway::errors::GatewayError;
-use crate::gateway::types::{GatewayDiscoveredCandidate, GatewaySavedEndpoint};
+use crate::gateway::types::{
+    GatewayAdvancedConnectionConfig, GatewayDiscoveredCandidate, GatewaySavedEndpoint,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +47,7 @@ pub struct GatewayStorePaths {
     pub identity_file: PathBuf,
     pub device_auth_file: PathBuf,
     pub saved_endpoints_file: PathBuf,
+    pub advanced_config_file: PathBuf,
 }
 
 impl GatewayStorePaths {
@@ -52,10 +55,11 @@ impl GatewayStorePaths {
         let identity_dir = root.join("identity");
         let saved_endpoints_file = root.join("saved-endpoints.json");
         Self {
-            root,
+            root: root.clone(),
             identity_file: identity_dir.join("device.json"),
             device_auth_file: identity_dir.join("device-auth.json"),
             saved_endpoints_file,
+            advanced_config_file: root.join("advanced-connection-config.json"),
         }
     }
 }
@@ -64,6 +68,13 @@ impl GatewayStorePaths {
 struct SavedGatewayEndpointStore {
     pub version: u8,
     pub endpoints: Vec<GatewaySavedEndpoint>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct StoredGatewayAdvancedConnectionConfig {
+    pub version: u8,
+    #[serde(flatten)]
+    pub config: GatewayAdvancedConnectionConfig,
 }
 
 pub fn resolve_store_paths() -> GatewayStorePaths {
@@ -214,6 +225,26 @@ pub fn load_saved_endpoints(paths: &GatewayStorePaths) -> Result<Vec<GatewaySave
     Ok(read_json::<SavedGatewayEndpointStore>(&paths.saved_endpoints_file)?
         .map(|store| sort_saved_endpoints(store.endpoints))
         .unwrap_or_default())
+}
+
+pub fn load_advanced_connection_config(
+    paths: &GatewayStorePaths,
+) -> Result<Option<GatewayAdvancedConnectionConfig>, GatewayError> {
+    Ok(read_json::<StoredGatewayAdvancedConnectionConfig>(&paths.advanced_config_file)?
+        .map(|store| store.config))
+}
+
+pub fn store_advanced_connection_config(
+    paths: &GatewayStorePaths,
+    config: &GatewayAdvancedConnectionConfig,
+) -> Result<(), GatewayError> {
+    write_json(
+        &paths.advanced_config_file,
+        &StoredGatewayAdvancedConnectionConfig {
+            version: 1,
+            config: config.clone(),
+        },
+    )
 }
 
 pub fn select_saved_endpoint(
