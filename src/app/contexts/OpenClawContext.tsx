@@ -7,6 +7,7 @@ import {
   readStoredAuthSecret,
   type AuthMode,
 } from './openClawStorage';
+import { shouldShowSkippedConnectionReminder } from './openClawConnectionState';
 
 export type { AuthMode } from './openClawStorage';
 type GatewayConnectionPhase =
@@ -1229,6 +1230,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
   const [lastError, setLastError] = useState<GatewayErrorSummary | null>(null);
   const [advancedConnectionConfig, setAdvancedConnectionConfig] = useState<GatewayAdvancedConnectionConfig>(DEFAULT_GATEWAY_ADVANCED_CONFIG);
   const [showReminder, setShowReminder] = useState(false);
+  const [hasHydratedGatewayState, setHasHydratedGatewayState] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [discoveredGateways, setDiscoveredGateways] = useState<GatewayDiscoveredCandidate[]>([]);
@@ -1252,16 +1254,25 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
   }, [isConfigured, hasSkippedSetup, isDev]);
 
   useEffect(() => {
-    if (hasSkippedSetup && !isConfigured && !isSetupWizardOpen) {
+    if (
+      shouldShowSkippedConnectionReminder({
+        hasSkippedSetup,
+        isConfigured,
+        isSetupWizardOpen,
+        isConnected,
+        hasHydratedGatewayState,
+      })
+    ) {
       const timer = setTimeout(() => setShowReminder(true), 1500);
       return () => clearTimeout(timer);
     }
 
     setShowReminder(false);
-  }, [hasSkippedSetup, isConfigured, isSetupWizardOpen]);
+  }, [hasSkippedSetup, isConfigured, isSetupWizardOpen, isConnected, hasHydratedGatewayState]);
 
   useEffect(() => {
     let cancelled = false;
+    setHasHydratedGatewayState(false);
 
     const hydrateGatewayState = async () => {
       if (isTauriRuntimeAvailable()) {
@@ -1313,6 +1324,9 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
               if (reconnectUrl !== gatewayUrl) {
                 setGatewayUrl(reconnectUrl);
               }
+              setIsConfigured(true);
+              setHasSkippedSetupState(false);
+              setShowReminder(false);
               try {
                 const refreshedEndpoints = await gatewaySavedEndpoints();
                 if (!cancelled) {
@@ -1342,6 +1356,9 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
             return;
           }
 
+          setIsConfigured(true);
+          setHasSkippedSetupState(false);
+          setShowReminder(false);
           const node = buildNode(origin);
           setIsConnected(true);
           setConnectedOrigin(origin);
@@ -1382,7 +1399,11 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    void hydrateGatewayState();
+    void hydrateGatewayState().finally(() => {
+      if (!cancelled) {
+        setHasHydratedGatewayState(true);
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -1422,6 +1443,14 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
   }, [advancedConnectionConfig.heartbeatMs, connectedOrigin, gatewayUrl, isConnected]);
 
   const setHasSkippedSetup = (skipped: boolean) => {
+    if (skipped && isConnected) {
+      setIsConfigured(true);
+      setHasSkippedSetupState(false);
+      setShowReminder(false);
+      setIsSetupWizardOpen(false);
+      return;
+    }
+
     setHasSkippedSetupState(skipped);
     if (skipped) {
       setIsSetupWizardOpen(false);
