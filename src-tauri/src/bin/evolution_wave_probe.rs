@@ -33,9 +33,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let snapshot = connector::connect(state.clone(), config).await?;
     println!("connected_phase={:?}", snapshot.phase);
 
-    let agents = connector::agents_list(state.clone()).await?;
+    let agents = connector::agents_list(state.clone(), None).await?;
     let mut agent_id = agents.default_id.clone();
-    let mut memory = connector::agent_memory_get(state.clone(), agent_id.as_str()).await?;
+    let mut memory = connector::agent_memory_get(state.clone(), None, agent_id.as_str()).await?;
 
     if !memory
         .documents
@@ -43,7 +43,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .any(|document| !document.missing && document.content.as_ref().is_some())
     {
         for agent in &agents.agents {
-            let candidate_memory = connector::agent_memory_get(state.clone(), agent.id.as_str()).await?;
+            let candidate_memory =
+                connector::agent_memory_get(state.clone(), None, agent.id.as_str()).await?;
             if candidate_memory
                 .documents
                 .iter()
@@ -74,16 +75,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     connector::agent_memory_set(
         state.clone(),
+        None,
         agent_id.as_str(),
         source_document.as_str(),
         next_content.as_str(),
     )
     .await?;
-    if let Err(error) = connector::agent_memory_index(state.clone(), agent_id.as_str(), true).await {
+    if let Err(error) =
+        connector::agent_memory_index(state.clone(), None, agent_id.as_str(), true).await
+    {
         println!("execute_index_warning={error}");
     }
 
-    let after_execute = connector::agent_memory_get(state.clone(), agent_id.as_str()).await?;
+    let after_execute = connector::agent_memory_get(state.clone(), None, agent_id.as_str()).await?;
     let changed = after_execute
         .documents
         .iter()
@@ -134,16 +138,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     connector::agent_memory_set(
         state.clone(),
+        None,
         agent_id.as_str(),
         source_document.as_str(),
         original_content.as_str(),
     )
     .await?;
-    if let Err(error) = connector::agent_memory_index(state.clone(), agent_id.as_str(), true).await {
+    if let Err(error) =
+        connector::agent_memory_index(state.clone(), None, agent_id.as_str(), true).await
+    {
         println!("rollback_index_warning={error}");
     }
 
-    let after_rollback = connector::agent_memory_get(state.clone(), agent_id.as_str()).await?;
+    let after_rollback =
+        connector::agent_memory_get(state.clone(), None, agent_id.as_str()).await?;
     let restored = after_rollback
         .documents
         .iter()

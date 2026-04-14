@@ -35,6 +35,22 @@ pub async fn gateway_status(
 }
 
 #[tauri::command]
+pub async fn gateway_sessions_list(
+    state: State<'_, GatewayAppState>,
+) -> Result<Vec<GatewayStatusSnapshot>, GatewayErrorSummary> {
+    Ok(state.snapshots())
+}
+
+#[tauri::command]
+pub async fn gateway_set_active_session(
+    state: State<'_, GatewayAppState>,
+    session_id: String,
+) -> Result<GatewayStatusSnapshot, GatewayErrorSummary> {
+    state.set_active_session_id(Some(session_id));
+    Ok(state.snapshot())
+}
+
+#[tauri::command]
 pub async fn gateway_normalize_endpoint(
     config: GatewayConnectConfig,
 ) -> Result<GatewayEndpoint, GatewayErrorSummary> {
@@ -97,8 +113,9 @@ pub async fn gateway_disconnect(
 #[tauri::command]
 pub async fn gateway_agents_list(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
 ) -> Result<GatewayAgentsListResult, GatewayErrorSummary> {
-    connector::agents_list(state.inner().clone())
+    connector::agents_list(state.inner().clone(), session_id.as_deref())
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -106,9 +123,10 @@ pub async fn gateway_agents_list(
 #[tauri::command]
 pub async fn gateway_agent_identity_get(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
 ) -> Result<GatewayAgentIdentityResult, GatewayErrorSummary> {
-    connector::agent_identity_get(state.inner().clone(), &agent_id)
+    connector::agent_identity_get(state.inner().clone(), session_id.as_deref(), &agent_id)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -116,9 +134,10 @@ pub async fn gateway_agent_identity_get(
 #[tauri::command]
 pub async fn gateway_agent_soul_get(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
 ) -> Result<GatewayAgentFileGetResult, GatewayErrorSummary> {
-    connector::agent_soul_get(state.inner().clone(), &agent_id)
+    connector::agent_soul_get(state.inner().clone(), session_id.as_deref(), &agent_id)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -126,10 +145,11 @@ pub async fn gateway_agent_soul_get(
 #[tauri::command]
 pub async fn gateway_agent_file_read(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
     name: String,
 ) -> Result<GatewayAgentFileGetResult, GatewayErrorSummary> {
-    connector::agent_file_read(state.inner().clone(), &agent_id, &name)
+    connector::agent_file_read(state.inner().clone(), session_id.as_deref(), &agent_id, &name)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -137,9 +157,14 @@ pub async fn gateway_agent_file_read(
 #[tauri::command]
 pub async fn gateway_agent_workspace_identity_get(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
 ) -> Result<GatewayAgentFileGetResult, GatewayErrorSummary> {
-    connector::agent_workspace_identity_get(state.inner().clone(), &agent_id)
+    connector::agent_workspace_identity_get(
+        state.inner().clone(),
+        session_id.as_deref(),
+        &agent_id,
+    )
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -147,9 +172,10 @@ pub async fn gateway_agent_workspace_identity_get(
 #[tauri::command]
 pub async fn gateway_agent_memory_get(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
 ) -> Result<GatewayAgentMemoryResult, GatewayErrorSummary> {
-    connector::agent_memory_get(state.inner().clone(), &agent_id)
+    connector::agent_memory_get(state.inner().clone(), session_id.as_deref(), &agent_id)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -157,6 +183,7 @@ pub async fn gateway_agent_memory_get(
 #[tauri::command]
 pub async fn gateway_agent_memory_search(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
     query: String,
     max_results: Option<usize>,
@@ -164,6 +191,7 @@ pub async fn gateway_agent_memory_search(
 ) -> Result<GatewayAgentMemorySearchResult, GatewayErrorSummary> {
     connector::agent_memory_search(
         state.inner().clone(),
+        session_id.as_deref(),
         &agent_id,
         &query,
         max_results,
@@ -176,9 +204,10 @@ pub async fn gateway_agent_memory_search(
 #[tauri::command]
 pub async fn gateway_agent_memory_status(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
 ) -> Result<GatewayAgentMemoryStatusResult, GatewayErrorSummary> {
-    connector::agent_memory_status(state.inner().clone(), &agent_id)
+    connector::agent_memory_status(state.inner().clone(), session_id.as_deref(), &agent_id)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -186,9 +215,14 @@ pub async fn gateway_agent_memory_status(
 #[tauri::command]
 pub async fn gateway_agent_memory_runtime_status(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
 ) -> Result<GatewayAgentMemoryRuntimeStatusResult, GatewayErrorSummary> {
-    connector::agent_memory_runtime_status(state.inner().clone(), &agent_id)
+    connector::agent_memory_runtime_status(
+        state.inner().clone(),
+        session_id.as_deref(),
+        &agent_id,
+    )
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -196,9 +230,10 @@ pub async fn gateway_agent_memory_runtime_status(
 #[tauri::command]
 pub async fn gateway_agent_memory_timeline_get(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
 ) -> Result<GatewayAgentMemoryTimelineResult, GatewayErrorSummary> {
-    connector::agent_memory_timeline_get(state.inner().clone(), &agent_id)
+    connector::agent_memory_timeline_get(state.inner().clone(), session_id.as_deref(), &agent_id)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -206,9 +241,14 @@ pub async fn gateway_agent_memory_timeline_get(
 #[tauri::command]
 pub async fn gateway_agent_memory_timeline_access_resolve(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
 ) -> Result<GatewayAgentMemoryTimelineAccessResult, GatewayErrorSummary> {
-    connector::agent_memory_timeline_access_resolve(state.inner().clone(), &agent_id)
+    connector::agent_memory_timeline_access_resolve(
+        state.inner().clone(),
+        session_id.as_deref(),
+        &agent_id,
+    )
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -216,9 +256,14 @@ pub async fn gateway_agent_memory_timeline_access_resolve(
 #[tauri::command]
 pub async fn gateway_agent_memory_timeline_local_scan(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
 ) -> Result<GatewayAgentMemoryTimelineResult, GatewayErrorSummary> {
-    connector::agent_memory_timeline_local_scan(state.inner().clone(), &agent_id)
+    connector::agent_memory_timeline_local_scan(
+        state.inner().clone(),
+        session_id.as_deref(),
+        &agent_id,
+    )
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -226,12 +271,14 @@ pub async fn gateway_agent_memory_timeline_local_scan(
 #[tauri::command]
 pub async fn gateway_agent_memory_timeline_remote_probe(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
     start_date: String,
     end_date: String,
 ) -> Result<GatewayAgentMemoryTimelineResult, GatewayErrorSummary> {
     connector::agent_memory_timeline_remote_probe(
         state.inner().clone(),
+        session_id.as_deref(),
         &agent_id,
         &start_date,
         &end_date,
@@ -243,10 +290,16 @@ pub async fn gateway_agent_memory_timeline_remote_probe(
 #[tauri::command]
 pub async fn gateway_agent_memory_timeline_remote_probe_dates(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
     dates: Vec<String>,
 ) -> Result<GatewayAgentMemoryTimelineResult, GatewayErrorSummary> {
-    connector::agent_memory_timeline_remote_probe_dates(state.inner().clone(), &agent_id, &dates)
+    connector::agent_memory_timeline_remote_probe_dates(
+        state.inner().clone(),
+        session_id.as_deref(),
+        &agent_id,
+        &dates,
+    )
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -254,10 +307,16 @@ pub async fn gateway_agent_memory_timeline_remote_probe_dates(
 #[tauri::command]
 pub async fn gateway_agent_memory_timeline_entry_get(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
     name: String,
 ) -> Result<GatewayAgentFileGetResult, GatewayErrorSummary> {
-    connector::agent_memory_timeline_entry_get(state.inner().clone(), &agent_id, &name)
+    connector::agent_memory_timeline_entry_get(
+        state.inner().clone(),
+        session_id.as_deref(),
+        &agent_id,
+        &name,
+    )
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -265,10 +324,16 @@ pub async fn gateway_agent_memory_timeline_entry_get(
 #[tauri::command]
 pub async fn gateway_agent_memory_timeline_entry_read(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
     name: String,
 ) -> Result<GatewayAgentFileGetResult, GatewayErrorSummary> {
-    connector::agent_memory_timeline_entry_read(state.inner().clone(), &agent_id, &name)
+    connector::agent_memory_timeline_entry_read(
+        state.inner().clone(),
+        session_id.as_deref(),
+        &agent_id,
+        &name,
+    )
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -276,9 +341,10 @@ pub async fn gateway_agent_memory_timeline_entry_read(
 #[tauri::command]
 pub async fn gateway_agent_settings_get(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
 ) -> Result<GatewayAgentSettingsResult, GatewayErrorSummary> {
-    connector::agent_settings_get(state.inner().clone(), &agent_id)
+    connector::agent_settings_get(state.inner().clone(), session_id.as_deref(), &agent_id)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -344,11 +410,18 @@ pub async fn gateway_advanced_connection_config_set(
 #[tauri::command]
 pub async fn gateway_agent_memory_set(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
     name: String,
     content: String,
 ) -> Result<(), GatewayErrorSummary> {
-    connector::agent_memory_set(state.inner().clone(), &agent_id, &name, &content)
+    connector::agent_memory_set(
+        state.inner().clone(),
+        session_id.as_deref(),
+        &agent_id,
+        &name,
+        &content,
+    )
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -356,10 +429,16 @@ pub async fn gateway_agent_memory_set(
 #[tauri::command]
 pub async fn gateway_agent_memory_index(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
     force: bool,
 ) -> Result<GatewayAgentMemoryIndexResult, GatewayErrorSummary> {
-    connector::agent_memory_index(state.inner().clone(), &agent_id, force)
+    connector::agent_memory_index(
+        state.inner().clone(),
+        session_id.as_deref(),
+        &agent_id,
+        force,
+    )
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -367,10 +446,16 @@ pub async fn gateway_agent_memory_index(
 #[tauri::command]
 pub async fn gateway_agent_workspace_identity_set(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
     content: String,
 ) -> Result<(), GatewayErrorSummary> {
-    connector::agent_workspace_identity_set(state.inner().clone(), &agent_id, &content)
+    connector::agent_workspace_identity_set(
+        state.inner().clone(),
+        session_id.as_deref(),
+        &agent_id,
+        &content,
+    )
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }
@@ -378,10 +463,16 @@ pub async fn gateway_agent_workspace_identity_set(
 #[tauri::command]
 pub async fn gateway_agent_soul_set(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     agent_id: String,
     content: String,
 ) -> Result<(), GatewayErrorSummary> {
-    connector::agent_soul_set(state.inner().clone(), &agent_id, &content)
+    connector::agent_soul_set(
+        state.inner().clone(),
+        session_id.as_deref(),
+        &agent_id,
+        &content,
+    )
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }

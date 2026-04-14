@@ -114,7 +114,9 @@ impl Clone for GatewayActiveConnection {
 
 struct GatewayStateInner {
     snapshot: Mutex<GatewayStatusSnapshot>,
-    session: AsyncMutex<Option<GatewayActiveConnection>>,
+    active_session_id: Mutex<Option<String>>,
+    sessions: AsyncMutex<HashMap<String, GatewayActiveConnection>>,
+    snapshots: Mutex<HashMap<String, GatewayStatusSnapshot>>,
     timeline_probe_cache: Mutex<HashMap<String, CachedTimelineProbeResult>>,
     advanced_config: Mutex<GatewayAdvancedConnectionConfig>,
 }
@@ -142,7 +144,9 @@ impl Default for GatewayAppState {
         Self {
             inner: Arc::new(GatewayStateInner {
                 snapshot: Mutex::new(GatewayStatusSnapshot::idle()),
-                session: AsyncMutex::new(None),
+                active_session_id: Mutex::new(None),
+                sessions: AsyncMutex::new(HashMap::new()),
+                snapshots: Mutex::new(HashMap::new()),
                 timeline_probe_cache: Mutex::new(HashMap::new()),
                 advanced_config: Mutex::new(advanced_config),
             }),
@@ -160,6 +164,25 @@ impl GatewayAppState {
     }
 
     pub fn replace_snapshot(&self, snapshot: GatewayStatusSnapshot) {
+        if snapshot.is_active {
+            let mut snapshots = self
+                .inner
+                .snapshots
+                .lock()
+                .expect("gateway snapshots lock poisoned");
+            for existing in snapshots.values_mut() {
+                existing.is_active = false;
+            }
+            if let Some(session_id) = snapshot.session_id.as_ref() {
+                snapshots.insert(session_id.clone(), snapshot.clone());
+            }
+        } else if let Some(session_id) = snapshot.session_id.as_ref() {
+            self.inner
+                .snapshots
+                .lock()
+                .expect("gateway snapshots lock poisoned")
+                .insert(session_id.clone(), snapshot.clone());
+        }
         *self
             .inner
             .snapshot
@@ -168,15 +191,82 @@ impl GatewayAppState {
     }
 
     pub async fn session(&self) -> Option<GatewayActiveConnection> {
-        self.inner.session.lock().await.clone()
+        let active_session_id = self
+            .inner
+            .active_session_id
+            .lock()
+            .expect("active gateway session lock poisoned")
+            .clone();
+        let guard = self.inner.sessions.lock().await;
+        if let Some(active_session_id) = active_session_id {
+            if let Some(session) = guard.get(&active_session_id) {
+                return Some(session.clone());
+            }
+        }
+
+        guard.values().next().cloned()
+    }
+
+    pub async fn session_by_id(&self, session_id: &str) -> Option<GatewayActiveConnection> {
+        self.inner.sessions.lock().await.get(session_id).cloned()
+    }
+
+    pub async fn session_for_selector(&self, selector: Option<&str>) -> Option<GatewayActiveConnection> {
+        match selector {
+            Some(session_id) if !session_id.trim().is_empty() => self.session_by_id(session_id).await,
+            _ => self.session().await,
+        }
     }
 
     pub async fn replace_session(
         &self,
         session: Option<GatewayActiveConnection>,
     ) -> Option<GatewayActiveConnection> {
-        let mut guard = self.inner.session.lock().await;
-        std::mem::replace(&mut *guard, session)
+        match session {
+            Some(session) => {
+                let session_id = session.session_id.clone();
+                let previous = self
+                    .inner
+                    .sessions
+                    .lock()
+                    .await
+                    .insert(session_id.clone(), session);
+                *self
+                    .inner
+                    .active_session_id
+                    .lock()
+                    .expect("active gateway session lock poisoned") = Some(session_id);
+                let active_session_id = self.active_session_id();
+                let mut snapshots = self
+                    .inner
+                    .snapshots
+                    .lock()
+                    .expect("gateway snapshots lock poisoned");
+                for (candidate_id, snapshot) in snapshots.iter_mut() {
+                    snapshot.is_active = active_session_id.as_deref() == Some(candidate_id.as_str());
+                }
+                previous
+            }
+            None => {
+                let active_session_id = self
+                    .inner
+                    .active_session_id
+                    .lock()
+                    .expect("active gateway session lock poisoned")
+                    .clone();
+                if let Some(active_session_id) = active_session_id {
+                    let previous = self.inner.sessions.lock().await.remove(&active_session_id);
+                    *self
+                        .inner
+                        .active_session_id
+                        .lock()
+                        .expect("active gateway session lock poisoned") = None;
+                    previous
+                } else {
+                    None
+                }
+            }
+        }
     }
 
     pub async fn take_session(&self) -> Option<GatewayActiveConnection> {
@@ -184,15 +274,105 @@ impl GatewayAppState {
     }
 
     pub async fn clear_session_for_id(&self, session_id: &str) -> bool {
-        let mut guard = self.inner.session.lock().await;
-        let should_clear = guard
-            .as_ref()
-            .map(|session| session.session_id == session_id)
-            .unwrap_or(false);
-        if should_clear {
-            *guard = None;
+        let removed = self.inner.sessions.lock().await.remove(session_id).is_some();
+        if removed {
+            self.inner
+                .snapshots
+                .lock()
+                .expect("gateway snapshots lock poisoned")
+                .remove(session_id);
+            let mut active = self
+                .inner
+                .active_session_id
+                .lock()
+                .expect("active gateway session lock poisoned");
+            if active.as_deref() == Some(session_id) {
+                *active = self
+                    .inner
+                    .sessions
+                    .blocking_lock()
+                    .keys()
+                    .next()
+                    .cloned();
+                if let Some(next_session_id) = active.clone() {
+                    if let Some(next_snapshot) = self
+                        .inner
+                        .snapshots
+                        .lock()
+                        .expect("gateway snapshots lock poisoned")
+                        .get(&next_session_id)
+                        .cloned()
+                    {
+                        *self
+                            .inner
+                            .snapshot
+                            .lock()
+                            .expect("gateway snapshot lock poisoned") = next_snapshot;
+                    }
+                } else {
+                    *self
+                        .inner
+                        .snapshot
+                        .lock()
+                        .expect("gateway snapshot lock poisoned") = GatewayStatusSnapshot::idle();
+                }
+            }
         }
-        should_clear
+        removed
+    }
+
+    pub fn snapshots(&self) -> Vec<GatewayStatusSnapshot> {
+        self.inner
+            .snapshots
+            .lock()
+            .expect("gateway snapshots lock poisoned")
+            .values()
+            .cloned()
+            .collect()
+    }
+
+    pub fn active_session_id(&self) -> Option<String> {
+        self.inner
+            .active_session_id
+            .lock()
+            .expect("active gateway session lock poisoned")
+            .clone()
+    }
+
+    pub fn set_active_session_id(&self, session_id: Option<String>) {
+        *self
+            .inner
+            .active_session_id
+            .lock()
+            .expect("active gateway session lock poisoned") = session_id.clone();
+
+        {
+            let mut snapshots = self
+                .inner
+                .snapshots
+                .lock()
+                .expect("gateway snapshots lock poisoned");
+            for (candidate_id, snapshot) in snapshots.iter_mut() {
+                snapshot.is_active = session_id.as_deref() == Some(candidate_id.as_str());
+            }
+        }
+
+        if let Some(session_id) = session_id {
+            if let Some(snapshot) = self
+                .inner
+                .snapshots
+                .lock()
+                .expect("gateway snapshots lock poisoned")
+                .get(&session_id)
+                .cloned()
+            {
+                *self
+                    .inner
+                    .snapshot
+                    .lock()
+                    .expect("gateway snapshot lock poisoned") = snapshot;
+            }
+        }
     }
 
     pub fn load_timeline_probe_cache(
@@ -267,6 +447,7 @@ mod tests {
         GatewayAgentFileEntry, GatewayAgentMemoryTimelineDiagnostics,
         GatewayAgentMemoryTimelineProbeStatus, GatewayAgentMemoryTimelineProbeSummary,
         GatewayAgentMemoryTimelineResult, GatewayAgentMemoryTimelineSource,
+        GatewayConnectionPhase,
     };
 
     fn sample_timeline_result() -> GatewayAgentMemoryTimelineResult {
@@ -346,5 +527,43 @@ mod tests {
         assert!(state
             .load_timeline_probe_cache(cache_key, 1_000)
             .is_none());
+    }
+
+    #[test]
+    fn snapshot_registry_switches_active_session_truthfully() {
+        let state = GatewayAppState::default();
+
+        state.replace_snapshot(GatewayStatusSnapshot {
+            session_id: Some("ws://node-a:18789".to_string()),
+            phase: GatewayConnectionPhase::Connected,
+            gateway_origin: Some("ws://node-a:18789".to_string()),
+            is_active: true,
+            device_id: None,
+            granted_role: None,
+            granted_scopes: vec![],
+            last_error: None,
+            is_paired: true,
+            can_retry_with_device_token: false,
+        });
+
+        state.replace_snapshot(GatewayStatusSnapshot {
+            session_id: Some("ws://node-b:18789".to_string()),
+            phase: GatewayConnectionPhase::Connected,
+            gateway_origin: Some("ws://node-b:18789".to_string()),
+            is_active: false,
+            device_id: None,
+            granted_role: None,
+            granted_scopes: vec![],
+            last_error: None,
+            is_paired: true,
+            can_retry_with_device_token: false,
+        });
+
+        assert_eq!(state.snapshots().len(), 2);
+
+        state.set_active_session_id(Some("ws://node-a:18789".to_string()));
+        assert_eq!(state.active_session_id().as_deref(), Some("ws://node-a:18789"));
+        let snapshots = state.snapshots();
+        assert_eq!(snapshots.iter().filter(|snapshot| snapshot.is_active).count(), 1);
     }
 }

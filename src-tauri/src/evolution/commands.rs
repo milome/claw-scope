@@ -67,7 +67,7 @@ pub async fn evolution_preview(
     knowledge_input: Option<EvolutionKnowledgeInjectionInput>,
     custom_input: Option<EvolutionCustomTemplateInput>,
 ) -> Result<EvolutionPreviewResult, GatewayErrorSummary> {
-    let memory = connector::agent_memory_get(gateway_state.inner().clone(), &agent_id)
+    let memory = connector::agent_memory_get(gateway_state.inner().clone(), None, &agent_id)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))?;
     let source_document = resolve_source_document(&memory.documents).ok_or_else(|| {
@@ -370,6 +370,7 @@ pub async fn evolution_rollback(
 
     connector::agent_memory_set(
         gateway_state.inner().clone(),
+        None,
         agent_id.as_str(),
         snapshot.source_document.as_str(),
         snapshot.content.as_str(),
@@ -377,7 +378,12 @@ pub async fn evolution_rollback(
     .await
     .map_err(|error| GatewayErrorSummary::from_error(&error))?;
 
-    let _ = connector::agent_memory_index(gateway_state.inner().clone(), agent_id.as_str(), true)
+    let _ = connector::agent_memory_index(
+        gateway_state.inner().clone(),
+        None,
+        agent_id.as_str(),
+        true,
+    )
         .await;
 
     let rollback_message_i18n = localized_message(
@@ -832,6 +838,7 @@ async fn execute_operation_task<R: Runtime>(
 
     if let Err(error) = connector::agent_memory_set(
         gateway_state.clone(),
+        None,
         pending.preview.agent_id.as_str(),
         pending.preview.source_document.as_str(),
         pending.next_content.as_str(),
@@ -897,6 +904,7 @@ async fn execute_operation_task<R: Runtime>(
 
     let index_warning = connector::agent_memory_index(
         gateway_state.clone(),
+        None,
         pending.preview.agent_id.as_str(),
         true,
     )
@@ -1837,7 +1845,7 @@ async fn load_current_source_content(
     agent_id: &str,
     source_document: &str,
 ) -> Result<String, GatewayErrorSummary> {
-    let memory = connector::agent_memory_get(gateway_state, agent_id)
+    let memory = connector::agent_memory_get(gateway_state, None, agent_id)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))?;
     let document = memory

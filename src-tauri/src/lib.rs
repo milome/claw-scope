@@ -15,6 +15,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             gateway::commands::gateway_status,
+            gateway::commands::gateway_sessions_list,
+            gateway::commands::gateway_set_active_session,
             gateway::commands::gateway_normalize_endpoint,
             gateway::commands::gateway_connect,
             gateway::commands::gateway_discover,

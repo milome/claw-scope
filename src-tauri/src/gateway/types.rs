@@ -112,8 +112,10 @@ pub enum GatewayConnectionPhase {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct GatewayStatusSnapshot {
+    pub session_id: Option<String>,
     pub phase: GatewayConnectionPhase,
     pub gateway_origin: Option<String>,
+    pub is_active: bool,
     pub device_id: Option<String>,
     pub granted_role: Option<String>,
     pub granted_scopes: Vec<String>,
@@ -125,8 +127,10 @@ pub struct GatewayStatusSnapshot {
 impl GatewayStatusSnapshot {
     pub fn idle() -> Self {
         Self {
+            session_id: None,
             phase: GatewayConnectionPhase::Idle,
             gateway_origin: None,
+            is_active: false,
             device_id: None,
             granted_role: None,
             granted_scopes: Vec::new(),
@@ -541,10 +545,60 @@ pub struct GatewayConfigSchemaLookupResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct GatewayAgentSettingsFieldMetadata {
+    pub source: GatewayAgentSettingsFieldSourceKind,
+    pub path: Option<String>,
+    pub write_actions: Vec<GatewayAgentSettingsWriteAction>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayAgentSettingsMetadata {
+    pub workspace: GatewayAgentSettingsFieldMetadata,
+    pub model: GatewayAgentSettingsFieldMetadata,
+    pub is_default: GatewayAgentSettingsFieldMetadata,
+    pub agent_dir: GatewayAgentSettingsFieldMetadata,
+    pub bindings: GatewayAgentSettingsFieldMetadata,
+    pub group_chat: GatewayAgentSettingsFieldMetadata,
+    pub sandbox: GatewayAgentSettingsFieldMetadata,
+    pub tools: GatewayAgentSettingsFieldMetadata,
+    pub memory_search: GatewayAgentSettingsFieldMetadata,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GatewayAgentSettingsFieldSourceKind {
+    GatewayGlobal,
+    DefaultAgentRouting,
+    UniversalDefaults,
+    SelectedAgentOverride,
+    EffectiveRuntime,
+    Mixed,
+    Unset,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayAgentSettingsWriteAction {
+    pub kind: GatewayAgentSettingsWriteActionKind,
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GatewayAgentSettingsWriteActionKind {
+    AgentsUpdate,
+    ConfigPatch,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct GatewayAgentSettingsResult {
     pub agent_id: String,
     pub workspace: Option<String>,
     pub model: Option<String>,
+    #[serde(default)]
+    pub model_options: Vec<String>,
     pub is_default: bool,
     pub agent_dir: Option<String>,
     pub bindings_json: Option<String>,
@@ -552,11 +606,13 @@ pub struct GatewayAgentSettingsResult {
     pub sandbox_json: Option<String>,
     pub tools_json: Option<String>,
     pub memory_search: GatewayAgentMemorySearchSettingsResult,
+    pub metadata: GatewayAgentSettingsMetadata,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct GatewayAgentSettingsUpdateInput {
+    pub session_id: Option<String>,
     pub agent_id: String,
     pub workspace: Option<String>,
     pub model: Option<String>,

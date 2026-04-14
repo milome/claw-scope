@@ -1,4 +1,5 @@
 use std::{
+    collections::{HashMap, HashSet},
     future::Future,
     fs,
     path::{Path, PathBuf},
@@ -49,7 +50,10 @@ use crate::gateway::{
         GatewayAgentMemoryTimelineProbeDayStatus, GatewayAgentMemoryTimelineProbeStatus,
         GatewayAgentMemoryTimelineProbeSummary, GatewayAgentMemoryTimelineResult,
         GatewayAgentMemoryTimelineSource,
-        GatewayAgentSettingsResult, GatewayAgentSettingsUpdateInput, GatewayAgentsListResult,
+        GatewayAgentSettingsFieldMetadata, GatewayAgentSettingsFieldSourceKind,
+        GatewayAgentSettingsMetadata, GatewayAgentSettingsResult,
+        GatewayAgentSettingsUpdateInput, GatewayAgentSettingsWriteAction,
+        GatewayAgentSettingsWriteActionKind, GatewayAgentsListResult,
         GatewayConfigSchemaLookupChild, GatewayConfigSchemaLookupResult, GatewayConfigSchemaUiHint,
         GatewayConnectConfig,
         GatewayConfigSetResult,
@@ -79,12 +83,6 @@ pub async fn connect(
     let endpoint = GatewayEndpoint::from_config(&config)?;
     state.clear_timeline_probe_cache();
 
-    if let Some(existing) = state.take_session().await {
-        existing.reject_all_pending_requests(GatewayError::Transport {
-            message: "gateway session replaced by a new connection attempt".to_string(),
-        });
-        close_connection_writer(&existing).await;
-    }
     let role = normalize_role(&config.role);
     let scopes = normalize_scopes(&config.scopes);
     let store_paths = resolve_store_paths();
@@ -157,7 +155,7 @@ pub async fn connect(
     }
     mark_saved_endpoint_success(&store_paths, &endpoint.origin_key)?;
 
-    let session_id = random_hex_id();
+    let session_id = endpoint.origin_key.clone();
     let writer = Arc::new(AsyncMutex::new(writer));
     let active_connection = GatewayActiveConnection::new(
         session_id.clone(),
@@ -168,15 +166,17 @@ pub async fn connect(
     let replaced = state.replace_session(Some(active_connection.clone())).await;
     if let Some(previous) = replaced {
         previous.reject_all_pending_requests(GatewayError::Transport {
-            message: "gateway session replaced by a newer live session".to_string(),
+            message: "gateway session replaced by a newer live session for the same endpoint".to_string(),
         });
         close_connection_writer(&previous).await;
     }
     spawn_connection_reader(state.clone(), active_connection, reader);
 
     let snapshot = GatewayStatusSnapshot {
+        session_id: Some(session_id),
         phase: GatewayConnectionPhase::Connected,
         gateway_origin: Some(endpoint.origin_key.clone()),
+        is_active: true,
         device_id: Some(identity.device_id.clone()),
         granted_role: Some(
             hello
@@ -208,19 +208,25 @@ pub async fn disconnect(state: GatewayAppState) -> Result<GatewayStatusSnapshot,
     }
 
     let mut snapshot = state.snapshot();
+    snapshot.session_id = None;
     snapshot.phase = GatewayConnectionPhase::Disconnected;
     snapshot.granted_role = None;
     snapshot.granted_scopes.clear();
     snapshot.last_error = None;
     snapshot.is_paired = false;
     snapshot.can_retry_with_device_token = false;
+    snapshot.is_active = false;
     state.replace_snapshot(snapshot.clone());
     Ok(snapshot)
 }
 
-pub async fn agents_list(state: GatewayAppState) -> Result<GatewayAgentsListResult, GatewayError> {
-    let value = request_json(
+pub async fn agents_list(
+    state: GatewayAppState,
+    session_selector: Option<&str>,
+) -> Result<GatewayAgentsListResult, GatewayError> {
+    let value = request_json_on_session(
         state,
+        session_selector,
         "agents.list",
         Some(Value::Object(Map::new())),
     )
@@ -232,10 +238,12 @@ pub async fn agents_list(state: GatewayAppState) -> Result<GatewayAgentsListResu
 
 pub async fn agent_identity_get(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
 ) -> Result<GatewayAgentIdentityResult, GatewayError> {
-    let value = request_json(
+    let value = request_json_on_session(
         state,
+        session_selector,
         "agent.identity.get",
         Some(json!({ "agentId": agent_id })),
     )
@@ -247,39 +255,48 @@ pub async fn agent_identity_get(
 
 pub async fn agent_soul_get(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
 ) -> Result<GatewayAgentFileGetResult, GatewayError> {
-    agent_file_get(state, agent_id, "SOUL.md").await
+    agent_file_get_with_selector(state, session_selector, agent_id, "SOUL.md").await
 }
 
 pub async fn agent_file_read(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     name: &str,
 ) -> Result<GatewayAgentFileGetResult, GatewayError> {
-    agent_file_get(state, agent_id, name).await
+    agent_file_get_with_selector(state, session_selector, agent_id, name).await
 }
 
 pub async fn agent_workspace_identity_get(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
 ) -> Result<GatewayAgentFileGetResult, GatewayError> {
-    agent_file_get(state, agent_id, "IDENTITY.md").await
+    agent_file_get_with_selector(state, session_selector, agent_id, "IDENTITY.md").await
 }
 
 pub async fn agent_memory_get(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
 ) -> Result<GatewayAgentMemoryResult, GatewayError> {
-    let agents = agents_list(state.clone()).await?;
-    let primary_document = agent_file_get(state.clone(), agent_id, "MEMORY.md").await?;
-    let legacy_document = agent_file_get(state.clone(), agent_id, "memory.md").await?;
+    let agents = agents_list(state.clone(), session_selector).await?;
+    let primary_document =
+        agent_file_get_with_selector(state.clone(), session_selector, agent_id, "MEMORY.md")
+            .await?;
+    let legacy_document =
+        agent_file_get_with_selector(state.clone(), session_selector, agent_id, "memory.md")
+            .await?;
     let mut workspace = resolve_memory_workspace(
         primary_document.workspace.as_str(),
         legacy_document.workspace.as_str(),
     );
-    let config = request_json(
+    let config = request_json_on_session(
         state.clone(),
+        session_selector,
         "config.get",
         Some(Value::Object(Map::new())),
     )
@@ -295,8 +312,14 @@ pub async fn agent_memory_get(
             }
         }
     }
-    let shared_agents =
-        resolve_shared_workspace_agents(state.clone(), &agents, agent_id, workspace.as_str()).await;
+    let shared_agents = resolve_shared_workspace_agents(
+        state.clone(),
+        session_selector,
+        &agents,
+        agent_id,
+        workspace.as_str(),
+    )
+    .await;
     let diagnostics = config.as_ref().map(|config| {
         resolve_agent_memory_diagnostics(config, agent_id, &agents.default_id, workspace.as_str())
     });
@@ -312,12 +335,13 @@ pub async fn agent_memory_get(
 
 pub async fn agent_memory_search(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     query: &str,
     max_results: Option<usize>,
     source_filter: Option<&str>,
 ) -> Result<GatewayAgentMemorySearchResult, GatewayError> {
-    let memory = agent_memory_get(state.clone(), agent_id).await?;
+    let memory = agent_memory_get(state.clone(), session_selector, agent_id).await?;
     let query = query.trim().to_string();
     let diagnostics = build_agent_memory_search_diagnostics(memory.diagnostics.as_ref());
     if query.is_empty() {
@@ -347,12 +371,13 @@ pub async fn agent_memory_search(
         result_limit,
         normalized_source_filter.as_deref(),
     );
-    let session = create_remote_probe_session(state.clone(), agent_id).await?;
+    let session = create_remote_probe_session(state.clone(), session_selector, agent_id).await?;
     let session_key = session.key.clone();
 
     let search_result = async {
         let send_response = send_remote_probe_session_message(
             state.clone(),
+            session_selector,
             session_key.as_str(),
             prompt.as_str(),
             REMOTE_MEMORY_SEARCH_REQUEST_TIMEOUT,
@@ -364,6 +389,7 @@ pub async fn agent_memory_search(
         {
             wait_for_remote_probe_run(
                 state.clone(),
+                session_selector,
                 run_id.as_str(),
                 REMOTE_MEMORY_SEARCH_WAIT_TIMEOUT,
                 REMOTE_MEMORY_SEARCH_REQUEST_TIMEOUT,
@@ -371,7 +397,8 @@ pub async fn agent_memory_search(
             .await?;
         }
 
-        let messages = request_session_messages(state.clone(), session_key.as_str()).await?;
+        let messages =
+            request_session_messages(state.clone(), session_selector, session_key.as_str()).await?;
         let reply = parse_remote_memory_search_reply_from_messages(messages.as_slice())?;
         let mut results = reply
             .results
@@ -402,16 +429,18 @@ pub async fn agent_memory_search(
     }
     .await;
 
-    delete_remote_probe_session(state, session_key.as_str()).await;
+    delete_remote_probe_session(state, session_selector, session_key.as_str()).await;
     search_result
 }
 
 pub async fn agent_memory_status(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
 ) -> Result<GatewayAgentMemoryStatusResult, GatewayError> {
-    let value = request_json(
+    let value = request_json_on_session(
         state,
+        session_selector,
         "doctor.memory.status",
         Some(json!({
             "agentId": agent_id,
@@ -465,13 +494,14 @@ pub async fn agent_memory_status(
 
 pub async fn agent_memory_runtime_status(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
 ) -> Result<GatewayAgentMemoryRuntimeStatusResult, GatewayError> {
     // Local-only enhancement.
     // This bridge shells out to the local `openclaw` CLI and therefore only works
     // for same-machine sessions. Remote/LAN gateway sessions must not rely on it.
     let endpoint = state
-        .session()
+        .session_for_selector(session_selector)
         .await
         .map(|session| session.endpoint.transport)
         .ok_or_else(|| GatewayError::Transport {
@@ -528,11 +558,17 @@ pub async fn agent_memory_runtime_status(
         })
         .collect::<Vec<_>>();
 
-    let config_value = request_json(state.clone(), "config.get", Some(Value::Object(Map::new()))).await?;
+    let config_value = request_json_on_session(
+        state.clone(),
+        session_selector,
+        "config.get",
+        Some(Value::Object(Map::new())),
+    )
+    .await?;
     let config = parse_gateway_config(config_value)?;
-    let agents = agents_list(state.clone()).await?;
+    let agents = agents_list(state.clone(), session_selector).await?;
     let default_id = agents.default_id.clone();
-    let memory = agent_memory_get(state, agent_id).await?;
+    let memory = agent_memory_get(state, session_selector, agent_id).await?;
     let workspace_dir = if memory.workspace.trim().is_empty() {
         resolve_agent_workspace(&config, agent_id, &default_id)
     } else {
@@ -592,11 +628,12 @@ pub async fn agent_memory_runtime_status(
 
 pub async fn agent_memory_index(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     force: bool,
 ) -> Result<GatewayAgentMemoryIndexResult, GatewayError> {
     let endpoint = state
-        .session()
+        .session_for_selector(session_selector)
         .await
         .map(|session| session.endpoint.transport)
         .ok_or_else(|| GatewayError::Transport {
@@ -642,16 +679,26 @@ pub async fn agent_memory_index(
 
 pub async fn agent_memory_timeline_get(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
 ) -> Result<GatewayAgentMemoryTimelineResult, GatewayError> {
-    agent_memory_timeline_local_scan(state, agent_id).await
+    agent_memory_timeline_local_scan(state, session_selector, agent_id).await
 }
 
 pub async fn agent_memory_timeline_access_resolve(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
 ) -> Result<GatewayAgentMemoryTimelineAccessResult, GatewayError> {
-    if state.snapshot().phase != GatewayConnectionPhase::Connected {
+    let snapshot = match session_selector {
+        Some(session_id) if !session_id.trim().is_empty() => state
+            .snapshots()
+            .into_iter()
+            .find(|candidate| candidate.session_id.as_deref() == Some(session_id))
+            .unwrap_or_else(|| state.snapshot()),
+        _ => state.snapshot(),
+    };
+    if snapshot.phase != GatewayConnectionPhase::Connected {
         return Ok(GatewayAgentMemoryTimelineAccessResult {
             agent_id: agent_id.to_string(),
             workspace: String::new(),
@@ -660,7 +707,7 @@ pub async fn agent_memory_timeline_access_resolve(
         });
     }
 
-    let memory = agent_memory_get(state, agent_id).await?;
+    let memory = agent_memory_get(state, session_selector, agent_id).await?;
     let workspace = memory.workspace.trim().to_string();
     if workspace.is_empty() {
         return Ok(GatewayAgentMemoryTimelineAccessResult {
@@ -684,9 +731,10 @@ pub async fn agent_memory_timeline_access_resolve(
 
 pub async fn agent_memory_timeline_local_scan(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
 ) -> Result<GatewayAgentMemoryTimelineResult, GatewayError> {
-    let access = agent_memory_timeline_access_resolve(state, agent_id).await?;
+    let access = agent_memory_timeline_access_resolve(state, session_selector, agent_id).await?;
     let empty_diagnostics = GatewayAgentMemoryTimelineDiagnostics {
         gateway_visible_files_count: 0,
         gateway_visible_root_docs_count: 0,
@@ -730,11 +778,13 @@ pub async fn agent_memory_timeline_local_scan(
 
 pub async fn agent_memory_timeline_remote_probe(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     start_date: &str,
     end_date: &str,
 ) -> Result<GatewayAgentMemoryTimelineResult, GatewayError> {
-    let access = agent_memory_timeline_access_resolve(state.clone(), agent_id).await?;
+    let access =
+        agent_memory_timeline_access_resolve(state.clone(), session_selector, agent_id).await?;
     let workspace = access.workspace.clone();
     let gateway_origin = state.snapshot().gateway_origin;
     let names = build_timeline_probe_date_names(start_date, end_date)?;
@@ -755,6 +805,7 @@ pub async fn agent_memory_timeline_remote_probe(
 
     let result = run_remote_timeline_probe(
         state.clone(),
+        session_selector,
         agent_id,
         workspace.as_str(),
         names,
@@ -779,30 +830,36 @@ pub async fn agent_memory_timeline_remote_probe(
 
 pub async fn agent_memory_timeline_remote_probe_dates(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     dates: &[String],
 ) -> Result<GatewayAgentMemoryTimelineResult, GatewayError> {
-    let access = agent_memory_timeline_access_resolve(state.clone(), agent_id).await?;
+    let access =
+        agent_memory_timeline_access_resolve(state.clone(), session_selector, agent_id).await?;
     let workspace = access.workspace.clone();
     let names = build_timeline_probe_date_names_from_dates(dates)?;
 
-    run_remote_timeline_probe(state, agent_id, workspace.as_str(), names, None).await
+    run_remote_timeline_probe(state, session_selector, agent_id, workspace.as_str(), names, None)
+        .await
 }
 
 pub async fn agent_memory_timeline_entry_get(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     name: &str,
 ) -> Result<GatewayAgentFileGetResult, GatewayError> {
-    agent_memory_timeline_entry_read(state, agent_id, name).await
+    agent_memory_timeline_entry_read(state, session_selector, agent_id, name).await
 }
 
 pub async fn agent_memory_timeline_entry_read(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     name: &str,
 ) -> Result<GatewayAgentFileGetResult, GatewayError> {
-    let access = agent_memory_timeline_access_resolve(state.clone(), agent_id).await?;
+    let access =
+        agent_memory_timeline_access_resolve(state.clone(), session_selector, agent_id).await?;
     let resolved_access = resolve_memory_timeline_access(
         expand_workspace_path(access.workspace.as_str()).as_path(),
         true,
@@ -812,6 +869,7 @@ pub async fn agent_memory_timeline_entry_read(
     } else {
         remote_read_memory_timeline_entry(
             state.clone(),
+            session_selector,
             agent_id,
             access.workspace.as_str(),
             name,
@@ -829,17 +887,21 @@ pub async fn agent_memory_timeline_entry_read(
 
 pub async fn agent_settings_get(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
 ) -> Result<GatewayAgentSettingsResult, GatewayError> {
-    let agents = agents_list(state.clone()).await?;
-    let workspace = agent_workspace_identity_get(state.clone(), agent_id).await?;
-    let config = gateway_config_get(state).await?.config;
+    let agents = agents_list(state.clone(), session_selector).await?;
+    let workspace = agent_file_get_with_selector(state.clone(), session_selector, agent_id, "IDENTITY.md").await?;
+    let config = gateway_config_get_for_session(state, session_selector).await?.config;
     let is_default = agents.default_id == agent_id;
+    let explicit_agent_exists = resolve_named_agent_config(&config, agent_id).is_some();
+    let effective_workspace = workspace.workspace.clone();
 
     Ok(GatewayAgentSettingsResult {
         agent_id: agent_id.to_string(),
-        workspace: normalize_optional_string(Some(workspace.workspace)),
+        workspace: normalize_optional_string(Some(effective_workspace.clone())),
         model: resolve_agent_model(&config, agent_id, &agents.default_id),
+        model_options: resolve_ready_model_options(&config),
         is_default,
         agent_dir: resolve_agent_dir(&config, agent_id, &agents.default_id),
         bindings_json: resolve_bindings_json(&config),
@@ -847,6 +909,13 @@ pub async fn agent_settings_get(
         sandbox_json: resolve_agent_sandbox_json(&config, agent_id, &agents.default_id),
         tools_json: resolve_agent_tools_json(&config, agent_id, &agents.default_id),
         memory_search: resolve_agent_memory_search_settings(&config, agent_id, &agents.default_id),
+        metadata: resolve_agent_settings_metadata(
+            &config,
+            agent_id,
+            &agents.default_id,
+            explicit_agent_exists,
+            effective_workspace.as_str(),
+        ),
     })
 }
 
@@ -854,7 +923,8 @@ pub async fn agent_settings_set(
     state: GatewayAppState,
     input: GatewayAgentSettingsUpdateInput,
 ) -> Result<GatewayAgentSettingsResult, GatewayError> {
-    let agents = agents_list(state.clone()).await?;
+    let session_selector = input.session_id.as_deref();
+    let agents = agents_list(state.clone(), session_selector).await?;
     let is_default_agent = agents.default_id == input.agent_id;
 
     let workspace = normalize_optional_string(input.workspace);
@@ -894,7 +964,13 @@ pub async fn agent_settings_set(
             params.insert("model".to_string(), Value::String(model));
         }
         if params.len() > 1 {
-            let _ = request_json(state.clone(), "agents.update", Some(Value::Object(params))).await?;
+            let _ = request_json_on_session(
+                state.clone(),
+                session_selector,
+                "agents.update",
+                Some(Value::Object(params)),
+            )
+            .await?;
         }
     }
 
@@ -916,7 +992,7 @@ pub async fn agent_settings_set(
         should_patch_agent_branch || input.clear_bindings || bindings.is_some();
 
     if should_use_config_patch {
-        let mut response = gateway_config_get(state.clone()).await?;
+        let mut response = gateway_config_get_for_session(state.clone(), session_selector).await?;
         let config = &mut response.config;
         if input.clear_bindings {
             config.bindings = None;
@@ -1113,11 +1189,17 @@ pub async fn agent_settings_set(
         }
 
         if !patch.is_empty() {
-            gateway_config_patch(state.clone(), Value::Object(patch), response.hash).await?;
+            gateway_config_patch_for_session(
+                state.clone(),
+                session_selector,
+                Value::Object(patch),
+                response.hash,
+            )
+            .await?;
         }
     }
 
-    agent_settings_get(state, input.agent_id.as_str()).await
+    agent_settings_get(state, session_selector, input.agent_id.as_str()).await
 }
 
 pub async fn config_schema_lookup(
@@ -1307,27 +1389,37 @@ pub async fn config_set_local(
 
 pub async fn agent_workspace_identity_set(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     content: &str,
 ) -> Result<(), GatewayError> {
-    agent_file_set(state, agent_id, "IDENTITY.md", content).await
+    agent_file_set(state, session_selector, agent_id, "IDENTITY.md", content).await
 }
 
 pub async fn agent_soul_set(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     content: &str,
 ) -> Result<(), GatewayError> {
-    agent_file_set(state, agent_id, "SOUL.md", content).await
+    agent_file_set(state, session_selector, agent_id, "SOUL.md", content).await
 }
 
 pub async fn agent_memory_set(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     name: &str,
     content: &str,
 ) -> Result<(), GatewayError> {
-    agent_file_set(state, agent_id, normalize_memory_root_document_name(name)?, content).await
+    agent_file_set(
+        state,
+        session_selector,
+        agent_id,
+        normalize_memory_root_document_name(name)?,
+        content,
+    )
+    .await
 }
 
 async fn agent_file_get(
@@ -1337,6 +1429,24 @@ async fn agent_file_get(
 ) -> Result<GatewayAgentFileGetResult, GatewayError> {
     let value = request_json(
         state,
+        "agents.files.get",
+        Some(json!({ "agentId": agent_id, "name": name })),
+    )
+    .await?;
+    serde_json::from_value(value).map_err(|error| GatewayError::Protocol {
+        message: format!("failed decoding agents.files.get payload for {name}: {error}"),
+    })
+}
+
+async fn agent_file_get_with_selector(
+    state: GatewayAppState,
+    session_selector: Option<&str>,
+    agent_id: &str,
+    name: &str,
+) -> Result<GatewayAgentFileGetResult, GatewayError> {
+    let value = request_json_on_session(
+        state,
+        session_selector,
         "agents.files.get",
         Some(json!({ "agentId": agent_id, "name": name })),
     )
@@ -1475,12 +1585,14 @@ enum RemoteProbeSendDisposition {
 
 async fn agent_file_set(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     name: &str,
     content: &str,
 ) -> Result<(), GatewayError> {
-    request_json(
+    request_json_on_session(
         state,
+        session_selector,
         "agents.files.set",
         Some(json!({
             "agentId": agent_id,
@@ -2248,6 +2360,7 @@ Rules:\n\
 
 async fn run_remote_timeline_probe(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     workspace: &str,
     names: Vec<String>,
@@ -2259,6 +2372,7 @@ async fn run_remote_timeline_probe(
     for name in names {
         let attempt = remote_probe_timeline_entry_with_retry(
             state.clone(),
+            session_selector,
             agent_id,
             workspace,
             name.as_str(),
@@ -2302,10 +2416,12 @@ async fn run_remote_timeline_probe(
 
 async fn create_remote_probe_session(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
 ) -> Result<GatewaySessionCreateResponse, GatewayError> {
-    let value = request_json(
+    let value = request_json_on_session(
         state,
+        session_selector,
         "sessions.create",
         Some(json!({
             "agentId": agent_id,
@@ -2320,12 +2436,14 @@ async fn create_remote_probe_session(
 
 async fn send_remote_probe_session_message(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     session_key: &str,
     prompt: &str,
     request_timeout: Duration,
 ) -> Result<GatewaySessionSendResponse, GatewayError> {
     let value = request_json_with_timeout(
         state,
+        session_selector,
         "sessions.send",
         Some(json!({
             "key": session_key,
@@ -2388,12 +2506,14 @@ fn resolve_remote_probe_send_disposition(
 
 async fn wait_for_remote_probe_run(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     run_id: &str,
     wait_timeout: Duration,
     request_timeout: Duration,
 ) -> Result<(), GatewayError> {
     let value = request_json_with_timeout(
         state,
+        session_selector,
         "agent.wait",
         Some(json!({
             "runId": run_id,
@@ -2427,10 +2547,12 @@ async fn wait_for_remote_probe_run(
 
 async fn request_session_messages(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     session_key: &str,
 ) -> Result<Vec<Value>, GatewayError> {
-    let value = match request_json(
+    let value = match request_json_on_session(
         state.clone(),
+        session_selector,
         "chat.history",
         Some(json!({
             "sessionKey": session_key,
@@ -2441,8 +2563,9 @@ async fn request_session_messages(
     {
         Ok(value) => value,
         Err(GatewayError::NotImplemented { .. }) => {
-            request_json(
+            request_json_on_session(
                 state,
+                session_selector,
                 "sessions.get",
                 Some(json!({
                     "key": session_key,
@@ -2596,9 +2719,14 @@ fn parse_remote_memory_search_reply_from_messages(
     })
 }
 
-async fn delete_remote_probe_session(state: GatewayAppState, session_key: &str) {
-    let _ = request_json(
+async fn delete_remote_probe_session(
+    state: GatewayAppState,
+    session_selector: Option<&str>,
+    session_key: &str,
+) {
+    let _ = request_json_on_session(
         state,
+        session_selector,
         "sessions.delete",
         Some(json!({
             "key": session_key,
@@ -2619,12 +2747,14 @@ fn classify_remote_timeline_probe_error(error: &GatewayError) -> RemoteTimelineP
 
 async fn remote_probe_timeline_entry_with_retry(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     workspace: &str,
     name: &str,
 ) -> RemoteTimelineProbeAttempt {
     match remote_read_memory_timeline_entry_with_timeouts(
         state.clone(),
+        session_selector,
         agent_id,
         workspace,
         name,
@@ -2638,6 +2768,7 @@ async fn remote_probe_timeline_entry_with_retry(
         Err(error) if is_remote_timeline_probe_timeout(&error) => {
             match remote_read_memory_timeline_entry_with_timeouts(
                 state,
+                session_selector,
                 agent_id,
                 workspace,
                 name,
@@ -2659,6 +2790,7 @@ async fn remote_probe_timeline_entry_with_retry(
 
 async fn remote_read_memory_timeline_entry(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     workspace: &str,
     name: &str,
@@ -2676,6 +2808,7 @@ async fn remote_read_memory_timeline_entry(
     };
     remote_read_memory_timeline_entry_with_timeouts(
         state,
+        session_selector,
         agent_id,
         workspace,
         name,
@@ -2688,6 +2821,7 @@ async fn remote_read_memory_timeline_entry(
 
 async fn remote_read_memory_timeline_entry_with_timeouts(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agent_id: &str,
     workspace: &str,
     name: &str,
@@ -2697,7 +2831,7 @@ async fn remote_read_memory_timeline_entry_with_timeouts(
 ) -> Result<GatewayAgentFileEntry, GatewayError> {
     let normalized_name = normalize_memory_timeline_entry_name(name)?;
     let prompt = build_remote_probe_prompt(normalized_name.as_str(), include_content);
-    let session = create_remote_probe_session(state.clone(), agent_id).await?;
+    let session = create_remote_probe_session(state.clone(), session_selector, agent_id).await?;
     let session_key = session.key.clone();
 
     let result = async {
@@ -2717,6 +2851,7 @@ async fn remote_read_memory_timeline_entry_with_timeouts(
 
         let send_result = send_remote_probe_session_message(
             state.clone(),
+            session_selector,
             session_key.as_str(),
             prompt.as_str(),
             request_timeout,
@@ -2727,6 +2862,7 @@ async fn remote_read_memory_timeline_entry_with_timeouts(
             RemoteProbeSendDisposition::Wait(run_id) => {
                 wait_for_remote_probe_run(
                     state.clone(),
+                    session_selector,
                     run_id.as_str(),
                     wait_timeout,
                     request_timeout,
@@ -2736,7 +2872,8 @@ async fn remote_read_memory_timeline_entry_with_timeouts(
             RemoteProbeSendDisposition::Completed => {}
         }
 
-        let messages = request_session_messages(state.clone(), session_key.as_str()).await?;
+        let messages =
+            request_session_messages(state.clone(), session_selector, session_key.as_str()).await?;
         let reply = parse_remote_timeline_probe_reply_from_messages(
             &messages,
             normalized_name.as_str(),
@@ -2779,7 +2916,7 @@ async fn remote_read_memory_timeline_entry_with_timeouts(
     }
     .await;
 
-    delete_remote_probe_session(state, session_key.as_str()).await;
+    delete_remote_probe_session(state, session_selector, session_key.as_str()).await;
     result
 }
 
@@ -2809,9 +2946,28 @@ struct GatewayConfigSnapshot {
     #[serde(default)]
     agents: GatewayAgentsConfigSnapshot,
     #[serde(default)]
+    models: GatewayModelsConfigSnapshot,
+    #[serde(default)]
     memory: GatewayMemoryConfigSnapshot,
     #[serde(default)]
     bindings: Option<Value>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct GatewayModelsConfigSnapshot {
+    #[serde(default)]
+    providers: HashMap<String, GatewayModelProviderConfigSnapshot>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct GatewayModelProviderConfigSnapshot {
+    base_url: Option<String>,
+    api_key: Option<String>,
+    api: Option<String>,
+    #[serde(flatten)]
+    extra: Map<String, Value>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
@@ -3095,6 +3251,20 @@ async fn gateway_config_get(
     parse_gateway_config_response(config_value)
 }
 
+async fn gateway_config_get_for_session(
+    state: GatewayAppState,
+    session_selector: Option<&str>,
+) -> Result<GatewayConfigGetResponse, GatewayError> {
+    let config_value = request_json_on_session(
+        state,
+        session_selector,
+        "config.get",
+        Some(Value::Object(Map::new())),
+    )
+    .await?;
+    parse_gateway_config_response(config_value)
+}
+
 async fn gateway_config_patch(
     state: GatewayAppState,
     patch: Value,
@@ -3109,10 +3279,270 @@ async fn gateway_config_patch(
     Ok(())
 }
 
-fn resolve_agent_model(
+async fn gateway_config_patch_for_session(
+    state: GatewayAppState,
+    session_selector: Option<&str>,
+    patch: Value,
+    base_hash: Option<String>,
+) -> Result<(), GatewayError> {
+    let mut params = Map::new();
+    params.insert("patch".to_string(), patch);
+    if let Some(base_hash) = normalize_optional_string(base_hash) {
+        params.insert("baseHash".to_string(), Value::String(base_hash));
+    }
+    let _ = request_json_on_session(state, session_selector, "config.patch", Some(Value::Object(params))).await?;
+    Ok(())
+}
+
+fn gateway_settings_agents_update_action(path: &str) -> GatewayAgentSettingsWriteAction {
+    GatewayAgentSettingsWriteAction {
+        kind: GatewayAgentSettingsWriteActionKind::AgentsUpdate,
+        path: Some(path.to_string()),
+    }
+}
+
+fn gateway_settings_config_patch_action(path: impl Into<String>) -> GatewayAgentSettingsWriteAction {
+    GatewayAgentSettingsWriteAction {
+        kind: GatewayAgentSettingsWriteActionKind::ConfigPatch,
+        path: Some(path.into()),
+    }
+}
+
+fn selected_agent_patch_path(
+    agent_id: &str,
+    default_id: &str,
+    explicit_agent_exists: bool,
+    leaf: &str,
+) -> String {
+    if agent_id == default_id && !explicit_agent_exists {
+        format!("agents.defaults.{leaf}")
+    } else {
+        format!("agents.list.{agent_id}.{leaf}")
+    }
+}
+
+fn simple_settings_metadata(
+    source: GatewayAgentSettingsFieldSourceKind,
+    path: Option<String>,
+    write_actions: Vec<GatewayAgentSettingsWriteAction>,
+) -> GatewayAgentSettingsFieldMetadata {
+    GatewayAgentSettingsFieldMetadata {
+        source,
+        path,
+        write_actions,
+    }
+}
+
+fn conditional_field_metadata(
+    explicit_has_value: bool,
+    default_has_value: bool,
+    allow_defaults: bool,
+    explicit_path: String,
+    default_path: String,
+    write_actions: Vec<GatewayAgentSettingsWriteAction>,
+) -> GatewayAgentSettingsFieldMetadata {
+    if explicit_has_value {
+        return simple_settings_metadata(
+            GatewayAgentSettingsFieldSourceKind::SelectedAgentOverride,
+            Some(explicit_path),
+            write_actions,
+        );
+    }
+
+    if allow_defaults && default_has_value {
+        return simple_settings_metadata(
+            GatewayAgentSettingsFieldSourceKind::UniversalDefaults,
+            Some(default_path),
+            write_actions,
+        );
+    }
+
+    simple_settings_metadata(GatewayAgentSettingsFieldSourceKind::Unset, None, write_actions)
+}
+
+fn resolve_memory_search_metadata(
     config: &GatewayConfigSnapshot,
     agent_id: &str,
     default_id: &str,
+    explicit_agent_exists: bool,
+) -> GatewayAgentSettingsFieldMetadata {
+    let defaults = config.agents.defaults.memory_search.as_ref();
+    let explicit_agent = resolve_named_agent_config(config, agent_id);
+    let explicit = explicit_agent.and_then(|agent| agent.memory_search.as_ref());
+
+    let source = match (explicit.is_some(), defaults.is_some()) {
+        (true, true) => GatewayAgentSettingsFieldSourceKind::Mixed,
+        (true, false) => GatewayAgentSettingsFieldSourceKind::SelectedAgentOverride,
+        (false, true) => GatewayAgentSettingsFieldSourceKind::UniversalDefaults,
+        (false, false) => GatewayAgentSettingsFieldSourceKind::Unset,
+    };
+
+    let path = match source {
+        GatewayAgentSettingsFieldSourceKind::Mixed => Some(format!(
+            "{} + {}",
+            selected_agent_patch_path(agent_id, default_id, explicit_agent_exists, "memorySearch"),
+            "agents.defaults.memorySearch"
+        )),
+        GatewayAgentSettingsFieldSourceKind::SelectedAgentOverride => Some(
+            selected_agent_patch_path(agent_id, default_id, explicit_agent_exists, "memorySearch"),
+        ),
+        GatewayAgentSettingsFieldSourceKind::UniversalDefaults => {
+            Some("agents.defaults.memorySearch".to_string())
+        }
+        GatewayAgentSettingsFieldSourceKind::Unset => None,
+        _ => None,
+    };
+
+    simple_settings_metadata(
+        source,
+        path,
+        vec![gateway_settings_config_patch_action(selected_agent_patch_path(
+            agent_id,
+            default_id,
+            explicit_agent_exists,
+            "memorySearch",
+        ))],
+    )
+}
+
+fn resolve_agent_settings_metadata(
+    config: &GatewayConfigSnapshot,
+    agent_id: &str,
+    default_id: &str,
+    explicit_agent_exists: bool,
+    effective_workspace: &str,
+) -> GatewayAgentSettingsMetadata {
+    let explicit_agent = resolve_named_agent_config(config, agent_id);
+    let defaults_model = config.agents.defaults.model.as_ref().and_then(format_agent_model);
+    let explicit_model = explicit_agent
+        .and_then(|agent| agent.model.as_ref())
+        .and_then(format_agent_model);
+    let defaults_agent_dir = normalize_optional_string(config.agents.defaults.agent_dir.clone());
+    let explicit_agent_dir =
+        explicit_agent.and_then(|agent| normalize_optional_string(agent.agent_dir.clone()));
+    let defaults_group_chat = config.agents.defaults.group_chat.as_ref();
+    let explicit_group_chat = explicit_agent.and_then(|agent| agent.group_chat.as_ref());
+    let defaults_sandbox = config.agents.defaults.sandbox.as_ref();
+    let explicit_sandbox = explicit_agent.and_then(|agent| agent.sandbox.as_ref());
+    let defaults_tools = config.agents.defaults.tools.as_ref();
+    let explicit_tools = explicit_agent.and_then(|agent| agent.tools.as_ref());
+    let effective_workspace = normalize_optional_string(Some(effective_workspace.to_string()));
+
+    GatewayAgentSettingsMetadata {
+        workspace: simple_settings_metadata(
+            if effective_workspace.is_some() {
+                GatewayAgentSettingsFieldSourceKind::EffectiveRuntime
+            } else {
+                GatewayAgentSettingsFieldSourceKind::Unset
+            },
+            effective_workspace
+                .as_ref()
+                .map(|_| "agents.files.get(IDENTITY.md).workspace".to_string()),
+            vec![
+                gateway_settings_agents_update_action("workspace"),
+                gateway_settings_config_patch_action(selected_agent_patch_path(
+                    agent_id,
+                    default_id,
+                    explicit_agent_exists,
+                    "workspace",
+                )),
+            ],
+        ),
+        model: conditional_field_metadata(
+            explicit_model.is_some(),
+            defaults_model.is_some(),
+            true,
+            format!("agents.list.{agent_id}.model"),
+            "agents.defaults.model".to_string(),
+            vec![
+                gateway_settings_agents_update_action("model"),
+                gateway_settings_config_patch_action(selected_agent_patch_path(
+                    agent_id,
+                    default_id,
+                    explicit_agent_exists,
+                    "model",
+                )),
+            ],
+        ),
+        is_default: simple_settings_metadata(
+            GatewayAgentSettingsFieldSourceKind::DefaultAgentRouting,
+            Some("agents.default_id".to_string()),
+            vec![gateway_settings_config_patch_action("agents.list[*].default")],
+        ),
+        agent_dir: conditional_field_metadata(
+            explicit_agent_dir.is_some(),
+            defaults_agent_dir.is_some(),
+            true,
+            format!("agents.list.{agent_id}.agentDir"),
+            "agents.defaults.agentDir".to_string(),
+            vec![gateway_settings_config_patch_action(selected_agent_patch_path(
+                agent_id,
+                default_id,
+                explicit_agent_exists,
+                "agentDir",
+            ))],
+        ),
+        bindings: simple_settings_metadata(
+            if config.bindings.is_some() {
+                GatewayAgentSettingsFieldSourceKind::GatewayGlobal
+            } else {
+                GatewayAgentSettingsFieldSourceKind::Unset
+            },
+            config.bindings.as_ref().map(|_| "bindings".to_string()),
+            vec![gateway_settings_config_patch_action("bindings")],
+        ),
+        group_chat: conditional_field_metadata(
+            explicit_group_chat.is_some(),
+            defaults_group_chat.is_some(),
+            true,
+            format!("agents.list.{agent_id}.groupChat"),
+            "agents.defaults.groupChat".to_string(),
+            vec![gateway_settings_config_patch_action(selected_agent_patch_path(
+                agent_id,
+                default_id,
+                explicit_agent_exists,
+                "groupChat",
+            ))],
+        ),
+        sandbox: conditional_field_metadata(
+            explicit_sandbox.is_some(),
+            defaults_sandbox.is_some(),
+            true,
+            format!("agents.list.{agent_id}.sandbox"),
+            "agents.defaults.sandbox".to_string(),
+            vec![gateway_settings_config_patch_action(selected_agent_patch_path(
+                agent_id,
+                default_id,
+                explicit_agent_exists,
+                "sandbox",
+            ))],
+        ),
+        tools: conditional_field_metadata(
+            explicit_tools.is_some(),
+            defaults_tools.is_some(),
+            true,
+            format!("agents.list.{agent_id}.tools"),
+            "agents.defaults.tools".to_string(),
+            vec![gateway_settings_config_patch_action(selected_agent_patch_path(
+                agent_id,
+                default_id,
+                explicit_agent_exists,
+                "tools",
+            ))],
+        ),
+        memory_search: resolve_memory_search_metadata(
+            config,
+            agent_id,
+            default_id,
+            explicit_agent_exists,
+        ),
+    }
+}
+
+fn resolve_agent_model(
+    config: &GatewayConfigSnapshot,
+    agent_id: &str,
+    _default_id: &str,
 ) -> Option<String> {
     let defaults_model = config.agents.defaults.model.as_ref().and_then(format_agent_model);
     let explicit_agent = resolve_named_agent_config(config, agent_id);
@@ -3124,11 +3554,7 @@ fn resolve_agent_model(
         return explicit_model;
     }
 
-    if explicit_agent.is_some() || agent_id == default_id {
-        return defaults_model;
-    }
-
-    None
+    defaults_model
 }
 
 fn resolve_named_agent_config<'a>(
@@ -3141,7 +3567,7 @@ fn resolve_named_agent_config<'a>(
 fn resolve_agent_workspace(
     config: &GatewayConfigSnapshot,
     agent_id: &str,
-    default_id: &str,
+    _default_id: &str,
 ) -> Option<String> {
     let defaults_workspace = normalize_optional_string(config.agents.defaults.workspace.clone());
     let explicit_agent = resolve_named_agent_config(config, agent_id);
@@ -3152,17 +3578,13 @@ fn resolve_agent_workspace(
         return explicit_workspace;
     }
 
-    if explicit_agent.is_some() || agent_id == default_id {
-        return defaults_workspace;
-    }
-
-    None
+    defaults_workspace
 }
 
 fn resolve_agent_dir(
     config: &GatewayConfigSnapshot,
     agent_id: &str,
-    default_id: &str,
+    _default_id: &str,
 ) -> Option<String> {
     let defaults_agent_dir = normalize_optional_string(config.agents.defaults.agent_dir.clone());
     let explicit_agent = resolve_named_agent_config(config, agent_id);
@@ -3173,11 +3595,7 @@ fn resolve_agent_dir(
         return explicit_agent_dir;
     }
 
-    if explicit_agent.is_some() || agent_id == default_id {
-        return defaults_agent_dir;
-    }
-
-    None
+    defaults_agent_dir
 }
 
 fn format_json_patch_surface(value: Option<&Value>) -> Option<String> {
@@ -3451,19 +3869,15 @@ fn resolve_bindings_json(config: &GatewayConfigSnapshot) -> Option<String> {
 fn resolve_agent_patch_surface_json(
     defaults: Option<&Value>,
     explicit: Option<&Value>,
-    explicit_agent_exists: bool,
-    agent_id: &str,
-    default_id: &str,
+    _explicit_agent_exists: bool,
+    _agent_id: &str,
+    _default_id: &str,
 ) -> Option<String> {
     if explicit.is_some() {
         return format_json_patch_surface(explicit);
     }
 
-    if explicit_agent_exists || agent_id == default_id {
-        return format_json_patch_surface(defaults);
-    }
-
-    None
+    format_json_patch_surface(defaults)
 }
 
 fn resolve_agent_sandbox_json(
@@ -3572,35 +3986,26 @@ fn resolve_agent_memory_diagnostics(
 fn resolve_agent_memory_search(
     config: &GatewayConfigSnapshot,
     agent_id: &str,
-    default_id: &str,
+    _default_id: &str,
 ) -> ResolvedGatewayMemorySearchConfig {
     let defaults = config.agents.defaults.memory_search.as_ref();
     let explicit_agent = resolve_named_agent_config(config, agent_id);
     let explicit = explicit_agent.and_then(|agent| agent.memory_search.as_ref());
-    let should_use_defaults = explicit_agent.is_some() || agent_id == default_id;
 
     let enabled = search_flag(explicit, |snapshot| snapshot.enabled)
-        .or_else(|| should_use_defaults.then(|| search_flag(defaults, |snapshot| snapshot.enabled)).flatten())
+        .or_else(|| search_flag(defaults, |snapshot| snapshot.enabled))
         .unwrap_or(true);
     let provider = search_string(explicit, |snapshot| snapshot.provider.clone()).or_else(|| {
-        should_use_defaults
-            .then(|| search_string(defaults, |snapshot| snapshot.provider.clone()))
-            .flatten()
+        search_string(defaults, |snapshot| snapshot.provider.clone())
     });
     let model = search_string(explicit, |snapshot| snapshot.model.clone()).or_else(|| {
-        should_use_defaults
-            .then(|| search_string(defaults, |snapshot| snapshot.model.clone()))
-            .flatten()
+        search_string(defaults, |snapshot| snapshot.model.clone())
     });
     let extra_paths = search_vec(explicit, |snapshot| snapshot.extra_paths.clone()).or_else(|| {
-        should_use_defaults
-            .then(|| search_vec(defaults, |snapshot| snapshot.extra_paths.clone()))
-            .flatten()
+        search_vec(defaults, |snapshot| snapshot.extra_paths.clone())
     });
     let sources = search_vec(explicit, |snapshot| snapshot.sources.clone()).or_else(|| {
-        should_use_defaults
-            .then(|| search_vec(defaults, |snapshot| snapshot.sources.clone()))
-            .flatten()
+        search_vec(defaults, |snapshot| snapshot.sources.clone())
     });
     let store_path = search_string(explicit, |snapshot| {
         snapshot
@@ -3609,16 +4014,12 @@ fn resolve_agent_memory_search(
             .and_then(|store| store.path.clone())
     })
     .or_else(|| {
-        should_use_defaults
-            .then(|| {
-                search_string(defaults, |snapshot| {
-                    snapshot
-                        .store
-                        .as_ref()
-                        .and_then(|store| store.path.clone())
-                })
-            })
-            .flatten()
+        search_string(defaults, |snapshot| {
+            snapshot
+                .store
+                .as_ref()
+                .and_then(|store| store.path.clone())
+        })
     })
     .unwrap_or_else(|| "~/.openclaw/memory/{agentId}.sqlite".to_string());
     let builtin_store_path = expand_agent_template_path(store_path.as_str(), agent_id);
@@ -3629,37 +4030,26 @@ fn resolve_agent_memory_search(
             .and_then(|experimental| experimental.session_memory)
     })
     .or_else(|| {
-        should_use_defaults
-            .then(|| {
-                search_flag(defaults, |snapshot| {
-                    snapshot
-                        .experimental
-                        .as_ref()
-                        .and_then(|experimental| experimental.session_memory)
-                })
-            })
-            .flatten()
+        search_flag(defaults, |snapshot| {
+            snapshot
+                .experimental
+                .as_ref()
+                .and_then(|experimental| experimental.session_memory)
+        })
     })
     .unwrap_or(false);
     let explicit_query = explicit.and_then(|snapshot| snapshot.query.as_ref());
     let default_query = defaults.and_then(|snapshot| snapshot.query.as_ref());
     let hybrid_enabled = query_bool(explicit_query, &["hybrid", "enabled"])
-        .or_else(|| should_use_defaults.then(|| query_bool(default_query, &["hybrid", "enabled"])).flatten())
+        .or_else(|| query_bool(default_query, &["hybrid", "enabled"]))
         .unwrap_or(false);
     let mmr_enabled = query_bool(explicit_query, &["mmr", "enabled"])
-        .or_else(|| should_use_defaults.then(|| query_bool(default_query, &["mmr", "enabled"])).flatten())
+        .or_else(|| query_bool(default_query, &["mmr", "enabled"]))
         .unwrap_or(false);
-    let mmr = query_number_string(explicit_query, &["hybrid", "mmr"]).or_else(|| {
-        should_use_defaults
-            .then(|| query_number_string(default_query, &["hybrid", "mmr"]))
-            .flatten()
-    });
-    let temporal_decay =
-        query_number_string(explicit_query, &["hybrid", "temporalDecay"]).or_else(|| {
-            should_use_defaults
-                .then(|| query_number_string(default_query, &["hybrid", "temporalDecay"]))
-                .flatten()
-        });
+    let mmr = query_number_string(explicit_query, &["hybrid", "mmr"])
+        .or_else(|| query_number_string(default_query, &["hybrid", "mmr"]));
+    let temporal_decay = query_number_string(explicit_query, &["hybrid", "temporalDecay"])
+        .or_else(|| query_number_string(default_query, &["hybrid", "temporalDecay"]));
 
     ResolvedGatewayMemorySearchConfig {
         enabled,
@@ -3741,6 +4131,88 @@ fn format_agent_model(model: &GatewayAgentModelConfig) -> Option<String> {
             }
         }
     }
+}
+
+fn agent_model_identifiers(model: &GatewayAgentModelConfig) -> Vec<String> {
+    match model {
+        GatewayAgentModelConfig::Name(model) => normalize_optional_string(Some(model.clone()))
+            .into_iter()
+            .collect(),
+        GatewayAgentModelConfig::Detailed { primary, fallbacks } => {
+            let mut values = Vec::new();
+            if let Some(primary) = normalize_optional_string(primary.clone()) {
+                values.push(primary);
+            }
+            values.extend(
+                fallbacks
+                    .iter()
+                    .filter_map(|value| normalize_optional_string(Some(value.clone()))),
+            );
+            normalize_string_list(values)
+        }
+    }
+}
+
+fn model_provider_key(model: &str) -> Option<String> {
+    normalize_optional_string(Some(model.to_string())).and_then(|model| {
+        model
+            .split_once('/')
+            .map(|(provider, _)| provider.trim().to_ascii_lowercase())
+            .filter(|provider| !provider.is_empty())
+    })
+}
+
+fn model_provider_is_ready(provider: &GatewayModelProviderConfigSnapshot) -> bool {
+    normalize_optional_string(provider.base_url.clone()).is_some()
+        && normalize_optional_string(provider.api_key.clone()).is_some()
+}
+
+fn push_ready_model_option(
+    options: &mut Vec<String>,
+    seen: &mut HashSet<String>,
+    ready_providers: &HashSet<String>,
+    model: String,
+) {
+    let Some(provider_key) = model_provider_key(model.as_str()) else {
+        return;
+    };
+    if !ready_providers.contains(&provider_key) {
+        return;
+    }
+    if seen.insert(model.clone()) {
+        options.push(model);
+    }
+}
+
+fn resolve_ready_model_options(config: &GatewayConfigSnapshot) -> Vec<String> {
+    let ready_providers = config
+        .models
+        .providers
+        .iter()
+        .filter_map(|(key, provider)| {
+            model_provider_is_ready(provider).then(|| key.to_ascii_lowercase())
+        })
+        .collect::<HashSet<_>>();
+
+    if ready_providers.is_empty() {
+        return Vec::new();
+    }
+
+    let mut options = Vec::new();
+    let mut seen = HashSet::new();
+    if let Some(model) = config.agents.defaults.model.as_ref() {
+        for model in agent_model_identifiers(model) {
+            push_ready_model_option(&mut options, &mut seen, &ready_providers, model);
+        }
+    }
+    for agent in &config.agents.list {
+        if let Some(model) = agent.model.as_ref() {
+            for model in agent_model_identifiers(model) {
+                push_ready_model_option(&mut options, &mut seen, &ready_providers, model);
+            }
+        }
+    }
+    options
 }
 
 fn normalize_optional_string(value: Option<String>) -> Option<String> {
@@ -3866,6 +4338,7 @@ fn resolve_agent_summary_name(agent: &crate::gateway::types::GatewayAgentSummary
 
 async fn resolve_shared_workspace_agents(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     agents: &GatewayAgentsListResult,
     selected_agent_id: &str,
     selected_workspace: &str,
@@ -3877,7 +4350,10 @@ async fn resolve_shared_workspace_agents(
             continue;
         }
 
-        let Ok(agent_memory) = agent_file_get(state.clone(), &agent.id, "MEMORY.md").await else {
+        let Ok(agent_memory) =
+            agent_file_get_with_selector(state.clone(), session_selector, &agent.id, "MEMORY.md")
+                .await
+        else {
             continue;
         };
 
@@ -4016,16 +4492,27 @@ async fn request_json(
     params: Option<Value>,
 ) -> Result<Value, GatewayError> {
     let request_timeout = Duration::from_millis(state.advanced_config().timeout_ms);
-    request_json_with_timeout(state, method, params, request_timeout).await
+    request_json_with_timeout(state, None, method, params, request_timeout).await
+}
+
+async fn request_json_on_session(
+    state: GatewayAppState,
+    session_selector: Option<&str>,
+    method: &str,
+    params: Option<Value>,
+) -> Result<Value, GatewayError> {
+    let request_timeout = Duration::from_millis(state.advanced_config().timeout_ms);
+    request_json_with_timeout(state, session_selector, method, params, request_timeout).await
 }
 
 async fn request_json_with_timeout(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     method: &str,
     params: Option<Value>,
     request_timeout: Duration,
 ) -> Result<Value, GatewayError> {
-    let connection = state.session().await.ok_or_else(|| GatewayError::Transport {
+    let connection = state.session_for_selector(session_selector).await.ok_or_else(|| GatewayError::Transport {
         message: "gateway not connected".to_string(),
     })?;
     if !connection.supports_method(method) {
@@ -4292,8 +4779,10 @@ fn snapshot_for_phase(
     phase: GatewayConnectionPhase,
 ) -> GatewayStatusSnapshot {
     GatewayStatusSnapshot {
+        session_id: Some(endpoint.origin_key.clone()),
         phase,
         gateway_origin: Some(endpoint.origin_key.clone()),
+        is_active: true,
         device_id: Some(device_id.to_string()),
         granted_role: None,
         granted_scopes: Vec::new(),
@@ -4309,12 +4798,14 @@ fn failure_snapshot(
     error: &GatewayError,
 ) -> GatewayStatusSnapshot {
     GatewayStatusSnapshot {
+        session_id: Some(endpoint.origin_key.clone()),
         phase: if error.connect_error_code().as_deref() == Some(CONNECT_ERROR_PAIRING_REQUIRED) {
             GatewayConnectionPhase::WaitingForApproval
         } else {
             GatewayConnectionPhase::Failed
         },
         gateway_origin: Some(endpoint.origin_key.clone()),
+        is_active: true,
         device_id: Some(device_id.to_string()),
         granted_role: None,
         granted_scopes: Vec::new(),
@@ -4352,6 +4843,7 @@ mod tests {
         order_daily_memory_entries, order_memory_root_documents, parse_gateway_config,
         parse_json_patch_surface, parse_memory_search_update_input,
         apply_memory_search_update, resolve_agent_memory_diagnostics, resolve_agent_model,
+        resolve_agent_settings_metadata, resolve_ready_model_options,
         resolve_agent_group_chat_json, resolve_agent_memory_search_settings, resolve_agent_sandbox_json,
         resolve_agent_tools_json, resolve_bindings_json, resolve_memory_workspace,
         GatewayMemorySearchSnapshot,
@@ -4360,6 +4852,8 @@ mod tests {
     use crate::gateway::errors::{GatewayError, GatewayErrorSummary};
     use crate::gateway::types::{
         GatewayAgentFileEntry, GatewayAgentMemorySearchSourceKind,
+        GatewayAgentSettingsFieldSourceKind, GatewayAgentSettingsWriteAction,
+        GatewayAgentSettingsWriteActionKind,
         GatewayAgentMemoryTimelineAccessReason,
         GatewayAgentMemoryTimelineProbeDayStatus, GatewayAgentMemoryTimelineProbeStatus,
         GatewayAgentMemoryTimelineSource, GatewayConfigSchemaLookupResult,
@@ -4436,6 +4930,125 @@ mod tests {
     }
 
     #[test]
+    fn gateway_agent_settings_metadata_marks_workspace_as_effective_runtime_with_dual_write_actions() {
+        let config = parse_gateway_config(json!({
+            "config": {
+                "agents": {
+                    "defaults": {
+                        "model": "gpt-5.4"
+                    },
+                    "list": [
+                        {
+                            "id": "research",
+                            "model": "claude-sonnet-4"
+                        }
+                    ]
+                }
+            }
+        }))
+        .expect("parse gateway config");
+
+        let metadata = resolve_agent_settings_metadata(
+            &config,
+            "research",
+            "main",
+            true,
+            "~/.openclaw/workspace-research",
+        );
+
+        assert_eq!(
+            metadata.workspace.source,
+            GatewayAgentSettingsFieldSourceKind::EffectiveRuntime
+        );
+        assert_eq!(
+            metadata.workspace.write_actions,
+            vec![
+                GatewayAgentSettingsWriteAction {
+                    kind: GatewayAgentSettingsWriteActionKind::AgentsUpdate,
+                    path: Some("workspace".to_string()),
+                },
+                GatewayAgentSettingsWriteAction {
+                    kind: GatewayAgentSettingsWriteActionKind::ConfigPatch,
+                    path: Some("agents.list.research.workspace".to_string()),
+                },
+            ]
+        );
+        assert_eq!(
+            metadata.model.source,
+            GatewayAgentSettingsFieldSourceKind::SelectedAgentOverride
+        );
+        assert_eq!(
+            metadata.model.write_actions,
+            vec![
+                GatewayAgentSettingsWriteAction {
+                    kind: GatewayAgentSettingsWriteActionKind::AgentsUpdate,
+                    path: Some("model".to_string()),
+                },
+                GatewayAgentSettingsWriteAction {
+                    kind: GatewayAgentSettingsWriteActionKind::ConfigPatch,
+                    path: Some("agents.list.research.model".to_string()),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn gateway_agent_settings_metadata_distinguishes_global_defaults_and_override_sources() {
+        let config = parse_gateway_config(json!({
+            "config": {
+                "bindings": [
+                    {
+                        "agentId": "research",
+                        "match": { "channel": "telegram" }
+                    }
+                ],
+                "agents": {
+                    "defaults": {
+                        "sandbox": {
+                            "mode": "workspace-write"
+                        },
+                        "memorySearch": {
+                            "provider": "openai"
+                        }
+                    },
+                    "list": [
+                        {
+                            "id": "research",
+                            "groupChat": {
+                                "mode": "managed"
+                            },
+                            "memorySearch": {
+                                "model": "text-embedding-3-large"
+                            }
+                        }
+                    ]
+                }
+            }
+        }))
+        .expect("parse gateway config");
+
+        let metadata =
+            resolve_agent_settings_metadata(&config, "research", "main", true, "~/.openclaw/workspace-research");
+
+        assert_eq!(
+            metadata.bindings.source,
+            GatewayAgentSettingsFieldSourceKind::GatewayGlobal
+        );
+        assert_eq!(
+            metadata.group_chat.source,
+            GatewayAgentSettingsFieldSourceKind::SelectedAgentOverride
+        );
+        assert_eq!(
+            metadata.sandbox.source,
+            GatewayAgentSettingsFieldSourceKind::UniversalDefaults
+        );
+        assert_eq!(
+            metadata.memory_search.source,
+            GatewayAgentSettingsFieldSourceKind::Mixed
+        );
+    }
+
+    #[test]
     fn gateway_agent_settings_handles_model_objects_without_primary() {
         let config = parse_gateway_config(json!({
             "config": {
@@ -4457,6 +5070,56 @@ mod tests {
         assert_eq!(
             resolve_agent_model(&config, "fallback-only", "main").as_deref(),
             Some("openai/gpt-4.1, anthropic/claude-sonnet-4")
+        );
+    }
+
+    #[test]
+    fn gateway_agent_settings_model_options_only_include_ready_provider_models() {
+        let config = parse_gateway_config(json!({
+            "config": {
+                "models": {
+                    "providers": {
+                        "anthropic": {
+                            "baseUrl": "https://api.anthropic.com",
+                            "apiKey": "anthropic-live-key"
+                        },
+                        "openai": {
+                            "baseUrl": "https://api.openai.com"
+                        },
+                        "ollama": {
+                            "baseUrl": "http://127.0.0.1:11434",
+                            "apiKey": "ollama-local"
+                        }
+                    }
+                },
+                "agents": {
+                    "defaults": {
+                        "model": {
+                            "primary": "anthropic/claude-sonnet-4-6",
+                            "fallbacks": [
+                                "openai/gpt-4.1",
+                                "ollama/qwen2.5-coder"
+                            ]
+                        }
+                    },
+                    "list": [
+                        {
+                            "id": "ops",
+                            "model": "anthropic/claude-sonnet-4"
+                        }
+                    ]
+                }
+            }
+        }))
+        .expect("parse gateway config");
+
+        assert_eq!(
+            resolve_ready_model_options(&config),
+            vec![
+                "anthropic/claude-sonnet-4-6".to_string(),
+                "ollama/qwen2.5-coder".to_string(),
+                "anthropic/claude-sonnet-4".to_string(),
+            ]
         );
     }
 
@@ -4659,7 +5322,11 @@ mod tests {
                 .expect("ops tools")
                 .contains("\"profile\": \"safe\"")
         );
-        assert!(resolve_agent_sandbox_json(&config, "ghost", "main").is_none());
+        assert!(
+            resolve_agent_sandbox_json(&config, "ghost", "main")
+                .expect("ghost falls back to universal sandbox defaults")
+                .contains("\"mode\": \"workspace-write\"")
+        );
     }
 
     #[test]

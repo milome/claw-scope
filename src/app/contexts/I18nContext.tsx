@@ -1379,6 +1379,111 @@ const DICT: Record<string, string[]> = {
     "身份与灵魂的编辑请继续使用 Profile，这里只负责运行态 Agent 设置与查看。",
     "身份與靈魂的編輯請繼續使用 Profile，這裡只負責執行態 Agent 設定與查看。",
   ],
+  "config.agentSettings.scopeLegendTitle": [
+    "Scope Legend",
+    "Scope 图例",
+    "Scope 圖例",
+  ],
+  "config.agentSettings.scopeLegendDesc": [
+    "This page mixes gateway-global config, default-agent routing, universal defaults, and selected-agent overrides. The UI below describes those layers rather than pretending everything belongs only to the selected agent.",
+    "这个页面同时包含 Gateway 全局配置、默认 Agent 路由、通用默认值以及当前 Agent 覆盖。下面的说明会按真实层级描述它们，而不是假装所有字段都只属于当前 Agent。",
+    "這個頁面同時包含 Gateway 全域配置、預設 Agent 路由、通用預設值以及目前 Agent 覆蓋。下方說明會按真實層級描述它們，而不是假裝所有欄位都只屬於目前 Agent。",
+  ],
+  "config.agentSettings.scopeGlobalTitle": [
+    "Gateway Global",
+    "Gateway 全局",
+    "Gateway 全域",
+  ],
+  "config.agentSettings.scopeGlobalDesc": [
+    "Shared across the current gateway session. Bindings live here.",
+    "作用于当前 Gateway 会话的共享配置，bindings 属于这一层。",
+    "作用於目前 Gateway 會話的共享配置，bindings 屬於這一層。",
+  ],
+  "config.agentSettings.scopeDefaultRoutingTitle": [
+    "Default Agent Routing",
+    "默认 Agent 路由",
+    "預設 Agent 路由",
+  ],
+  "config.agentSettings.scopeDefaultRoutingDesc": [
+    "This selects which agent is treated as the current default. It is not the same thing as editing agents.defaults.*.",
+    "这一层决定谁是当前默认 Agent，它不等于编辑 agents.defaults.*。",
+    "這一層決定誰是目前預設 Agent，它不等於編輯 agents.defaults.*。",
+  ],
+  "config.agentSettings.scopeConditionalDefaultsTitle": [
+    "Universal Defaults",
+    "通用默认值",
+    "通用預設值",
+  ],
+  "config.agentSettings.scopeConditionalDefaultsDesc": [
+    "agents.defaults.* now acts as the shared default layer for every agent unless an explicit per-agent override exists.",
+    "agents.defaults.* 现在会作为所有 Agent 的共享默认层，除非存在显式的 per-agent override。",
+    "agents.defaults.* 現在會作為所有 Agent 的共享預設層，除非存在顯式的 per-agent override。",
+  ],
+  "config.agentSettings.scopeSelectedOverrideTitle": [
+    "Selected Agent Override",
+    "当前 Agent 覆盖",
+    "目前 Agent 覆蓋",
+  ],
+  "config.agentSettings.scopeSelectedOverrideDesc": [
+    "Named agent branches under agents.list[*] override universal defaults for the selected agent.",
+    "agents.list[*] 下的 named agent 分支会覆盖当前 Agent 看到的通用默认值。",
+    "agents.list[*] 下的 named agent 分支會覆蓋目前 Agent 看到的通用預設值。",
+  ],
+  "config.agentSettings.meta.sourceLabel": [
+    "Source",
+    "来源",
+    "來源",
+  ],
+  "config.agentSettings.meta.writeLabel": [
+    "Writes",
+    "写向",
+    "寫向",
+  ],
+  "config.agentSettings.meta.source.gatewayGlobal": [
+    "Gateway Global",
+    "Gateway 全局",
+    "Gateway 全域",
+  ],
+  "config.agentSettings.meta.source.defaultAgentRouting": [
+    "Default Agent Routing",
+    "默认 Agent 路由",
+    "預設 Agent 路由",
+  ],
+  "config.agentSettings.meta.source.universalDefaults": [
+    "Universal Defaults",
+    "通用默认值",
+    "通用預設值",
+  ],
+  "config.agentSettings.meta.source.selectedAgentOverride": [
+    "Selected Agent Override",
+    "当前 Agent 覆盖",
+    "目前 Agent 覆蓋",
+  ],
+  "config.agentSettings.meta.source.effectiveRuntime": [
+    "Effective Runtime",
+    "运行态有效值",
+    "執行態有效值",
+  ],
+  "config.agentSettings.meta.source.mixed": [
+    "Mixed",
+    "混合来源",
+    "混合來源",
+  ],
+  "config.agentSettings.meta.source.unset": [
+    "Unset",
+    "未设置",
+    "未設定",
+  ],
+  "config.agentSettings.meta.action.agentsUpdate": [
+    "agents.update",
+    "agents.update",
+    "agents.update",
+  ],
+  "config.agentSettings.meta.action.configPatch": [
+    "config.patch",
+    "config.patch",
+    "config.patch",
+  ],
   "config.agentSettings.openProfile": [
     "Open Profile",
     "打开 Profile",
@@ -1407,6 +1512,11 @@ const DICT: Record<string, string[]> = {
     "本 wave 已开放 workspace/model/agentDir/default/bindings/groupChat/sandbox/tools/memorySearch 写回。",
     "本 wave 已開放 workspace/model/agentDir/default/bindings/groupChat/sandbox/tools/memorySearch 寫回。",
   ],
+  "config.agentSettings.resolvedTruth": [
+    "The fields below combine effective values with backend source and write-target metadata. Use the scope colors to tell global, routing, shared-default, and agent-override work apart.",
+    "下面的字段同时展示 effective 值、后端来源和写入目标元数据；请直接用 scope 颜色区分全局、路由、共享默认值和当前 Agent 覆盖。",
+    "下方欄位同時顯示 effective 值、後端來源與寫入目標中繼資料；請直接用 scope 顏色區分全域、路由、共享預設值與目前 Agent 覆蓋。",
+  ],
   "config.agentSettings.loadFailed": [
     "Failed to load agent settings.",
     "加载 Agent 设置失败。",
@@ -1434,6 +1544,51 @@ const DICT: Record<string, string[]> = {
     "~/.openclaw/agents/research",
     "~/.openclaw/agents/research",
   ],
+  "config.agentSettings.effectiveSectionTitle": [
+    "Effective Runtime View",
+    "运行态有效值",
+    "執行態有效值",
+  ],
+  "config.agentSettings.effectiveSectionDesc": [
+    "These runtime-facing fields are still shown as effective values first, but each card now keeps its source and write-target truth next to the editor.",
+    "这些运行态字段依然以 effective 值为主，但每张卡片现在都会把来源和写向真相放在编辑器旁边。",
+    "這些執行態欄位仍然以 effective 值為主，但每張卡片現在都會把來源與寫向真相放在編輯器旁邊。",
+  ],
+  "config.agentSettings.workspaceHint": [
+    "Workspace is shown as the effective value for the selected agent. Saving it is currently not a single-route write path.",
+    "Workspace 展示的是当前 Agent 的有效值；当前保存它并不是单一路由写入。",
+    "Workspace 顯示的是目前 Agent 的有效值；目前保存它並不是單一路由寫入。",
+  ],
+  "config.agentSettings.modelHint": [
+    "Only models whose providers are configured and ready for this node appear in the dropdown. Current save flow may still touch more than one backend path.",
+    "下拉列表只展示当前节点上 provider 已配置完成、可直接使用的模型；当前保存流程仍可能触达不止一条后端路径。",
+    "下拉列表只顯示目前節點上 provider 已設定完成、可直接使用的模型；目前儲存流程仍可能觸達不止一條後端路徑。",
+  ],
+  "config.agentSettings.modelNoReadyOptions": [
+    "No directly usable models were found for this node. Configure provider credentials first.",
+    "当前节点还没有可直接使用的模型；请先完成 provider 凭据配置。",
+    "目前節點還沒有可直接使用的模型；請先完成 provider 憑證設定。",
+  ],
+  "config.agentSettings.modelCurrentUnavailable": [
+    "Current value (provider not ready):",
+    "当前值（provider 未就绪）：",
+    "目前值（provider 未就緒）：",
+  ],
+  "config.agentSettings.agentDirHint": [
+    "Agent Directory belongs to config patch semantics, not to a dedicated agents.update field.",
+    "Agent Directory 属于 config patch 语义，不是专门的 agents.update 字段。",
+    "Agent Directory 屬於 config patch 語義，不是專門的 agents.update 欄位。",
+  ],
+  "config.agentSettings.defaultAgentSectionTitle": [
+    "Default Agent Routing",
+    "默认 Agent 路由",
+    "預設 Agent 路由",
+  ],
+  "config.agentSettings.defaultAgentSectionDesc": [
+    "This card controls which agent is treated as the current default. It is separate from the universal defaults stored under agents.defaults.*.",
+    "这里控制谁是当前默认 Agent，它与 agents.defaults.* 下的通用默认值是两回事。",
+    "這裡控制誰是目前預設 Agent，它與 agents.defaults.* 下的通用預設值是兩回事。",
+  ],
   "config.agentSettings.defaultAgent": [
     "Default Agent",
     "默认 Agent",
@@ -1450,9 +1605,19 @@ const DICT: Record<string, string[]> = {
     "高級 JSON Patch 面",
   ],
   "config.agentSettings.advancedPatchDesc": [
-    "Bindings are global. Sandbox and tools resolve from config defaults or agent overrides. Clearing an editor removes that branch.",
-    "bindings 是全局配置。sandbox 与 tools 会解析默认值或当前 agent 覆盖；清空编辑器会移除该分支。",
-    "bindings 是全域配置。sandbox 與 tools 會解析預設值或目前 agent 覆蓋；清空編輯器會移除該分支。",
+    "This area is where shared defaults and selected-agent overrides become explicit. Each editor keeps the same scope color as the legend so you can tell what layer you are touching before you save.",
+    "这里是共享默认值与当前 Agent 覆盖真正落地的区域。每个编辑器都会沿用图例里的 scope 颜色，便于你在保存前判断自己正在碰哪一层。",
+    "這裡是共享預設值與目前 Agent 覆蓋真正落地的區域。每個編輯器都會沿用圖例裡的 scope 顏色，方便你在儲存前判斷自己正在碰哪一層。",
+  ],
+  "config.agentSettings.conditionalDefaultsDefaultHint": [
+    "You are viewing this page on the current default agent. Universal-default fields here may write back to agents.defaults.* for all agents.",
+    "你当前看到的是默认 Agent；这里的通用默认字段可能会写回 agents.defaults.*，并影响所有 Agent。",
+    "你目前看到的是預設 Agent；這裡的通用預設欄位可能會寫回 agents.defaults.*，並影響所有 Agent。",
+  ],
+  "config.agentSettings.conditionalDefaultsOverrideHint": [
+    "You are viewing a non-default agent. Universal defaults still apply here unless this page creates or updates a named override branch for the selected agent.",
+    "你当前看到的是非默认 Agent；除非这里为该 Agent 创建或更新 named override 分支，否则通用默认值仍然生效。",
+    "你目前看到的是非預設 Agent；除非這裡為該 Agent 建立或更新 named override 分支，否則通用預設值仍然生效。",
   ],
   "config.agentSettings.bindings": [
     "Bindings (Global)",
@@ -1506,9 +1671,9 @@ const DICT: Record<string, string[]> = {
   ],
   "config.agentSettings.sandbox": ["Sandbox", "Sandbox", "Sandbox"],
   "config.agentSettings.sandboxHint": [
-    "Agent-level sandbox branch. Falls back to agents.defaults.sandbox.",
-    "Agent 级 sandbox 分支；未配置时回退到 agents.defaults.sandbox。",
-    "Agent 層級 sandbox 分支；未配置時回退到 agents.defaults.sandbox。",
+    "Agent-level sandbox branch. Falls back to the universal defaults in agents.defaults.sandbox.",
+    "Agent 级 sandbox 分支；未配置时回退到 agents.defaults.sandbox 中的通用默认值。",
+    "Agent 層級 sandbox 分支；未配置時回退到 agents.defaults.sandbox 中的通用預設值。",
   ],
   "config.agentSettings.sandboxPlaceholder": [
     "{\n  \"mode\": \"workspace-write\",\n  \"network\": \"deny\"\n}",
@@ -1532,9 +1697,59 @@ const DICT: Record<string, string[]> = {
     "Memory Search",
   ],
   "config.agentSettings.memorySearchDesc": [
-    "Configure retrieval behavior, providers, and hybrid ranking for this agent.",
-    "配置当前 Agent 的检索行为、provider 与 hybrid 排序策略。",
-    "配置目前 Agent 的檢索行為、provider 與 hybrid 排序策略。",
+    "Configure how this agent indexes, stores, and ranks searchable memory.",
+    "配置当前 Agent 如何索引、存储并排序可检索记忆。",
+    "配置目前 Agent 如何索引、儲存並排序可檢索記憶。",
+  ],
+  "config.agentSettings.memorySearchControlTitle": [
+    "Control Surface",
+    "控制面",
+    "控制面",
+  ],
+  "config.agentSettings.memorySearchControlDesc": [
+    "Decide whether this agent should index and query semantic memory at all.",
+    "先决定这个 Agent 是否真的要启用语义记忆索引与检索。",
+    "先決定這個 Agent 是否真的要啟用語義記憶索引與檢索。",
+  ],
+  "config.agentSettings.memorySearchProviderBlockTitle": [
+    "Embedding And Store",
+    "Embedding 与存储",
+    "Embedding 與儲存",
+  ],
+  "config.agentSettings.memorySearchProviderBlockDesc": [
+    "Choose the embedding backend and the storage target for this agent's vectors.",
+    "这里定义 embedding 后端，以及当前 Agent 向量存到哪里。",
+    "這裡定義 embedding 後端，以及目前 Agent 向量存到哪裡。",
+  ],
+  "config.agentSettings.memorySearchBehaviorTitle": [
+    "Behavior Switches",
+    "行为开关",
+    "行為開關",
+  ],
+  "config.agentSettings.memorySearchBehaviorDesc": [
+    "These switches shape what gets indexed and how retrieval expands beyond the base vector search.",
+    "这些开关决定索引覆盖什么内容，以及检索是否在基础向量召回之外继续扩展。",
+    "這些開關決定索引覆蓋什麼內容，以及檢索是否在基礎向量召回之外繼續擴展。",
+  ],
+  "config.agentSettings.memorySearchTuningTitle": [
+    "Ranking Tuning",
+    "排序调参",
+    "排序調參",
+  ],
+  "config.agentSettings.memorySearchTuningDesc": [
+    "Touch these numbers only when retrieval quality needs explicit diversity or recency tuning.",
+    "只有在检索质量确实需要人工干预时，再改这里的多样性与时间偏置参数。",
+    "只有在檢索品質確實需要人工干預時，再改這裡的多樣性與時間偏置參數。",
+  ],
+  "config.agentSettings.memorySearchCorpusTitle": [
+    "Indexed Inputs",
+    "索引输入",
+    "索引輸入",
+  ],
+  "config.agentSettings.memorySearchCorpusDesc": [
+    "Point memory search at extra folders and source pools when the default corpus is not enough.",
+    "如果默认语料不够，就在这里补额外目录和来源池。",
+    "如果預設語料不夠，就在這裡補額外目錄與來源池。",
   ],
   "config.agentSettings.memorySearchEnabled": [
     "Enable Memory Search",
@@ -1582,9 +1797,9 @@ const DICT: Record<string, string[]> = {
     "索引 Session Memory",
   ],
   "config.agentSettings.memorySearchSessionMemoryHint": [
-    "Maps to memorySearch.experimental.sessionMemory.",
-    "对应 memorySearch.experimental.sessionMemory。",
-    "對應 memorySearch.experimental.sessionMemory。",
+    "Include live session traces in the searchable corpus.",
+    "把会话痕迹也纳入可检索语料。",
+    "把會話痕跡也納入可檢索語料。",
   ],
   "config.agentSettings.memorySearchHybridEnabled": [
     "Enable Hybrid Ranking",
@@ -1592,9 +1807,9 @@ const DICT: Record<string, string[]> = {
     "啟用 Hybrid 排序",
   ],
   "config.agentSettings.memorySearchHybridEnabledHint": [
-    "Maps to memorySearch.query.hybrid.enabled.",
-    "对应 memorySearch.query.hybrid.enabled。",
-    "對應 memorySearch.query.hybrid.enabled。",
+    "Blend semantic recall with an extra ranking pass.",
+    "在语义召回之外再叠一层额外排序。",
+    "在語義召回之外再疊一層額外排序。",
   ],
   "config.agentSettings.memorySearchMmrEnabled": [
     "Enable MMR Gate",
@@ -1602,9 +1817,9 @@ const DICT: Record<string, string[]> = {
     "啟用 MMR 開關",
   ],
   "config.agentSettings.memorySearchMmrEnabledHint": [
-    "Maps to memorySearch.query.mmr.enabled.",
-    "对应 memorySearch.query.mmr.enabled。",
-    "對應 memorySearch.query.mmr.enabled。",
+    "Favor diverse retrieval results instead of near-duplicates.",
+    "优先拉开结果多样性，减少相似命中堆叠。",
+    "優先拉開結果多樣性，減少相似命中堆疊。",
   ],
   "config.agentSettings.memorySearchMmr": [
     "MMR",
@@ -1647,9 +1862,9 @@ const DICT: Record<string, string[]> = {
     "memory\nsessions",
   ],
   "config.agentSettings.memorySearchListHint": [
-    "One item per line. Leave empty to clear the explicit branch.",
-    "每行一个值；留空会清除显式配置分支。",
-    "每行一個值；留空會清除顯式配置分支。",
+    "One item per line. Leave empty to clear this branch.",
+    "每行一个值；留空即清除此分支。",
+    "每行一個值；留空即清除此分支。",
   ],
   "config.agentSettings.saveOk": [
     "Agent settings saved.",
@@ -1660,6 +1875,16 @@ const DICT: Record<string, string[]> = {
     "Failed to save agent settings.",
     "保存 Agent 设置失败。",
     "保存 Agent 設定失敗。",
+  ],
+  "config.agentSettings.saveTruthDefault": [
+    "Save truth: on the default agent, this page may touch routing, shared defaults, and the current dual-path workspace/model flow.",
+    "保存真相：在默认 Agent 上，这里可能同时触达路由、共享默认值，以及 workspace/model 的双路径流程。",
+    "保存真相：在預設 Agent 上，這裡可能同時觸達路由、共享預設值，以及 workspace/model 的雙路徑流程。",
+  ],
+  "config.agentSettings.saveTruthOverride": [
+    "Save truth: on a non-default agent, advanced fields may create or update an override branch. Workspace/model is still not single-route.",
+    "保存真相：在非默认 Agent 上，高级字段可能创建或更新 override 分支；workspace/model 仍不是单一路径。",
+    "保存真相：在非預設 Agent 上，高級欄位可能建立或更新 override 分支；workspace/model 仍不是單一路徑。",
   ],
   "memory.diag.indexedShort": ["Indexed", "已索引", "已索引"],
   "memory.diag.totalShort": ["Total", "总数", "總數"],
@@ -2860,6 +3085,24 @@ const DICT: Record<string, string[]> = {
     "Last success",
     "最近成功连接",
     "最近成功連線",
+  ],
+  "config.sessions.title": [
+    "Connected Nodes",
+    "已连接节点",
+    "已連接節點",
+  ],
+  "config.sessions.desc": [
+    "Multiple gateway sessions can stay connected at once. Mark one as active to keep legacy single-session views aligned.",
+    "现在可以同时保持多个 Gateway session 连接。将某个节点设为 active，可让遗留的单 session 页面继续跟随它。",
+    "現在可以同時保持多個 Gateway session 連線。將某個節點設為 active，可讓遺留的單 session 頁面繼續跟隨它。",
+  ],
+  "config.sessions.active": ["Active", "当前 active", "目前 active"],
+  "config.sessions.online": ["Online", "在线", "在線"],
+  "config.sessions.offline": ["Offline", "离线", "離線"],
+  "config.sessions.makeActive": [
+    "Make Active",
+    "设为 Active",
+    "設為 Active",
   ],
   "config.discovery.confidenceHigh": [
     "High confidence",
