@@ -27,6 +27,8 @@ Thumbs.db
 
 # Local runtime / operator state
 .serena/
+.claude/
+.omc/
 outputs/
 .tmp/
 task_plan.md
