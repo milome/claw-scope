@@ -4,7 +4,7 @@
 
 OpenClaw 记忆与进化管理工具 — Tauri 2 + Rust 桌面应用。
 
-**命名：** 规划文档中的产品名为 **ClawForge**；本仓库与可执行侧为 **代号 ClawScope**。
+**命名：** 本仓库与可执行侧为 **代号 ClawScope**。
 
 ## 快速开始
 
