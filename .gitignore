@@ -29,6 +29,7 @@ Thumbs.db
 .serena/
 .claude/
 .omc/
+.zread/
 outputs/
 .tmp/
 task_plan.md
