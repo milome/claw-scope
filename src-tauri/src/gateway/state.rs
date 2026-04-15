@@ -198,10 +198,10 @@ impl GatewayAppState {
             .expect("active gateway session lock poisoned")
             .clone();
         let guard = self.inner.sessions.lock().await;
-        if let Some(active_session_id) = active_session_id {
-            if let Some(session) = guard.get(&active_session_id) {
-                return Some(session.clone());
-            }
+        if let Some(active_session_id) = active_session_id
+            && let Some(session) = guard.get(&active_session_id)
+        {
+            return Some(session.clone());
         }
 
         guard.values().next().cloned()
@@ -361,21 +361,20 @@ impl GatewayAppState {
             }
         }
 
-        if let Some(session_id) = session_id {
-            if let Some(snapshot) = self
+        if let Some(session_id) = session_id
+            && let Some(snapshot) = self
                 .inner
                 .snapshots
                 .lock()
                 .expect("gateway snapshots lock poisoned")
                 .get(&session_id)
                 .cloned()
-            {
-                *self
-                    .inner
-                    .snapshot
-                    .lock()
-                    .expect("gateway snapshot lock poisoned") = snapshot;
-            }
+        {
+            *self
+                .inner
+                .snapshot
+                .lock()
+                .expect("gateway snapshot lock poisoned") = snapshot;
         }
     }
 

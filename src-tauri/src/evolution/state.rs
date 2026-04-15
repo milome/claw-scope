@@ -48,9 +48,9 @@ pub struct EvolutionAppState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EvolutionRuntimeConflictKind {
-    AgentRuntimeConflict,
-    SourceDocumentConflict,
-    SourceRefConflict,
+    AgentRuntime,
+    SourceDocument,
+    SourceRef,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,11 +128,11 @@ impl EvolutionAppState {
                     .cloned()
                     .collect::<Vec<_>>();
                 let kind = if !overlapping_source_refs.is_empty() {
-                    EvolutionRuntimeConflictKind::SourceRefConflict
+                    EvolutionRuntimeConflictKind::SourceRef
                 } else if snapshot.source_document == preview.source_document {
-                    EvolutionRuntimeConflictKind::SourceDocumentConflict
+                    EvolutionRuntimeConflictKind::SourceDocument
                 } else {
-                    EvolutionRuntimeConflictKind::AgentRuntimeConflict
+                    EvolutionRuntimeConflictKind::AgentRuntime
                 };
                 return Some(EvolutionRuntimeConflict {
                     operation_id: snapshot.operation_id,
@@ -228,7 +228,7 @@ mod tests {
             .await
             .expect("expected conflict");
         assert_eq!(conflict.operation_id, "op-a");
-        assert_eq!(conflict.kind, EvolutionRuntimeConflictKind::SourceDocumentConflict);
+        assert_eq!(conflict.kind, EvolutionRuntimeConflictKind::SourceDocument);
 
         let no_conflict = state
             .find_running_conflict_for_preview(&preview, "op-a")
@@ -267,7 +267,7 @@ mod tests {
             .find_running_conflict_for_preview(&preview, "op-z")
             .await
             .expect("expected source ref conflict");
-        assert_eq!(conflict.kind, EvolutionRuntimeConflictKind::SourceRefConflict);
+        assert_eq!(conflict.kind, EvolutionRuntimeConflictKind::SourceRef);
         assert_eq!(conflict.overlapping_source_refs, vec!["doc://ops-playbook"]);
     }
 

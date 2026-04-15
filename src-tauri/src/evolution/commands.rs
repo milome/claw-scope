@@ -529,7 +529,7 @@ async fn start_execute_operation<R: Runtime>(
     {
         let store_paths = EvolutionStorePaths::resolve();
         let (blocked_reason_code, message, message_i18n) = match conflict.kind {
-            EvolutionRuntimeConflictKind::SourceRefConflict => (
+            EvolutionRuntimeConflictKind::SourceRef => (
                 "EVOLUTION_RUNTIME_SOURCE_REF_CONFLICT",
                 format!(
                     "当前节点已有运行中的 Evolution 正在占用本次来源引用 {}，阻断本次预检执行：{}",
@@ -544,7 +544,7 @@ async fn start_execute_operation<R: Runtime>(
                     ],
                 ),
             ),
-            EvolutionRuntimeConflictKind::SourceDocumentConflict => (
+            EvolutionRuntimeConflictKind::SourceDocument => (
                 "EVOLUTION_RUNTIME_SOURCE_DOCUMENT_CONFLICT",
                 format!(
                     "当前节点已有运行中的 Evolution 正在占用目标文档 {}，阻断本次预检执行：{}",
@@ -559,7 +559,7 @@ async fn start_execute_operation<R: Runtime>(
                     ],
                 ),
             ),
-            EvolutionRuntimeConflictKind::AgentRuntimeConflict => (
+            EvolutionRuntimeConflictKind::AgentRuntime => (
                 "EVOLUTION_RUNTIME_AGENT_CONFLICT",
                 format!(
                     "当前节点已有 Evolution 操作正在执行，阻断本次预检执行：{}",
@@ -626,19 +626,33 @@ async fn start_execute_operation<R: Runtime>(
         ));
     }
 
-    let initial_snapshot = build_status_snapshot(
-        &pending.preview,
-        EvolutionRuntimeState::Running,
-        EvolutionRuntimePhase::ValidatingPreview,
-        5,
-        "已完成预览校验，准备进入执行阶段。",
-        Some(localized_message("evo.message.runtime.validated", Vec::new())),
-        true,
-        false,
-        false,
-        override_risk_ack,
-        None,
-    );
+    let now = Utc::now().timestamp_millis();
+    let initial_snapshot = EvolutionOperationStatusSnapshot {
+        operation_id: pending.preview.operation_id.clone(),
+        agent_id: pending.preview.agent_id.clone(),
+        node_label: pending.preview.node_label.clone(),
+        template: pending.preview.template.clone(),
+        operation_type: pending.preview.operation_type.clone(),
+        source_document: pending.preview.source_document.clone(),
+        snapshot_id: pending.preview.snapshot_id.clone(),
+        risk_level: pending.preview.risk_level.clone(),
+        source_ref: pending.preview.source_ref.clone(),
+        source_refs: pending.preview.source_refs.clone(),
+        capability_tags: pending.preview.capability_tags.clone(),
+        runtime_state: EvolutionRuntimeState::Running,
+        phase: EvolutionRuntimePhase::ValidatingPreview,
+        progress_pct: 5,
+        message: "已完成预览校验，准备进入执行阶段。".to_string(),
+        message_i18n: Some(localized_message("evo.message.runtime.validated", Vec::new())),
+        can_cancel: true,
+        preview_stale: false,
+        conflict_detected: false,
+        override_applied: override_risk_ack,
+        active_conflict_operation_id: None,
+        updated_at_ms: now,
+        created_at_ms: now,
+        history_entry: None,
+    };
     let runtime = evolution_state.insert_runtime(initial_snapshot.clone()).await;
     emit_status(&app, &initial_snapshot);
 
@@ -673,12 +687,14 @@ async fn execute_operation_task<R: Runtime>(
     update_runtime_status(
         &app,
         &runtime,
-        EvolutionRuntimePhase::Snapshotting,
-        20,
-        "正在创建回滚快照。",
-        Some(localized_message("evo.message.runtime.snapshotting", Vec::new())),
-        true,
-        None,
+        RuntimeStatusUpdate {
+            phase: EvolutionRuntimePhase::Snapshotting,
+            progress_pct: 20,
+            message: "正在创建回滚快照。",
+            message_i18n: Some(localized_message("evo.message.runtime.snapshotting", Vec::new())),
+            can_cancel: true,
+            history_entry: None,
+        },
     )
     .await;
     sleep(Duration::from_millis(EVOLUTION_CANCEL_WINDOW_MS)).await;
@@ -783,12 +799,14 @@ async fn execute_operation_task<R: Runtime>(
     update_runtime_status(
         &app,
         &runtime,
-        EvolutionRuntimePhase::ApplyingChanges,
-        55,
-        "正在写入进化后的文档内容。",
-        Some(localized_message("evo.message.runtime.applyingChanges", Vec::new())),
-        false,
-        None,
+        RuntimeStatusUpdate {
+            phase: EvolutionRuntimePhase::ApplyingChanges,
+            progress_pct: 55,
+            message: "正在写入进化后的文档内容。",
+            message_i18n: Some(localized_message("evo.message.runtime.applyingChanges", Vec::new())),
+            can_cancel: false,
+            history_entry: None,
+        },
     )
     .await;
     sleep(Duration::from_millis(EVOLUTION_CANCEL_WINDOW_MS)).await;
@@ -892,12 +910,14 @@ async fn execute_operation_task<R: Runtime>(
     update_runtime_status(
         &app,
         &runtime,
-        EvolutionRuntimePhase::Reindexing,
-        80,
-        "正在触发索引刷新与后处理。",
-        Some(localized_message("evo.message.runtime.reindexing", Vec::new())),
-        false,
-        None,
+        RuntimeStatusUpdate {
+            phase: EvolutionRuntimePhase::Reindexing,
+            progress_pct: 80,
+            message: "正在触发索引刷新与后处理。",
+            message_i18n: Some(localized_message("evo.message.runtime.reindexing", Vec::new())),
+            can_cancel: false,
+            history_entry: None,
+        },
     )
     .await;
     sleep(Duration::from_millis(EVOLUTION_CANCEL_WINDOW_MS)).await;
@@ -915,12 +935,14 @@ async fn execute_operation_task<R: Runtime>(
     update_runtime_status(
         &app,
         &runtime,
-        EvolutionRuntimePhase::Finalizing,
-        95,
-        "正在收尾并写入历史记录。",
-        Some(localized_message("evo.message.runtime.finalizing", Vec::new())),
-        false,
-        None,
+        RuntimeStatusUpdate {
+            phase: EvolutionRuntimePhase::Finalizing,
+            progress_pct: 95,
+            message: "正在收尾并写入历史记录。",
+            message_i18n: Some(localized_message("evo.message.runtime.finalizing", Vec::new())),
+            can_cancel: false,
+            history_entry: None,
+        },
     )
     .await;
 
@@ -2199,68 +2221,30 @@ fn status_key(status: &EvolutionOperationStatus) -> String {
     }
 }
 
-fn build_status_snapshot(
-    preview: &EvolutionPreviewResult,
-    runtime_state: EvolutionRuntimeState,
+struct RuntimeStatusUpdate {
     phase: EvolutionRuntimePhase,
     progress_pct: u8,
-    message: &str,
+    message: &'static str,
     message_i18n: Option<EvolutionLocalizedMessage>,
     can_cancel: bool,
-    preview_stale: bool,
-    conflict_detected: bool,
-    override_applied: bool,
-    active_conflict_operation_id: Option<String>,
-) -> EvolutionOperationStatusSnapshot {
-    let now = Utc::now().timestamp_millis();
-    EvolutionOperationStatusSnapshot {
-        operation_id: preview.operation_id.clone(),
-        agent_id: preview.agent_id.clone(),
-        node_label: preview.node_label.clone(),
-        template: preview.template.clone(),
-        operation_type: preview.operation_type.clone(),
-        source_document: preview.source_document.clone(),
-        snapshot_id: preview.snapshot_id.clone(),
-        risk_level: preview.risk_level.clone(),
-        source_ref: preview.source_ref.clone(),
-        source_refs: preview.source_refs.clone(),
-        capability_tags: preview.capability_tags.clone(),
-        runtime_state,
-        phase,
-        progress_pct,
-        message: message.to_string(),
-        message_i18n,
-        can_cancel,
-        preview_stale,
-        conflict_detected,
-        override_applied,
-        active_conflict_operation_id,
-        updated_at_ms: now,
-        created_at_ms: now,
-        history_entry: None,
-    }
+    history_entry: Option<EvolutionHistoryEntry>,
 }
 
 async fn update_runtime_status<R: Runtime>(
     app: &AppHandle<R>,
     runtime: &Arc<RuntimeEvolutionOperation>,
-    phase: EvolutionRuntimePhase,
-    progress_pct: u8,
-    message: &str,
-    message_i18n: Option<EvolutionLocalizedMessage>,
-    can_cancel: bool,
-    history_entry: Option<EvolutionHistoryEntry>,
+    update: RuntimeStatusUpdate,
 ) -> EvolutionOperationStatusSnapshot {
     let next_snapshot = {
         let mut status = runtime.status.lock().await;
         status.runtime_state = EvolutionRuntimeState::Running;
-        status.phase = phase;
-        status.progress_pct = progress_pct;
-        status.message = message.to_string();
-        status.message_i18n = message_i18n;
-        status.can_cancel = can_cancel;
+        status.phase = update.phase;
+        status.progress_pct = update.progress_pct;
+        status.message = update.message.to_string();
+        status.message_i18n = update.message_i18n;
+        status.can_cancel = update.can_cancel;
         status.updated_at_ms = Utc::now().timestamp_millis();
-        if let Some(entry) = history_entry {
+        if let Some(entry) = update.history_entry {
             status.history_entry = Some(entry);
         }
         status.clone()

@@ -215,17 +215,17 @@ fn parse_ipconfig_ipv4_candidates(text: &str) -> Vec<Ipv4Addr> {
             continue;
         }
 
-        if awaiting_gateway_continuation {
-            if extract_ipv4_from_line(trimmed).is_some() {
-                current.has_default_gateway = true;
-                awaiting_gateway_continuation = false;
-            }
+        if awaiting_gateway_continuation
+            && extract_ipv4_from_line(trimmed).is_some()
+        {
+            current.has_default_gateway = true;
+            awaiting_gateway_continuation = false;
         }
 
-        if trimmed.contains("IPv4 Address") {
-            if let Some(ipv4) = extract_ipv4_from_line(trimmed) {
-                current.ipv4s.push(ipv4);
-            }
+        if trimmed.contains("IPv4 Address")
+            && let Some(ipv4) = extract_ipv4_from_line(trimmed)
+        {
+            current.ipv4s.push(ipv4);
         }
     }
 

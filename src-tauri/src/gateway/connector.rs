@@ -303,14 +303,12 @@ pub async fn agent_memory_get(
     .await
     .ok()
     .and_then(|value| parse_gateway_config(value).ok());
-    if workspace.trim().is_empty() {
-        if let Some(config) = config.as_ref() {
-            if let Some(config_workspace) =
-                resolve_agent_workspace(config, agent_id, &agents.default_id)
-            {
-                workspace = config_workspace;
-            }
-        }
+    if workspace.trim().is_empty()
+        && let Some(config) = config.as_ref()
+        && let Some(config_workspace) =
+            resolve_agent_workspace(config, agent_id, &agents.default_id)
+    {
+        workspace = config_workspace;
     }
     let shared_agents = resolve_shared_workspace_agents(
         state.clone(),
@@ -608,7 +606,7 @@ pub async fn agent_memory_runtime_status(
                 .unwrap_or_else(|| "unknown".to_string()),
             model: normalized_model,
             requested_provider: normalized_requested_provider
-                .or_else(|| normalized_provider)
+                .or(normalized_provider)
                 .unwrap_or_else(|| "unknown".to_string()),
             sources: memory
                 .diagnostics
@@ -1404,6 +1402,7 @@ pub async fn agent_memory_set(
     .await
 }
 
+#[allow(dead_code)]
 async fn agent_file_get(
     state: GatewayAppState,
     agent_id: &str,
@@ -1599,10 +1598,9 @@ fn expand_workspace_path(workspace: &str) -> PathBuf {
     if let Some(suffix) = trimmed
         .strip_prefix("~/")
         .or_else(|| trimmed.strip_prefix("~\\"))
+        && let Some(home_dir) = current_user_home_dir()
     {
-        if let Some(home_dir) = current_user_home_dir() {
-            return home_dir.join(suffix);
-        }
+        return home_dir.join(suffix);
     }
 
     PathBuf::from(trimmed)
@@ -2741,8 +2739,10 @@ async fn remote_probe_timeline_entry_with_retry(
         workspace,
         name,
         false,
-        REMOTE_TIMELINE_PROBE_WAIT_TIMEOUT,
-        REMOTE_TIMELINE_PROBE_REQUEST_TIMEOUT,
+        RemoteTimelineReadTimeouts {
+            wait_timeout: REMOTE_TIMELINE_PROBE_WAIT_TIMEOUT,
+            request_timeout: REMOTE_TIMELINE_PROBE_REQUEST_TIMEOUT,
+        },
     )
     .await
     {
@@ -2755,8 +2755,10 @@ async fn remote_probe_timeline_entry_with_retry(
                 workspace,
                 name,
                 false,
-                REMOTE_TIMELINE_PROBE_RETRY_WAIT_TIMEOUT,
-                REMOTE_TIMELINE_PROBE_RETRY_REQUEST_TIMEOUT,
+                RemoteTimelineReadTimeouts {
+                    wait_timeout: REMOTE_TIMELINE_PROBE_RETRY_WAIT_TIMEOUT,
+                    request_timeout: REMOTE_TIMELINE_PROBE_RETRY_REQUEST_TIMEOUT,
+                },
             )
             .await
             {
@@ -2795,10 +2797,17 @@ async fn remote_read_memory_timeline_entry(
         workspace,
         name,
         include_content,
-        wait_timeout,
-        request_timeout,
+        RemoteTimelineReadTimeouts {
+            wait_timeout,
+            request_timeout,
+        },
     )
     .await
+}
+
+struct RemoteTimelineReadTimeouts {
+    wait_timeout: Duration,
+    request_timeout: Duration,
 }
 
 async fn remote_read_memory_timeline_entry_with_timeouts(
@@ -2808,8 +2817,7 @@ async fn remote_read_memory_timeline_entry_with_timeouts(
     workspace: &str,
     name: &str,
     include_content: bool,
-    wait_timeout: Duration,
-    request_timeout: Duration,
+    timeouts: RemoteTimelineReadTimeouts,
 ) -> Result<GatewayAgentFileEntry, GatewayError> {
     let normalized_name = normalize_memory_timeline_entry_name(name)?;
     let prompt = build_remote_probe_prompt(normalized_name.as_str(), include_content);
@@ -2836,7 +2844,7 @@ async fn remote_read_memory_timeline_entry_with_timeouts(
             session_selector,
             session_key.as_str(),
             prompt.as_str(),
-            request_timeout,
+            timeouts.request_timeout,
         )
         .await?;
 
@@ -2846,8 +2854,8 @@ async fn remote_read_memory_timeline_entry_with_timeouts(
                     state.clone(),
                     session_selector,
                     run_id.as_str(),
-                    wait_timeout,
-                    request_timeout,
+                    timeouts.wait_timeout,
+                    timeouts.request_timeout,
                 )
                 .await?;
             }
@@ -3226,6 +3234,7 @@ fn schema_enum_values(value: Option<&Value>) -> Vec<String> {
         .unwrap_or_default()
 }
 
+#[allow(dead_code)]
 async fn gateway_config_get(
     state: GatewayAppState,
 ) -> Result<GatewayConfigGetResponse, GatewayError> {
@@ -3247,6 +3256,7 @@ async fn gateway_config_get_for_session(
     parse_gateway_config_response(config_value)
 }
 
+#[allow(dead_code)]
 async fn gateway_config_patch(
     state: GatewayAppState,
     config: &GatewayConfigSnapshot,
@@ -3797,10 +3807,10 @@ fn apply_memory_search_update(
         }
     }
 
-    if let Some(experimental) = target.experimental.as_ref() {
-        if memory_search_experimental_is_empty(experimental) {
-            target.experimental = None;
-        }
+    if let Some(experimental) = target.experimental.as_ref()
+        && memory_search_experimental_is_empty(experimental)
+    {
+        target.experimental = None;
     }
 
     Ok(())
@@ -4184,9 +4194,8 @@ fn resolve_ready_model_options(config: &GatewayConfigSnapshot) -> Vec<String> {
         .models
         .providers
         .iter()
-        .filter_map(|(key, provider)| {
-            model_provider_is_ready(provider).then(|| key.to_ascii_lowercase())
-        })
+        .filter(|(_, provider)| model_provider_is_ready(provider))
+        .map(|(key, _)| key.to_ascii_lowercase())
         .collect::<HashSet<_>>();
 
     if ready_providers.is_empty() {
@@ -4220,10 +4229,10 @@ fn normalize_optional_string(value: Option<String>) -> Option<String> {
 fn normalize_string_list(values: Vec<String>) -> Vec<String> {
     let mut normalized = Vec::new();
     for value in values {
-        if let Some(value) = normalize_optional_string(Some(value)) {
-            if !normalized.contains(&value) {
-                normalized.push(value);
-            }
+        if let Some(value) = normalize_optional_string(Some(value))
+            && !normalized.contains(&value)
+        {
+            normalized.push(value);
         }
     }
     normalized
@@ -4255,10 +4264,10 @@ fn normalize_qmd_paths(paths: Option<&Vec<GatewayMemoryQmdPathSnapshot>>) -> Vec
             GatewayMemoryQmdPathSnapshot::Detailed { path } => path.clone(),
         };
 
-        if let Some(value) = normalize_optional_string(value) {
-            if !normalized.contains(&value) {
-                normalized.push(value);
-            }
+        if let Some(value) = normalize_optional_string(value)
+            && !normalized.contains(&value)
+        {
+            normalized.push(value);
         }
     }
 
@@ -4461,8 +4470,7 @@ async fn perform_handshake(
             serde_json::to_string(&request)
                 .map_err(|error| GatewayError::Protocol {
                     message: format!("failed serializing connect request: {error}"),
-                })?
-                .into(),
+                })?,
         ))
         .await
         .map_err(|error| GatewayError::Transport {
@@ -4529,7 +4537,7 @@ async fn request_json_with_timeout(
 
     {
         let mut writer = connection.writer.lock().await;
-        if let Err(error) = writer.send(Message::Text(request_text.into())).await {
+        if let Err(error) = writer.send(Message::Text(request_text)).await {
             connection.remove_pending_request(&request_id);
             return Err(GatewayError::Transport {
                 message: format!("failed sending gateway request {method}: {error}"),

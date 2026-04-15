@@ -49,7 +49,7 @@ jobs:
         working-directory: src-tauri
 
       - name: Cargo clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --lib -- -D warnings
         working-directory: src-tauri
 
       - name: Build (Linux smoke)

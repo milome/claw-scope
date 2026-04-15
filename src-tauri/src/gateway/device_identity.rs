@@ -22,24 +22,23 @@ pub struct GatewayDeviceIdentity {
 
 impl GatewayDeviceIdentity {
     pub fn load_or_create(paths: &GatewayStorePaths) -> Result<Self, GatewayError> {
-        if let Some(stored) = load_stored_device_identity(paths)? {
-            if stored.version == 1 {
-                if let Ok(identity) = Self::from_stored(&stored) {
-                    if identity.device_id != stored.device_id {
-                        store_device_identity(
-                            paths,
-                            &StoredDeviceIdentity {
-                                version: 1,
-                                device_id: identity.device_id.clone(),
-                                public_key: identity.public_key_base64url.clone(),
-                                secret_key: identity.secret_key_base64url.clone(),
-                                created_at_ms: stored.created_at_ms,
-                            },
-                        )?;
-                    }
-                    return Ok(identity);
-                }
+        if let Some(stored) = load_stored_device_identity(paths)?
+            && stored.version == 1
+            && let Ok(identity) = Self::from_stored(&stored)
+        {
+            if identity.device_id != stored.device_id {
+                store_device_identity(
+                    paths,
+                    &StoredDeviceIdentity {
+                        version: 1,
+                        device_id: identity.device_id.clone(),
+                        public_key: identity.public_key_base64url.clone(),
+                        secret_key: identity.secret_key_base64url.clone(),
+                        created_at_ms: stored.created_at_ms,
+                    },
+                )?;
             }
+            return Ok(identity);
         }
 
         let identity = Self::generate();
