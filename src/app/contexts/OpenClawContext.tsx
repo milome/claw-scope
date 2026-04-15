@@ -8,6 +8,7 @@ import {
   type AuthMode,
 } from './openClawStorage';
 import { shouldShowSkippedConnectionReminder } from './openClawConnectionState';
+import { shouldRetryWithPairedDeviceOnLocalGateway } from './openClawConnectionPolicy';
 
 export type { AuthMode } from './openClawStorage';
 type GatewayConnectionPhase =
@@ -1493,6 +1494,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
               authSecret,
               false,
               anyRecovered,
+              true,
             );
             if (cancelled) {
               return;
@@ -1672,7 +1674,8 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     secret: string,
     persistConfig: boolean,
     preserveExistingStateOnFailure = false,
-  ) => {
+    allowLocalPairedFallback = false,
+  ): Promise<boolean> => {
     setLastError(null);
 
     try {
@@ -1682,6 +1685,25 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
       const origin = resolveOrigin(snapshot.gatewayOrigin, url);
 
       if (!isConnectedPhase(snapshot.phase) || !origin) {
+        if (
+          allowLocalPairedFallback &&
+          shouldRetryWithPairedDeviceOnLocalGateway(url, mode, snapshot.lastError)
+        ) {
+          const fallbackSuccess: boolean = await connectAndLoadAgents(
+            url,
+            'paired_device',
+            '',
+            persistConfig,
+            preserveExistingStateOnFailure,
+            false,
+          );
+          if (fallbackSuccess) {
+            setAuthMode('paired_device');
+            setAuthSecret('');
+          }
+          return fallbackSuccess;
+        }
+
         if (!preserveExistingStateOnFailure) {
           applyDisconnectedState(snapshot.lastError ?? null, origin, snapshot.grantedScopes ?? []);
         }
@@ -1714,8 +1736,29 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         return false;
       }
     } catch (error) {
+      const summary = toGatewayErrorSummary(error);
+
+      if (
+        allowLocalPairedFallback &&
+        shouldRetryWithPairedDeviceOnLocalGateway(url, mode, summary)
+      ) {
+        const fallbackSuccess: boolean = await connectAndLoadAgents(
+          url,
+          'paired_device',
+          '',
+          persistConfig,
+          preserveExistingStateOnFailure,
+          false,
+        );
+        if (fallbackSuccess) {
+          setAuthMode('paired_device');
+          setAuthSecret('');
+        }
+        return fallbackSuccess;
+      }
+
       if (!preserveExistingStateOnFailure) {
-        applyDisconnectedState(toGatewayErrorSummary(error));
+        applyDisconnectedState(summary);
       }
       return false;
     }
@@ -1788,7 +1831,7 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
       candidate.httpUrl ??
       candidate.wsUrl.replace(/^ws:\/\//, 'http://').replace(/^wss:\/\//, 'https://');
     setGatewayUrl(connectUrl);
-    return connectAndLoadAgents(connectUrl, mode, secret, true);
+    return connectAndLoadAgents(connectUrl, mode, secret, true, false, true);
   };
 
   const removeSavedEndpoint = async (endpointId: string) => {
