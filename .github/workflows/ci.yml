@@ -37,6 +37,13 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Prepare frontendDist placeholder
+        run: |
+          mkdir -p dist
+          if [ ! -f dist/index.html ]; then
+            printf '<!doctype html><html><body>ci-placeholder</body></html>\n' > dist/index.html
+          fi
+
       - name: Cargo check
         run: cargo check
         working-directory: src-tauri
