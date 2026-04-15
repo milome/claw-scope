@@ -8,7 +8,10 @@ import {
   type AuthMode,
 } from './openClawStorage';
 import { shouldShowSkippedConnectionReminder } from './openClawConnectionState';
-import { shouldRetryWithPairedDeviceOnLocalGateway } from './openClawConnectionPolicy';
+import {
+  resolvePersistedAuthModeAfterConnect,
+  shouldRetryWithPairedDeviceOnLocalGateway,
+} from './openClawConnectionPolicy';
 
 export type { AuthMode } from './openClawStorage';
 type GatewayConnectionPhase =
@@ -1719,9 +1722,15 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         }
 
         if (persistConfig) {
+          const persistedAuth = resolvePersistedAuthModeAfterConnect(
+            url,
+            mode,
+            secret,
+            snapshot,
+          );
           setGatewayUrl(url);
-          setAuthMode(mode);
-          setAuthSecret(mode === 'paired_device' ? '' : secret);
+          setAuthMode(persistedAuth.mode);
+          setAuthSecret(persistedAuth.secret);
           setIsConfigured(true);
           setHasSkippedSetupState(false);
           setShowReminder(false);
@@ -1891,4 +1900,3 @@ export function useOpenClaw() {
   if (!context) throw new Error('useOpenClaw must be used within OpenClawProvider');
   return context;
 }
-

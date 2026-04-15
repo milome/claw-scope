@@ -50,7 +50,14 @@ pub async fn discover_lan_candidates(
     let protocol_timeout = Duration::from_millis(
         (total_timeout_ms / 2).clamp(MIN_PROTOCOL_TIMEOUT_MS, MAX_PROTOCOL_TIMEOUT_MS),
     );
+    let mut seen_targets = BTreeSet::new();
     let mut targets = Vec::new();
+
+    for host in explicit_probe_hosts() {
+        if seen_targets.insert(host) {
+            targets.push(host);
+        }
+    }
 
     for subnet_ip in scan_subnets {
         let octets = subnet_ip.octets();
@@ -58,7 +65,10 @@ pub async fn discover_lan_candidates(
             if seed_ip != Some(subnet_ip) && host_octet == octets[3] {
                 continue;
             }
-            targets.push(Ipv4Addr::new(octets[0], octets[1], octets[2], host_octet));
+            let host = Ipv4Addr::new(octets[0], octets[1], octets[2], host_octet);
+            if seen_targets.insert(host) {
+                targets.push(host);
+            }
         }
     }
 
@@ -91,6 +101,10 @@ pub async fn discover_lan_candidates(
     });
     candidates.dedup_by(|left, right| left.ws_url == right.ws_url);
     Ok(candidates)
+}
+
+fn explicit_probe_hosts() -> Vec<Ipv4Addr> {
+    vec![Ipv4Addr::LOCALHOST]
 }
 
 fn discover_local_ipv4_candidates(seed_url: Option<&str>) -> Vec<Ipv4Addr> {
@@ -408,6 +422,11 @@ mod tests {
                 Ipv4Addr::new(172, 16, 0, 9),
             ]
         );
+    }
+
+    #[test]
+    fn explicit_probe_hosts_includes_loopback() {
+        assert_eq!(explicit_probe_hosts(), vec![Ipv4Addr::LOCALHOST]);
     }
 
     #[tokio::test]

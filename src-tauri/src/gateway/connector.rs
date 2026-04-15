@@ -108,7 +108,7 @@ pub async fn connect(
     )?;
 
     let mut retry_with_stored_device_token = false;
-    let (writer, reader, hello) = loop {
+    let (writer, reader, hello, used_paired_device_token) = loop {
         let selected_auth = select_connect_auth(
             &normalized_config,
             stored_device_token.as_ref(),
@@ -124,7 +124,14 @@ pub async fn connect(
         )
         .await
         {
-            Ok(result) => break result,
+            Ok((writer, reader, hello)) => {
+                break (
+                    writer,
+                    reader,
+                    hello,
+                    selected_auth.resolved_device_token.is_some(),
+                )
+            }
             Err(error)
                 if should_retry_with_stored_device_token(
                     &endpoint,
@@ -172,6 +179,7 @@ pub async fn connect(
     }
     spawn_connection_reader(state.clone(), active_connection, reader);
 
+    let is_paired = resolve_paired_connection_state(hello.auth.is_some(), used_paired_device_token);
     let snapshot = GatewayStatusSnapshot {
         session_id: Some(session_id),
         phase: GatewayConnectionPhase::Connected,
@@ -191,7 +199,7 @@ pub async fn connect(
             .map(|auth| auth.scopes.clone())
             .unwrap_or(scopes),
         last_error: None,
-        is_paired: true,
+        is_paired,
         can_retry_with_device_token: false,
     };
     state.replace_snapshot(snapshot.clone());
@@ -4776,6 +4784,13 @@ fn is_trusted_device_retry_endpoint(endpoint: &GatewayEndpoint) -> bool {
     matches!(endpoint.transport, GatewayTransportKind::LocalLoopback)
 }
 
+fn resolve_paired_connection_state(
+    hello_has_device_auth: bool,
+    used_paired_device_token: bool,
+) -> bool {
+    hello_has_device_auth || used_paired_device_token
+}
+
 fn snapshot_for_phase(
     endpoint: &GatewayEndpoint,
     device_id: &str,
@@ -4850,6 +4865,7 @@ mod tests {
         resolve_agent_settings_metadata, resolve_ready_model_options,
         resolve_agent_group_chat_json, resolve_agent_memory_search_settings, resolve_agent_sandbox_json,
         resolve_agent_tools_json, resolve_bindings_json, resolve_memory_workspace,
+        resolve_paired_connection_state,
         GatewayMemorySearchSnapshot,
         scan_local_memory_timeline_entries,
     };
@@ -4889,6 +4905,13 @@ mod tests {
             retried: false,
             recovered_after_retry: false,
         }
+    }
+
+    #[test]
+    fn paired_connection_state_requires_device_auth_or_cached_device_token() {
+        assert!(resolve_paired_connection_state(true, false));
+        assert!(resolve_paired_connection_state(false, true));
+        assert!(!resolve_paired_connection_state(false, false));
     }
 
     #[test]
@@ -6203,6 +6226,3 @@ mod tests {
         );
     }
 }
-
-
-
