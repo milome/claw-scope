@@ -30,6 +30,7 @@ export function Shell() {
   const location = useLocation();
   const { theme, setTheme } = useTheme();
   const { lang, setLang, t } = useI18n();
+  const appVersion = __APP_VERSION__;
   const [mounted, setMounted] = useState(false);
   const [hasTauriWindow, setHasTauriWindow] = useState(false);
   const [ripplePos, setRipplePos] = useState({ x: 0, y: 0, active: false });
@@ -235,7 +236,7 @@ export function Shell() {
 
           <div className="mt-auto px-4 pb-3 flex flex-col gap-3">
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
-              <div className="font-semibold text-slate-800 dark:text-slate-200">{t("app.footer.version", "0.1.0")}</div>
+              <div className="font-semibold text-slate-800 dark:text-slate-200">{t("app.footer.version", appVersion)}</div>
               <div className="mt-1">{t("app.footer.copyright", 2026)}</div>
             </div>
           </div>

@@ -36,10 +36,12 @@ import {
   collectTextSearchMatches,
   createMemoryDrafts,
   filterMemoryFootprintGroups,
+  hasTimelineProbeRangeChanged,
   hasSharedWorkspaceMemory,
   isMemoryDocumentDirty,
   moveActiveSearchMatchIndex,
   mergeTimelineProbeResults,
+  resolveDocumentSearchQueryFromSearchResult,
   resolveExternalMemorySources,
   resolveMemoryDocumentContent,
   resolveMemoryRootDocument,
@@ -1023,6 +1025,23 @@ export function MemoryView() {
     }
   };
 
+  const handleTimelineProbeRangeChange = (next: { startDate: string; endDate: string }) => {
+    setTimelineProbeRange((current) => {
+      if (!hasTimelineProbeRangeChanged(current, next)) {
+        return current;
+      }
+      return next;
+    });
+    setTimelineProbeState("idle");
+    setTimelineError(null);
+    setTimelineProbeFeedback({
+      coveredDates: [],
+      missingDates: [],
+      probingDates: [],
+      failureReasons: {},
+    });
+  };
+
   const handleRetryProbeDate = async (date: string) => {
     if (!selectedAgentId) {
       return;
@@ -1172,7 +1191,10 @@ export function MemoryView() {
   const handleOpenSearchEntry = async (entry: NonNullable<GatewayAgentMemorySearchResult>["results"][number]) => {
     if (entry.openTarget === "documents") {
         setSelectedDocumentName(entry.canonicalDocumentName ?? entry.path.split("/").pop() ?? "");
-        const derivedQuery = entry.snippet.trim().split(/\s+/).find((token) => token.length >= 3) ?? entry.snippet.slice(0, 24).trim();
+        const derivedQuery = resolveDocumentSearchQueryFromSearchResult(
+          searchResult?.query ?? searchQuery,
+          entry.snippet,
+        );
         setDocumentSearchState({
           query: derivedQuery,
           input: derivedQuery,
@@ -1366,7 +1388,7 @@ export function MemoryView() {
           resolveTimelineModeLabel={(access, result) => resolveTimelineModeLabel(access, result, t)}
           getAgentBadge={getAgentBadge}
           t={t}
-          onProbeRangeChange={setTimelineProbeRange}
+          onProbeRangeChange={handleTimelineProbeRangeChange}
           onProbeTimelineRange={() => void handleProbeTimelineRange()}
           onRetryProbeDate={(date) => void handleRetryProbeDate(date)}
           onPreviousHighlight={() => setTimelineEvidenceMatchIndex((current) => Math.max(0, current - 1))}

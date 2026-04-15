@@ -5,6 +5,10 @@ export interface GatewayErrorLike {
   code?: string | null;
 }
 
+export interface GatewayConnectionSnapshotLike {
+  isPaired?: boolean | null;
+}
+
 const LOCAL_GATEWAY_AUTH_FALLBACK_CODES = new Set([
   'PAIRING_REQUIRED',
   'AUTH_TOKEN_MISMATCH',
@@ -43,4 +47,23 @@ export function shouldRetryWithPairedDeviceOnLocalGateway(
   }
 
   return Boolean(error.category && LOCAL_GATEWAY_AUTH_FALLBACK_CATEGORIES.has(error.category));
+}
+
+export function resolvePersistedAuthModeAfterConnect(
+  url: string,
+  requestedMode: AuthMode,
+  requestedSecret: string,
+  snapshot?: GatewayConnectionSnapshotLike | null,
+) {
+  if (isLoopbackGatewayUrl(url) && requestedMode !== 'paired_device' && snapshot?.isPaired) {
+    return {
+      mode: 'paired_device' as const,
+      secret: '',
+    };
+  }
+
+  return {
+    mode: requestedMode,
+    secret: requestedMode === 'paired_device' ? '' : requestedSecret,
+  };
 }
