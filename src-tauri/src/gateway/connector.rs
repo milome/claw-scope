@@ -1172,31 +1172,13 @@ pub async fn agent_settings_set(
             }
         }
 
-        let mut patch = Map::new();
-        if should_patch_agent_branch {
-            patch.insert(
-                "agents".to_string(),
-                json!({
-                    "defaults": config.agents.defaults,
-                    "list": config.agents.list
-                }),
-            );
-        }
-        if input.clear_bindings {
-            patch.insert("bindings".to_string(), Value::Null);
-        } else if let Some(bindings) = bindings {
-            patch.insert("bindings".to_string(), bindings);
-        }
-
-        if !patch.is_empty() {
-            gateway_config_patch_for_session(
-                state.clone(),
-                session_selector,
-                Value::Object(patch),
-                response.hash,
-            )
-            .await?;
-        }
+        gateway_config_patch_for_session(
+            state.clone(),
+            session_selector,
+            &response.config,
+            response.hash,
+        )
+        .await?;
     }
 
     agent_settings_get(state, session_selector, input.agent_id.as_str()).await
@@ -3267,14 +3249,10 @@ async fn gateway_config_get_for_session(
 
 async fn gateway_config_patch(
     state: GatewayAppState,
-    patch: Value,
+    config: &GatewayConfigSnapshot,
     base_hash: Option<String>,
 ) -> Result<(), GatewayError> {
-    let mut params = Map::new();
-    params.insert("patch".to_string(), patch);
-    if let Some(base_hash) = normalize_optional_string(base_hash) {
-        params.insert("baseHash".to_string(), Value::String(base_hash));
-    }
+    let params = build_gateway_config_patch_params(config, base_hash)?;
     let _ = request_json(state, "config.patch", Some(Value::Object(params))).await?;
     Ok(())
 }
@@ -3282,16 +3260,33 @@ async fn gateway_config_patch(
 async fn gateway_config_patch_for_session(
     state: GatewayAppState,
     session_selector: Option<&str>,
-    patch: Value,
+    config: &GatewayConfigSnapshot,
     base_hash: Option<String>,
 ) -> Result<(), GatewayError> {
+    let params = build_gateway_config_patch_params(config, base_hash)?;
+    let _ = request_json_on_session(
+        state,
+        session_selector,
+        "config.patch",
+        Some(Value::Object(params)),
+    )
+    .await?;
+    Ok(())
+}
+
+fn build_gateway_config_patch_params(
+    config: &GatewayConfigSnapshot,
+    base_hash: Option<String>,
+) -> Result<Map<String, Value>, GatewayError> {
     let mut params = Map::new();
-    params.insert("patch".to_string(), patch);
+    let raw = serde_json::to_string_pretty(config).map_err(|error| GatewayError::Protocol {
+        message: format!("failed encoding config.patch raw payload: {error}"),
+    })?;
+    params.insert("raw".to_string(), Value::String(raw));
     if let Some(base_hash) = normalize_optional_string(base_hash) {
         params.insert("baseHash".to_string(), Value::String(base_hash));
     }
-    let _ = request_json_on_session(state, session_selector, "config.patch", Some(Value::Object(params))).await?;
-    Ok(())
+    Ok(params)
 }
 
 fn gateway_settings_agents_update_action(path: &str) -> GatewayAgentSettingsWriteAction {
@@ -4836,6 +4831,7 @@ mod tests {
         REMOTE_TIMELINE_ENTRY_WAIT_TIMEOUT, REMOTE_TIMELINE_PROBE_REQUEST_TIMEOUT,
         REMOTE_TIMELINE_PROBE_RETRY_REQUEST_TIMEOUT, REMOTE_TIMELINE_PROBE_RETRY_WAIT_TIMEOUT,
         REMOTE_TIMELINE_PROBE_WAIT_TIMEOUT,
+        build_gateway_config_patch_params,
         config_schema_lookup_with,
         config_schema_lookup_candidate_paths,
         is_config_schema_path_not_found,
@@ -4859,7 +4855,7 @@ mod tests {
         GatewayAgentMemoryTimelineSource, GatewayConfigSchemaLookupResult,
         GatewayAgentMemorySearchSettingsUpdateInput,
     };
-    use serde_json::json;
+    use serde_json::{json, Value};
     use std::{
         fs,
         path::PathBuf,
@@ -4927,6 +4923,49 @@ mod tests {
             resolve_agent_model(&config, "main", "main").as_deref(),
             Some("gpt-5.4")
         );
+    }
+
+    #[test]
+    fn gateway_config_patch_params_send_raw_payload_instead_of_patch_object() {
+        let config = parse_gateway_config(json!({
+            "config": {
+                "agents": {
+                    "defaults": {
+                        "workspace": "~/.openclaw/workspace-main"
+                    },
+                    "list": [
+                        {
+                            "id": "secondary",
+                            "default": true
+                        }
+                    ]
+                },
+                "bindings": {
+                    "slack": {
+                        "channel": "ops"
+                    }
+                }
+            }
+        }))
+        .expect("config snapshot");
+
+        let params = build_gateway_config_patch_params(&config, Some("hash-123".to_string()))
+            .expect("config patch params");
+
+        assert!(!params.contains_key("patch"));
+        assert_eq!(
+            params.get("baseHash"),
+            Some(&Value::String("hash-123".to_string()))
+        );
+
+        let raw = params
+            .get("raw")
+            .and_then(Value::as_str)
+            .expect("raw config payload");
+        let decoded: Value = serde_json::from_str(raw).expect("decode raw payload");
+        assert_eq!(decoded["agents"]["list"][0]["id"], "secondary");
+        assert_eq!(decoded["agents"]["list"][0]["default"], true);
+        assert_eq!(decoded["bindings"]["slack"]["channel"], "ops");
     }
 
     #[test]

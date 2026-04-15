@@ -355,7 +355,7 @@ export function MemoryKnowledgePanel({
           <ArchiveStatCard
             label={t("memory.diag.runtimeStatus")}
             value={knowledgeModel.runtimeAvailable ? t("memory.diag.ready") : t("memory.diag.unavailableShort")}
-            meta={knowledgeModel.runtimeAvailable ? `${knowledgeModel.runtimeSummary?.files ?? 0} files · ${knowledgeModel.runtimeSummary?.chunks ?? 0} chunks` : t(isLocalGatewaySession ? "memory.diag.runtimePlaceholder" : "memory.diag.runtimeRemoteUnavailable")}
+            meta={knowledgeModel.runtimeAvailable ? `${knowledgeModel.runtimeSummary?.files ?? 0} ${t("common.files")} · ${knowledgeModel.runtimeSummary?.chunks ?? 0} ${t("common.chunks")}` : t(isLocalGatewaySession ? "memory.diag.runtimePlaceholder" : "memory.diag.runtimeRemoteUnavailable")}
           />
           <ArchiveStatCard
             label={t("memory.knowledge.sources")}

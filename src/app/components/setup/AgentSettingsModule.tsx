@@ -34,7 +34,11 @@ import { AgentSettingsScopeLegend } from "./AgentSettingsScopeLegend";
 import { AgentSettingsDefaultRoutingCard } from "./AgentSettingsDefaultRoutingCard";
 import {
   canEditAgentSettings,
+  deriveAgentSettingsScope,
   resolveSelectedAgentId,
+  buildAvailableAgentSettingsScopes,
+  resolveSelectedAgentSettingsScope,
+  type AgentSettingsScopeId,
 } from "./agentSettingsState";
 
 const ADVANCED_SCHEMA_PATHS = {
@@ -595,6 +599,23 @@ export function AgentSettingsModule() {
     [sessionAgents],
   );
   const canEdit = canEditAgentSettings(selectedNode?.grantedScopes ?? []);
+  const availableScopes = useMemo(
+    () => buildAvailableAgentSettingsScopes(),
+    [],
+  );
+  const [activeScope, setActiveScope] =
+    useState<AgentSettingsScopeId>("gateway_global");
+
+  useEffect(() => {
+    const nextScope = resolveSelectedAgentSettingsScope(
+      activeScope,
+      availableScopes,
+    );
+
+    if (nextScope !== activeScope) {
+      setActiveScope(nextScope);
+    }
+  }, [activeScope, availableScopes]);
 
   useEffect(() => {
     if (!selectableNodes.length) {
@@ -853,6 +874,15 @@ export function AgentSettingsModule() {
   const sandboxTone = resolveScopeTone(sandboxMetadata?.source);
   const toolsTone = resolveScopeTone(toolsMetadata?.source);
   const memorySearchTone = resolveScopeTone(memorySearchMetadata?.source);
+  const workspaceScope = deriveAgentSettingsScope(workspaceMetadata);
+  const modelScope = deriveAgentSettingsScope(modelMetadata);
+  const agentDirScope = deriveAgentSettingsScope(agentDirMetadata);
+  const defaultRoutingScope = deriveAgentSettingsScope(defaultAgentMetadata);
+  const bindingsScope = deriveAgentSettingsScope(bindingsMetadata);
+  const groupChatScope = deriveAgentSettingsScope(groupChatMetadata);
+  const sandboxScope = deriveAgentSettingsScope(sandboxMetadata);
+  const toolsScope = deriveAgentSettingsScope(toolsMetadata);
+  const memorySearchScope = deriveAgentSettingsScope(memorySearchMetadata);
 
   const workspacePatch = buildTextDelta(workspaceDraft, settings?.workspace);
   const modelPatch = buildTextDelta(modelDraft, settings?.model);
@@ -1101,7 +1131,7 @@ export function AgentSettingsModule() {
 
   if (selectableNodes.length === 0) {
     return (
-      <div className="w-full max-w-4xl font-sans text-slate-900 dark:text-slate-100 pb-8">
+      <div className="w-full max-w-7xl font-sans text-slate-900 dark:text-slate-100 pb-8">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6">
           <h2 className="text-xl font-bold tracking-tight mb-2">
             {t("config.agentSettings.title")}
@@ -1115,7 +1145,7 @@ export function AgentSettingsModule() {
   }
 
   return (
-    <div className="w-full max-w-4xl font-sans text-slate-900 dark:text-slate-100 pb-8">
+    <div className="w-full max-w-7xl font-sans text-slate-900 dark:text-slate-100 pb-8">
       <div className="mb-6">
         <h2 className="text-xl font-bold tracking-tight mb-1">
           {t("config.agentSettings.title")}
@@ -1126,34 +1156,6 @@ export function AgentSettingsModule() {
       </div>
 
       <div className="space-y-6">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-6 md:p-7 flex flex-col md:flex-row md:items-center justify-between gap-5">
-            <div className="flex items-start gap-4">
-              <div className="w-11 h-11 rounded-2xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-300 flex items-center justify-center shrink-0 border border-sky-100 dark:border-sky-900/60">
-                <IdCard className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-[15px] font-semibold mb-1.5">
-                  {t("config.agentSettings.boundaryTitle")}
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 leading-6">
-                  {t("config.agentSettings.boundaryDesc")}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate("/")}
-              className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 dark:bg-sky-600 hover:bg-black dark:hover:bg-sky-500 text-white px-4 py-2.5 text-sm font-semibold transition-all shadow-md active:scale-95"
-            >
-              {t("config.agentSettings.openProfile")}
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        <AgentSettingsScopeLegend />
-
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
           <div className="p-6 md:p-7 flex flex-col gap-6">
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
@@ -1224,9 +1226,9 @@ export function AgentSettingsModule() {
               </div>
             ) : null}
 
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/30 px-5 py-4 text-sm text-slate-600 dark:text-slate-300">
-              {t("config.agentSettings.resolvedTruth")}
-            </div>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/30 px-5 py-4 text-sm text-slate-600 dark:text-slate-300">
+                {t("config.agentSettings.resolvedTruth")}
+              </div>
 
             {loadError ? (
               <div className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
@@ -1244,8 +1246,50 @@ export function AgentSettingsModule() {
               <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
                 {saveSuccess}
               </div>
-            ) : null}
-
+              ) : null}
+            </div>
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+          <div className="grid grid-cols-1 xl:grid-cols-[18rem_minmax(0,1fr)]">
+            <div className="border-b border-slate-200 bg-slate-50/70 p-5 dark:border-slate-800 dark:bg-slate-950/30 xl:border-b-0 xl:border-r">
+              <div className="xl:sticky xl:top-6">
+                <AgentSettingsScopeLegend
+                  activeScope={activeScope}
+                  onSelectScope={setActiveScope}
+                  layout="lane"
+                />
+              </div>
+            </div>
+            <div className="min-w-0 p-6 md:p-7 space-y-6">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+                <div className="p-6 md:p-7 flex flex-col md:flex-row md:items-center justify-between gap-5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-11 h-11 rounded-2xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-300 flex items-center justify-center shrink-0 border border-sky-100 dark:border-sky-900/60">
+                      <IdCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-[15px] font-semibold mb-1.5">
+                        {t("config.agentSettings.boundaryTitle")}
+                      </h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 leading-6">
+                        {t("config.agentSettings.boundaryDesc")}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/")}
+                    className="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 dark:bg-sky-600 hover:bg-black dark:hover:bg-sky-500 text-white px-4 py-2.5 text-sm font-semibold transition-all shadow-md active:scale-95"
+                  >
+                    {t("config.agentSettings.openProfile")}
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+        {[workspaceScope, modelScope, agentDirScope, defaultRoutingScope].some(
+          (scope) => scope === activeScope,
+        ) ? (
+          <>
             <div className="space-y-4">
               <div>
                 <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -1364,7 +1408,12 @@ export function AgentSettingsModule() {
               onChange={setIsDefaultDraft}
               metadata={defaultAgentMetadata}
             />
+          </>
+        ) : null}
 
+        {[bindingsScope, groupChatScope, sandboxScope, toolsScope].some(
+          (scope) => scope === activeScope,
+        ) ? (
             <div className={`rounded-2xl border p-5 space-y-4 ${advancedScopeTone.panel}`}>
               <div>
                 <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -1511,7 +1560,9 @@ export function AgentSettingsModule() {
 
               </div>
             </div>
+        ) : null}
 
+        {memorySearchScope === activeScope ? (
             <div className={`rounded-2xl border p-5 space-y-4 ${memorySearchTone.panel}`}>
               <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                 <div className="min-w-0">
@@ -1791,6 +1842,7 @@ export function AgentSettingsModule() {
                 </MemorySearchSubsection>
               </div>
             </div>
+        ) : null}
 
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 px-4 py-3 text-sm text-slate-600 dark:text-slate-300 sm:flex-1">
@@ -1824,6 +1876,7 @@ export function AgentSettingsModule() {
                 {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
                 {t("config.agentSettings.save")}
               </button>
+            </div>
             </div>
           </div>
         </div>

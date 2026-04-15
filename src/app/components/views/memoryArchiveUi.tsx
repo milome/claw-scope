@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
+import { useOptionalI18n } from "../../contexts/I18nContext";
 
 export type ArchiveTone = "sky" | "violet" | "emerald" | "amber" | "rose";
 
@@ -254,6 +255,7 @@ export function ArchiveDiagnosticsLayout({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { t } = useOptionalI18n();
   return (
     <div className="absolute inset-y-0 right-0 z-20 w-full max-w-xl overflow-hidden border-l border-slate-800 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] p-5 shadow-[0_24px_64px_rgba(2,6,23,0.55)] backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3 rounded-[24px] border border-slate-800/90 bg-slate-950/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(148,163,184,0.08)]">
@@ -265,7 +267,7 @@ export function ArchiveDiagnosticsLayout({
           onClick={onClose}
           className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-200 shadow-sm transition-colors hover:border-sky-600 hover:text-sky-300"
         >
-          Close
+          {t("common.close")}
         </button>
       </div>
       <div className="mt-4 h-[calc(100vh-120px)] space-y-3 overflow-y-auto pr-2 pb-8">{children}</div>

@@ -44,6 +44,11 @@ import { EvolutionHistorySheet } from "./EvolutionHistorySheet";
 import { buildEvolutionAuditReportMarkdown } from "./evolutionAuditReport";
 import { formatKnowledgePackExample, parseKnowledgeInjectionPack } from "./evolutionKnowledgePack";
 import {
+  buildEvolutionTargetNodeEntries,
+  resolveSelectedEvolutionAgentId,
+  resolveSelectedEvolutionNodeId,
+} from "./evolutionTargetState";
+import {
   renderEvolutionHistorySummary,
   renderEvolutionRuntimeMessage,
 } from "./evolutionMessageI18n";
@@ -177,21 +182,24 @@ export function EvolutionView() {
   const { lang, t } = useI18n();
   const { nodes, agents, isConnected } = useOpenClaw();
   const RECENT_HISTORY_COLLAPSED_COUNT = 3;
-  const evolutionNodes = isConnected && agents.length > 0
-    ? agents.map((agent) => ({
-        id: agent.id,
-        name: agent.name,
-        status: agent.status === "sleeping" ? "offline" as const : "online" as const,
-      }))
-    : nodes.length > 0
-      ? nodes
-    : [
-        { id: "node-local", name: "OpenClaw-Local", status: "online" as const },
-        { id: "node-east", name: "OpenClaw-East", status: "online" as const },
-        { id: "node-west", name: "OpenClaw-West", status: "offline" as const },
-      ];
+  const buildCustomTemplateExample = () =>
+    `{\n  "mode": "append_block",\n  "title": "${t("evo.custom.example.blockTitle")}",\n  "content": "${t("evo.custom.example.blockContent")}"\n}`;
+  const evolutionNodeEntries = useMemo(
+    () =>
+      buildEvolutionTargetNodeEntries({
+        isConnected,
+        nodes,
+        agents,
+      }),
+    [agents, isConnected, nodes],
+  );
 
-  const [activeNode, setActiveNode] = useState(evolutionNodes.length > 0 ? evolutionNodes[0].id : "");
+  const [selectedNodeId, setSelectedNodeId] = useState(
+    resolveSelectedEvolutionNodeId("", evolutionNodeEntries),
+  );
+  const [activeAgentId, setActiveAgentId] = useState(
+    resolveSelectedEvolutionAgentId("", resolveSelectedEvolutionNodeId("", evolutionNodeEntries), evolutionNodeEntries),
+  );
   const [template, setTemplate] = useState<TemplateType>(null);
   const [state, setState] = useState<EvoState>("idle");
   const [execStep, setExecStep] = useState(-1);
@@ -218,7 +226,7 @@ export function EvolutionView() {
   const [customTagsInput, setCustomTagsInput] = useState("custom, safe");
   const [lastCustomAppendSourceRef, setLastCustomAppendSourceRef] = useState<string | null>(null);
   const [customScriptBody, setCustomScriptBody] = useState(
-    '{\n  "mode": "append_block",\n  "title": "Custom Knowledge Block",\n  "content": "Use this declarative sandbox to append managed memory context."\n}',
+    buildCustomTemplateExample(),
   );
   const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
   const [historySheetSelectionId, setHistorySheetSelectionId] = useState<string | null>(null);
@@ -234,7 +242,12 @@ export function EvolutionView() {
     { id: 3, label: t("evo.step.3.label"), desc: t("evo.step.3.desc") },
   ];
 
-  const currentNode = evolutionNodes.find((n) => n.id === activeNode);
+  const currentNode = evolutionNodeEntries.find((node) => node.id === selectedNodeId);
+  const currentNodeAgents = currentNode?.agents ?? [];
+  const currentAgent =
+    currentNodeAgents.find((agent) => agent.id === activeAgentId) ??
+    agents.find((agent) => agent.id === activeAgentId) ??
+    null;
   const manualKnowledgeCapabilityTags = useMemo(
     () =>
       knowledgeTagsInput
@@ -344,9 +357,7 @@ export function EvolutionView() {
     setCustomSourceRef(uniqueSource);
     setCustomAdditionalSourcesInput("custom://shared-playbook");
     setCustomTagsInput("custom, safe");
-    setCustomScriptBody(
-      '{\n  "mode": "append_block",\n  "title": "Custom Knowledge Block",\n  "content": "Use this declarative sandbox to append managed memory context."\n}',
-    );
+    setCustomScriptBody(buildCustomTemplateExample());
     setPreviewResult(null);
     setActionError(null);
     setState("idle");
@@ -431,14 +442,26 @@ export function EvolutionView() {
   };
 
   useEffect(() => {
-    if (!currentNode && evolutionNodes.length > 0) {
-      setActiveNode(evolutionNodes[0].id);
+    const nextNodeId = resolveSelectedEvolutionNodeId(selectedNodeId, evolutionNodeEntries);
+    if (nextNodeId !== selectedNodeId) {
+      setSelectedNodeId(nextNodeId);
     }
-  }, [currentNode, evolutionNodes]);
+  }, [selectedNodeId, evolutionNodeEntries]);
+
+  useEffect(() => {
+    const nextAgentId = resolveSelectedEvolutionAgentId(
+      activeAgentId,
+      selectedNodeId,
+      evolutionNodeEntries,
+    );
+    if (nextAgentId !== activeAgentId) {
+      setActiveAgentId(nextAgentId);
+    }
+  }, [activeAgentId, selectedNodeId, evolutionNodeEntries]);
 
   useEffect(() => {
     setIsRecentHistoryExpanded(false);
-  }, [activeNode]);
+  }, [activeAgentId]);
 
   useEffect(() => {
     if (knowledgeEntryMode !== "manual" || !knowledgePackText.trim()) {
@@ -466,7 +489,7 @@ export function EvolutionView() {
     let cancelled = false;
 
     const loadHistory = async () => {
-      if (!isConnected || agents.length === 0 || !activeNode) {
+      if (!isConnected || agents.length === 0 || !activeAgentId) {
         setHistoryEntries([]);
         setLatestResult(null);
         setAuditSummary(null);
@@ -476,8 +499,8 @@ export function EvolutionView() {
       setIsHistoryLoading(true);
       try {
         const [nextHistory, nextAudit] = await Promise.all([
-          evolutionHistoryList(activeNode),
-          evolutionAuditSummary(activeNode).catch(() => null),
+          evolutionHistoryList(activeAgentId),
+          evolutionAuditSummary(activeAgentId).catch(() => null),
         ]);
         if (cancelled) {
           return;
@@ -504,7 +527,7 @@ export function EvolutionView() {
     return () => {
       cancelled = true;
     };
-  }, [activeNode, agents.length, isConnected]);
+  }, [activeAgentId, agents.length, isConnected]);
 
   const applyRuntimeSnapshot = (snapshot: EvolutionOperationStatusSnapshot) => {
     setRuntimeStatus(snapshot);
@@ -619,11 +642,21 @@ export function EvolutionView() {
   );
 
   const resolvePreviewTarget = async () => {
-    if (!isConnected || agents.length === 0) {
-      return currentNode;
+    if (!isConnected || agents.length === 0 || !currentNode) {
+      return null;
     }
 
-    const candidateIds = [activeNode, ...agents.map((agent) => agent.id).filter((agentId) => agentId !== activeNode)];
+    const prioritizedNodeAgentIds = currentNodeAgents
+      .map((agent) => agent.id)
+      .filter((agentId) => agentId !== activeAgentId);
+    const candidateIds = [
+      activeAgentId,
+      ...prioritizedNodeAgentIds,
+      ...agents.map((agent) => agent.id).filter(
+        (agentId) => agentId !== activeAgentId && !prioritizedNodeAgentIds.includes(agentId),
+      ),
+    ].filter(Boolean);
+
     for (const candidateId of candidateIds) {
       try {
         const memory = await gatewayAgentMemoryGet(candidateId);
@@ -634,24 +667,40 @@ export function EvolutionView() {
           continue;
         }
 
-        const candidate = evolutionNodes.find((node) => node.id === candidateId);
-        if (candidate) {
-          if (candidateId !== activeNode) {
-            setActiveNode(candidateId);
+        const candidateAgent = agents.find((agent) => agent.id === candidateId);
+        const candidateNode = evolutionNodeEntries.find(
+          (node) => node.id === candidateAgent?.nodeId,
+        );
+        if (candidateAgent && candidateNode) {
+          if (candidateNode.id !== selectedNodeId) {
+            setSelectedNodeId(candidateNode.id);
           }
-          return candidate;
+          if (candidateId !== activeAgentId) {
+            setActiveAgentId(candidateId);
+          }
+          return {
+            agentId: candidateId,
+            nodeLabel: candidateNode.name,
+          };
         }
       } catch {
         // Ignore agents that cannot expose a writable MEMORY document.
       }
     }
 
-    return currentNode;
+    if (!activeAgentId) {
+      return null;
+    }
+
+    return {
+      agentId: activeAgentId,
+      nodeLabel: currentNode.name,
+    };
   };
 
   const handlePreview = async () => {
-    if (!activeNode || !template) return;
-    if (!isConnected || agents.length === 0 || !currentNode) {
+    if (!selectedNodeId || !activeAgentId || !template) return;
+    if (!isConnected || agents.length === 0 || !currentNode || !currentAgent) {
       toast.error(t("evo.connection.required"));
       return;
     }
@@ -671,8 +720,8 @@ export function EvolutionView() {
       }
 
       const preview = await evolutionPreview(
-        target.id,
-        target.name,
+        target.agentId,
+        target.nodeLabel,
         template,
         effectiveKnowledgeInput,
         customInput,
@@ -819,19 +868,47 @@ export function EvolutionView() {
                   <Network className="w-4 h-4 text-sky-500" />
                 </div>
                 <select
-                  value={activeNode}
-                  onChange={(e) => setActiveNode(e.target.value)}
+                  value={selectedNodeId}
+                  onChange={(e) => setSelectedNodeId(e.target.value)}
                   disabled={state !== "idle" && state !== "diff-ready"}
                   className="w-full cursor-pointer appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-10 text-sm text-slate-900 transition-colors focus:border-sky-500/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
                 >
                   <option value="" disabled>{t("evo.target.select")}</option>
-                  {evolutionNodes.map((n) => (
+                  {evolutionNodeEntries.map((n) => (
                     <option key={n.id} value={n.id}>{n.name} {n.status === "offline" ? t("evo.target.offline") : ""}</option>
                   ))}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-2.5 w-4 h-4 text-slate-400 dark:text-slate-600" />
               </div>
             </div>
+
+            {isConnected ? (
+              <div>
+                <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500">{t("evo.target.agent")}</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-2.5 pointer-events-none">
+                    <Server className="w-4 h-4 text-sky-500" />
+                  </div>
+                  <select
+                    value={activeAgentId}
+                    onChange={(e) => setActiveAgentId(e.target.value)}
+                    disabled={
+                      (state !== "idle" && state !== "diff-ready") ||
+                      currentNodeAgents.length === 0
+                    }
+                    className="w-full cursor-pointer appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-10 text-sm text-slate-900 transition-colors focus:border-sky-500/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                  >
+                    <option value="" disabled>{t("evo.target.agentSelect")}</option>
+                    {currentNodeAgents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-2.5 w-4 h-4 text-slate-400 dark:text-slate-600" />
+                </div>
+              </div>
+            ) : null}
 
             <div>
               <label className="mb-2 flex justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500">
@@ -1343,7 +1420,8 @@ export function EvolutionView() {
                 className="w-full bg-sky-600 hover:bg-sky-500 text-white transition-all shadow-lg shadow-sky-900/20"
                 onClick={() => void handlePreview()}
                 disabled={
-                  !activeNode ||
+                  !selectedNodeId ||
+                  !activeAgentId ||
                   !template ||
                   !isConnected ||
                   agents.length === 0 ||
@@ -1464,7 +1542,7 @@ export function EvolutionView() {
                   <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
                     {template === "knowledge_injection" ? (
                       <>
-                        {t("evo.summary.knowledge.compact", currentNode?.name || "the node")}
+                        {t("evo.summary.knowledge.compact", currentNode?.name || t("evo.nodeFallback"))}
                         <span className="ml-1 font-medium text-slate-800 dark:text-slate-200">{effectiveKnowledgeInput?.sourceRef || "—"}</span>
                       </>
                     ) : template === "custom_template" ? (
@@ -1474,14 +1552,14 @@ export function EvolutionView() {
                       </>
                     ) : (
                       <>
-                        {t("evo.summary.desc1")} <span className="font-medium text-slate-800 dark:text-slate-200">{currentNode?.name || "the node"}</span>.
+                        {t("evo.summary.desc1")} <span className="font-medium text-slate-800 dark:text-slate-200">{currentNode?.name || t("evo.nodeFallback")}</span>.
                         {t("evo.summary.desc2.prefix")} {template === "aggressive" ? t("evo.summary.desc2.agg") : t("evo.summary.desc2.con")}.
                       </>
                     )}
                   </p>
                   {previewResult ? (
                     <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-500">
-                      {previewResult.sourceDocument} · {previewResult.bytesBefore} bytes → {previewResult.bytesAfter} bytes
+                      {previewResult.sourceDocument} · {previewResult.bytesBefore} {t("common.bytes")} → {previewResult.bytesAfter} {t("common.bytes")}
                       {previewResult.sourceRefs.length > 0
                         ? ` · ${t("evo.summary.sourceRefs", previewResult.sourceRefs.length)}`
                         : previewResult.sourceRef
@@ -1617,17 +1695,17 @@ export function EvolutionView() {
               <div className="mt-2 flex flex-wrap gap-2">
                 {runtimeStatus.previewStale ? (
                   <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
-                    Preview Stale
+                    {t("evo.runtime.previewStale")}
                   </Badge>
                 ) : null}
                 {runtimeStatus.conflictDetected ? (
                   <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">
-                    Conflict Detected
+                    {t("evo.runtime.conflict")}
                   </Badge>
                 ) : null}
                 {runtimeStatus.overrideApplied ? (
                   <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/20 dark:text-sky-300">
-                    Override Applied
+                    {t("evo.runtime.overrideApplied")}
                   </Badge>
                 ) : null}
               </div>
@@ -1776,7 +1854,7 @@ export function EvolutionView() {
               </div>
               <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-2.5 text-sm dark:border-slate-800/60">
                 <span className="whitespace-nowrap text-slate-500 dark:text-slate-400">{t("evo.dialog.scope")}</span>
-                <span className="text-right text-xs leading-relaxed text-slate-700 dark:text-slate-300">{t("evo.dialog.scope.val", currentNode?.name || "the node")}</span>
+                <span className="text-right text-xs leading-relaxed text-slate-700 dark:text-slate-300">{t("evo.dialog.scope.val", currentNode?.name || t("evo.nodeFallback"))}</span>
               </div>
               <div className="flex items-center justify-between border-b border-slate-200 pb-2.5 text-sm dark:border-slate-800/60">
                 <span className="text-slate-500 dark:text-slate-400">{t("evo.dialog.vol")}</span>

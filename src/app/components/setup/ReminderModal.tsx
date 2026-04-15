@@ -61,7 +61,7 @@ export function ReminderModal() {
           <div className="p-8">
             <div className="relative w-20 h-20 mb-6 mx-auto flex items-center justify-center mix-blend-multiply dark:mix-blend-normal">
               <div className="w-full h-full grayscale-[80%] opacity-80 drop-shadow-md flex items-center justify-center">
-                <img src={appLogo} alt="Logo" className="w-[120%] h-[120%] object-contain [clip-path:circle(45%_at_50%_50%)]" />
+                <img src={appLogo} alt={t("app.logoAlt")} className="w-[120%] h-[120%] object-contain [clip-path:circle(45%_at_50%_50%)]" />
               </div>
               <div className="absolute 0 -right-1 w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-900/80 border-2 border-white dark:border-slate-900 flex items-center justify-center text-amber-500 shadow-sm z-10">
                 <Unplug className="w-3.5 h-3.5" />

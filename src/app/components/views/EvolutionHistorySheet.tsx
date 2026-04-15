@@ -455,7 +455,7 @@ export function EvolutionHistorySheet({
                     <div>
                       <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
                         <Activity className="h-3.5 w-3.5 text-sky-500" />
-                        Selected Operation
+                        {t("evo.history.selectedOperation")}
                       </div>
                       <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50">{renderEvolutionHistorySummary(selectedEntry, t)}</h3>
                     </div>

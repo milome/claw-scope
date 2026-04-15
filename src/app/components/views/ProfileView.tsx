@@ -20,8 +20,6 @@ import {
   ArrowRight,
   Activity,
   Terminal,
-  ArrowLeftRight,
-  ChevronLeft,
   ChevronRight,
   ChevronUp,
   ChevronDown,
@@ -53,7 +51,11 @@ import {
   type GatewayAgentIdentityResult,
 } from "../../contexts/OpenClawContext";
 import { applyIdentityMetaToDocument } from "./profileIdentityDocument";
-import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
+import {
+  groupAgentsByNode,
+  resolveSelectedAgentIdForNode,
+  resolveSelectedProfileNodeName,
+} from "./profileNodeState";
 import { resolveViewToneClasses } from "./viewTone";
 
 type AgentStatusKey = "active" | "standby" | "sleeping";
@@ -135,33 +137,10 @@ type AgentDocumentSourceMeta = {
   isFallback: boolean;
 };
 
-type HorizontalOverflowState = {
-  left: boolean;
-  right: boolean;
-};
-
 const PROFILE_DOC_STATE_STORAGE_PREFIX = "clawscope:profile-doc-state:";
 const EXPAND_ALL_OVERSCAN_PX = 160;
 const EXPAND_ALL_FALLBACK_VISIBLE_COUNT = 3;
 const EXPAND_ALL_BATCH_SIZE = 3;
-
-function resolveHorizontalOverflowState(
-  element: HTMLElement | null,
-): HorizontalOverflowState {
-  if (!element) {
-    return { left: false, right: false };
-  }
-
-  const hasOverflow = element.scrollWidth - element.clientWidth > 4;
-  if (!hasOverflow) {
-    return { left: false, right: false };
-  }
-
-  return {
-    left: element.scrollLeft > 4,
-    right: element.scrollLeft + element.clientWidth < element.scrollWidth - 4,
-  };
-}
 
 function statusLabel(status: AgentStatusKey, t: Translate) {
   switch (status) {
@@ -357,7 +336,10 @@ function formatAgentShortId(agentId: string) {
   return `${agentId.slice(0, 8)}-${agentId.slice(-4)}`;
 }
 
-function formatLoadError(error: unknown) {
+function formatLoadError(
+  error: unknown,
+  t?: (key: string, ...args: (string | number)[]) => string,
+) {
   if (typeof error === "string") {
     return error;
   }
@@ -376,7 +358,7 @@ function formatLoadError(error: unknown) {
     }
   }
 
-  return "Failed to load agent details.";
+  return t ? t("profile.error.loadAgentDetails") : "Failed to load agent details.";
 }
 
 async function loadAgentDetails(agentId: string): Promise<AgentDetailsState> {
@@ -871,6 +853,7 @@ function splitDocumentBlocks(markdown: string): AgentDocumentBlock[] {
 
 function buildDocumentSections(
   blocks: AgentDocumentBlock[],
+  t: (key: string, ...args: (string | number)[]) => string,
 ): AgentDocumentSection[] {
   const sections: AgentDocumentSection[] = [];
   let currentSection: AgentDocumentSection | null = null;
@@ -907,7 +890,7 @@ function buildDocumentSections(
     if (!currentSection) {
       currentSection = {
         id: nextSectionId("overview"),
-        title: "Overview",
+        title: t("profile.doc.overview"),
         level: 1,
         blocks: [],
         synthetic: true,
@@ -1206,7 +1189,7 @@ function AgentDocument({
 }) {
   const { t } = useI18n();
   const blocks = splitDocumentBlocks(content);
-  const sections = buildDocumentSections(blocks);
+  const sections = buildDocumentSections(blocks, t);
   const baseTextClass =
     tone === "soul"
       ? "text-slate-700 dark:text-slate-300"
@@ -2270,12 +2253,6 @@ export function ProfileView() {
   const [isSavingIdentityDoc, setIsSavingIdentityDoc] = useState(false);
   const [isSavingSoulDoc, setIsSavingSoulDoc] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const desktopNodeTabsRef = useRef<HTMLDivElement>(null);
-  const mobileNodeTabsRef = useRef<HTMLDivElement>(null);
-  const [desktopNodeTabsOverflow, setDesktopNodeTabsOverflow] =
-    useState<HorizontalOverflowState>({ left: false, right: false });
-  const [mobileNodeTabsOverflow, setMobileNodeTabsOverflow] =
-    useState<HorizontalOverflowState>({ left: false, right: false });
 
   const hasRealAgents = isConnected && realAgents.length > 0;
 
@@ -2382,17 +2359,17 @@ export function ProfileView() {
           status: statusLabel(agent.status, t),
           version: details?.identity?.agentId
             ? `agent:${details.identity.agentId}`
-            : "OpenClaw Agent",
+            : t("profile.agentVersionFallback"),
           identity:
             parsedIdentity.text ||
             resolvedAgentName ||
             backup?.identity ||
-            "No identity set.",
+            t("profile.noIdentity"),
           tags: parsedIdentity.tags,
           soulQuote:
             extractSoulText(soulMarkdown) ||
             backup?.soulQuote ||
-            "No soul quote available.",
+            t("profile.noSoulQuote"),
           stats: {
             memory:
               countMeaningfulLines(identityMarkdown) +
@@ -2521,7 +2498,7 @@ export function ProfileView() {
     try {
       await reloadSelectedAgentDetails(activeAgent.id);
     } catch (error) {
-      toast.error(formatLoadError(error));
+      toast.error(formatLoadError(error, t));
     }
   };
 
@@ -2561,7 +2538,7 @@ export function ProfileView() {
       toast.success(t("profile.saveSuccess", t("profile.identityFields")));
     } catch (error) {
       toast.error(
-        `${t("profile.saveFailed", t("profile.identityFields"))}: ${formatLoadError(error)}`,
+        `${t("profile.saveFailed", t("profile.identityFields"))}: ${formatLoadError(error, t)}`,
       );
     } finally {
       setIsSavingIdentityMeta(false);
@@ -2577,7 +2554,7 @@ export function ProfileView() {
     try {
       await reloadSelectedAgentDetails(activeAgent.id);
     } catch (error) {
-      toast.error(formatLoadError(error));
+      toast.error(formatLoadError(error, t));
     }
   };
 
@@ -2595,7 +2572,7 @@ export function ProfileView() {
       toast.success(t("profile.saveSuccess", t("profile.identity")));
     } catch (error) {
       toast.error(
-        `${t("profile.saveFailed", t("profile.identity"))}: ${formatLoadError(error)}`,
+        `${t("profile.saveFailed", t("profile.identity"))}: ${formatLoadError(error, t)}`,
       );
     } finally {
       setIsSavingIdentityDoc(false);
@@ -2611,7 +2588,7 @@ export function ProfileView() {
     try {
       await reloadSelectedAgentDetails(activeAgent.id);
     } catch (error) {
-      toast.error(formatLoadError(error));
+      toast.error(formatLoadError(error, t));
     }
   };
 
@@ -2629,7 +2606,7 @@ export function ProfileView() {
       toast.success(t("profile.saveSuccess", t("profile.soul")));
     } catch (error) {
       toast.error(
-        `${t("profile.saveFailed", t("profile.soul"))}: ${formatLoadError(error)}`,
+        `${t("profile.saveFailed", t("profile.soul"))}: ${formatLoadError(error, t)}`,
       );
     } finally {
       setIsSavingSoulDoc(false);
@@ -2637,15 +2614,7 @@ export function ProfileView() {
   };
 
   const groupedAgents = useMemo(
-    () =>
-      displayAgents.reduce(
-        (acc, agent) => {
-          if (!acc[agent.node]) acc[agent.node] = [];
-          acc[agent.node].push(agent);
-          return acc;
-        },
-        {} as Record<string, (typeof displayAgents)[number][]>,
-      ),
+    () => groupAgentsByNode(displayAgents),
     [displayAgents],
   );
   const nodeEntries = useMemo(() => Object.entries(groupedAgents), [groupedAgents]);
@@ -2654,21 +2623,17 @@ export function ProfileView() {
     [nodeEntries],
   );
   const nodeCount = nodeNames.length;
-  const showNodeTabsHint = nodeCount > 1;
   const [selectedNodeName, setSelectedNodeName] = useState("");
 
   useEffect(() => {
-    if (nodeNames.length === 0) {
-      if (selectedNodeName !== "") {
-        setSelectedNodeName("");
-      }
-      return;
+    const nextNodeName = resolveSelectedProfileNodeName(
+      selectedNodeName,
+      nodeNames,
+    );
+    if (nextNodeName !== selectedNodeName) {
+      setSelectedNodeName(nextNodeName);
     }
-
-    if (!selectedNodeName || !groupedAgents[selectedNodeName]) {
-      setSelectedNodeName(nodeNames[0]);
-    }
-  }, [groupedAgents, nodeNames, selectedNodeName]);
+  }, [nodeNames, selectedNodeName]);
 
   useEffect(() => {
     if (activeAgent?.node && activeAgent.node !== selectedNodeName) {
@@ -2676,15 +2641,15 @@ export function ProfileView() {
     }
   }, [activeAgent?.node, selectedNodeName]);
 
-  const handleNodeTabChange = (nodeName: string) => {
+  const handleNodeSelect = (nodeName: string) => {
     setSelectedNodeName(nodeName);
-    const nodeAgents = groupedAgents[nodeName] ?? [];
+    const nextSelectedAgentId = resolveSelectedAgentIdForNode(
+      selectedAgentId,
+      groupedAgents[nodeName] ?? [],
+    );
 
-    if (
-      nodeAgents.length > 0 &&
-      !nodeAgents.some((agent) => agent.id === selectedAgentId)
-    ) {
-      setSelectedAgentId(nodeAgents[0].id);
+    if (nextSelectedAgentId !== selectedAgentId) {
+      setSelectedAgentId(nextSelectedAgentId);
     }
   };
 
@@ -2692,45 +2657,26 @@ export function ProfileView() {
     ? groupedAgents[selectedNodeName] ?? []
     : [];
 
-  useEffect(() => {
-    const element = desktopNodeTabsRef.current;
-    if (!element) {
-      return;
-    }
-
-    const updateOverflow = () => {
-      setDesktopNodeTabsOverflow(resolveHorizontalOverflowState(element));
-    };
-
-    updateOverflow();
-    element.addEventListener("scroll", updateOverflow, { passive: true });
-    window.addEventListener("resize", updateOverflow);
-
-    return () => {
-      element.removeEventListener("scroll", updateOverflow);
-      window.removeEventListener("resize", updateOverflow);
-    };
-  }, [nodeEntries.length, selectedNodeName]);
-
-  useEffect(() => {
-    const element = mobileNodeTabsRef.current;
-    if (!element) {
-      return;
-    }
-
-    const updateOverflow = () => {
-      setMobileNodeTabsOverflow(resolveHorizontalOverflowState(element));
-    };
-
-    updateOverflow();
-    element.addEventListener("scroll", updateOverflow, { passive: true });
-    window.addEventListener("resize", updateOverflow);
-
-    return () => {
-      element.removeEventListener("scroll", updateOverflow);
-      window.removeEventListener("resize", updateOverflow);
-    };
-  }, [nodeEntries.length, selectedNodeName]);
+  const renderNodeSelectorControl = () => (
+    <div className="relative px-1">
+      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-sky-500">
+        <Network className="h-4 w-4" />
+      </div>
+      <select
+        value={selectedNodeName}
+        onChange={(event) => handleNodeSelect(event.target.value)}
+        disabled={nodeCount <= 1}
+        className="w-full cursor-pointer appearance-none rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-10 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-sky-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-200 dark:focus:border-sky-500 dark:focus:bg-slate-900 disabled:cursor-default disabled:opacity-70"
+      >
+        {nodeEntries.map(([nodeName, agents]) => (
+          <option key={nodeName} value={nodeName}>
+            {nodeName} ({agents.length})
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+    </div>
+  );
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -2770,7 +2716,7 @@ export function ProfileView() {
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
           </span>
           <span className="truncate">
-            {t("profile.connected", nodeCount)} • {displayAgents.length} Agents
+            {t("profile.connectedSummary", nodeCount, displayAgents.length)}
           </span>
         </motion.div>
       </div>
@@ -2798,62 +2744,11 @@ export function ProfileView() {
                   <Network className="w-3.5 h-3.5" />
                   {t("profile.nodes")}
                 </div>
-                {showNodeTabsHint ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
-                    <ArrowLeftRight className="h-3 w-3" />
-                    {t("profile.nodeTabsHint")}
-                  </span>
-                ) : null}
+                <span className="inline-flex rounded-full border border-slate-200/80 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
+                  {nodeCount}
+                </span>
               </div>
-              <Tabs value={selectedNodeName} onValueChange={handleNodeTabChange}>
-                <div className="relative">
-                  <div
-                    ref={desktopNodeTabsRef}
-                    className="overflow-x-auto hide-scrollbar"
-                  >
-                    <TabsList className="h-auto min-w-max flex-nowrap justify-start gap-1 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-1.5">
-                      {nodeEntries.map(([nodeName, agents]) => {
-                        const isSelectedNode = selectedNodeName === nodeName;
-
-                        return (
-                          <TabsTrigger
-                            key={nodeName}
-                            value={nodeName}
-                            className={`h-auto flex-none gap-2 px-3 py-2 text-xs font-semibold transition-all ${
-                              isSelectedNode
-                                ? "relative border-sky-200 bg-white text-sky-700 shadow-sm after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:origin-center after:rounded-full after:bg-sky-500 after:opacity-100 after:scale-x-100 after:transition-transform after:duration-200 after:ease-out dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200 dark:after:bg-sky-300"
-                                : "relative bg-slate-100/70 text-slate-500 after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:origin-center after:rounded-full after:bg-sky-500/70 after:opacity-0 after:scale-x-60 after:transition-transform after:duration-200 after:ease-out hover:bg-slate-100 hover:text-slate-700 dark:bg-slate-950/30 dark:text-slate-500 dark:after:bg-sky-300/70 dark:hover:bg-slate-900/70 dark:hover:text-slate-300"
-                            }`}
-                          >
-                            <span className="truncate max-w-[120px]">
-                              {nodeName}
-                            </span>
-                            <span
-                              className={`rounded-full px-1.5 py-0.5 text-[10px] ${
-                                isSelectedNode
-                                  ? "bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-200"
-                                  : "bg-slate-300/70 text-slate-500 dark:bg-slate-800/90 dark:text-slate-400"
-                              }`}
-                            >
-                              {agents.length}
-                            </span>
-                          </TabsTrigger>
-                        );
-                      })}
-                    </TabsList>
-                  </div>
-                  {desktopNodeTabsOverflow.left ? (
-                    <div className="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-start bg-gradient-to-r from-white via-white/90 to-transparent pl-1 dark:from-slate-900 dark:via-slate-900/90">
-                      <ChevronLeft className="h-4 w-4 text-slate-400" />
-                    </div>
-                  ) : null}
-                  {desktopNodeTabsOverflow.right ? (
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-end bg-gradient-to-l from-white via-white/90 to-transparent pr-1 dark:from-slate-900 dark:via-slate-900/90">
-                      <ChevronRight className="h-4 w-4 text-slate-400" />
-                    </div>
-                  ) : null}
-                </div>
-              </Tabs>
+              {renderNodeSelectorControl()}
             </div>
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 hide-scrollbar">
@@ -2926,62 +2821,11 @@ export function ProfileView() {
                 <Network className="w-3.5 h-3.5" />
                 {t("profile.nodes")}
               </div>
-              {showNodeTabsHint ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
-                  <ArrowLeftRight className="h-3 w-3" />
-                  {t("profile.nodeTabsHint")}
-                </span>
-              ) : null}
+              <span className="inline-flex rounded-full border border-slate-200/80 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
+                {nodeCount}
+              </span>
             </div>
-            <Tabs value={selectedNodeName} onValueChange={handleNodeTabChange}>
-              <div className="relative">
-                <div
-                  ref={mobileNodeTabsRef}
-                  className="overflow-x-auto hide-scrollbar"
-                >
-                  <TabsList className="h-auto min-w-max flex-nowrap justify-start gap-1 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5">
-                    {nodeEntries.map(([nodeName, agents]) => {
-                      const isSelectedNode = selectedNodeName === nodeName;
-
-                      return (
-                        <TabsTrigger
-                          key={nodeName}
-                          value={nodeName}
-                          className={`h-auto flex-none gap-2 px-3 py-2 text-xs font-semibold transition-all ${
-                            isSelectedNode
-                              ? "relative border-sky-200 bg-white text-sky-700 shadow-sm after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:origin-center after:rounded-full after:bg-sky-500 after:opacity-100 after:scale-x-100 after:transition-transform after:duration-200 after:ease-out dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200 dark:after:bg-sky-300"
-                              : "relative bg-slate-100/70 text-slate-500 after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:origin-center after:rounded-full after:bg-sky-500/70 after:opacity-0 after:scale-x-60 after:transition-transform after:duration-200 after:ease-out hover:bg-slate-100 hover:text-slate-700 dark:bg-slate-950/30 dark:text-slate-500 dark:after:bg-sky-300/70 dark:hover:bg-slate-900/70 dark:hover:text-slate-300"
-                          }`}
-                        >
-                          <span className="truncate max-w-[110px]">
-                            {nodeName}
-                          </span>
-                          <span
-                            className={`rounded-full px-1.5 py-0.5 text-[10px] ${
-                              isSelectedNode
-                                ? "bg-sky-100 text-sky-700 dark:bg-sky-900/60 dark:text-sky-200"
-                                : "bg-slate-300/70 text-slate-500 dark:bg-slate-800/90 dark:text-slate-400"
-                            }`}
-                          >
-                            {agents.length}
-                          </span>
-                        </TabsTrigger>
-                      );
-                    })}
-                  </TabsList>
-                </div>
-                {mobileNodeTabsOverflow.left ? (
-                  <div className="pointer-events-none absolute inset-y-0 left-0 flex w-8 items-center justify-start bg-gradient-to-r from-white via-white/90 to-transparent pl-1 dark:from-slate-900 dark:via-slate-900/90">
-                    <ChevronLeft className="h-4 w-4 text-slate-400" />
-                  </div>
-                ) : null}
-                {mobileNodeTabsOverflow.right ? (
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex w-8 items-center justify-end bg-gradient-to-l from-white via-white/90 to-transparent pr-1 dark:from-slate-900 dark:via-slate-900/90">
-                    <ChevronRight className="h-4 w-4 text-slate-400" />
-                  </div>
-                ) : null}
-              </div>
-            </Tabs>
+            {renderNodeSelectorControl()}
           </div>
           <div
             ref={scrollRef}
@@ -3247,7 +3091,7 @@ export function ProfileView() {
                           ) : (
                             <AgentDocument
                               key={`${activeAgent.id}:identity`}
-                              content={activeAgent.identity || "No identity set."}
+                              content={activeAgent.identity || t("profile.noIdentity")}
                               tone="identity"
                               storageKey={`${activeAgent.id}:identity`}
                               source={activeIdentitySource}
@@ -3308,7 +3152,7 @@ export function ProfileView() {
                               key={`${activeAgent.id}:soul`}
                               content={
                                 activeAgent.soulQuote ||
-                                "No soul quote available."
+                                t("profile.noSoulQuote")
                               }
                               tone="soul"
                               storageKey={`${activeAgent.id}:soul`}

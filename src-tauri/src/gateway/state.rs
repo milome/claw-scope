@@ -281,20 +281,24 @@ impl GatewayAppState {
                 .lock()
                 .expect("gateway snapshots lock poisoned")
                 .remove(session_id);
-            let mut active = self
+            let should_rotate_active = self
                 .inner
                 .active_session_id
                 .lock()
-                .expect("active gateway session lock poisoned");
-            if active.as_deref() == Some(session_id) {
-                *active = self
+                .expect("active gateway session lock poisoned")
+                .as_deref()
+                == Some(session_id);
+            if should_rotate_active {
+                let next_session_id = {
+                    let sessions = self.inner.sessions.lock().await;
+                    resolve_next_active_session_id(sessions.keys())
+                };
+                *self
                     .inner
-                    .sessions
-                    .blocking_lock()
-                    .keys()
-                    .next()
-                    .cloned();
-                if let Some(next_session_id) = active.clone() {
+                    .active_session_id
+                    .lock()
+                    .expect("active gateway session lock poisoned") = next_session_id.clone();
+                if let Some(next_session_id) = next_session_id {
                     if let Some(next_snapshot) = self
                         .inner
                         .snapshots
@@ -440,6 +444,12 @@ impl GatewayAppState {
     }
 }
 
+fn resolve_next_active_session_id<'a>(
+    mut session_ids: impl Iterator<Item = &'a String>,
+) -> Option<String> {
+    session_ids.next().cloned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -565,5 +575,25 @@ mod tests {
         assert_eq!(state.active_session_id().as_deref(), Some("ws://node-a:18789"));
         let snapshots = state.snapshots();
         assert_eq!(snapshots.iter().filter(|snapshot| snapshot.is_active).count(), 1);
+    }
+
+    #[test]
+    fn resolve_next_active_session_id_prefers_remaining_session() {
+        let session_ids = vec![
+            "ws://node-b:18789".to_string(),
+        ];
+
+        let next = resolve_next_active_session_id(session_ids.iter());
+
+        assert_eq!(next.as_deref(), Some("ws://node-b:18789"));
+    }
+
+    #[test]
+    fn resolve_next_active_session_id_returns_none_when_empty() {
+        let session_ids: Vec<String> = Vec::new();
+
+        let next = resolve_next_active_session_id(session_ids.iter());
+
+        assert!(next.is_none());
     }
 }

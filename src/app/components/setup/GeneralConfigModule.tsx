@@ -109,7 +109,7 @@ export function GeneralConfigModule() {
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
               <div className="p-6">
                 <h3 className="text-[15px] font-semibold mb-4 flex items-center gap-2">
-                  <Sun className="w-4 h-4 text-slate-500" /> Appearance
+                  <Sun className="w-4 h-4 text-slate-500" /> {t("config.general.appearance")}
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -124,7 +124,7 @@ export function GeneralConfigModule() {
                     <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center">
                       <Sun className="w-6 h-6 text-amber-500" />
                     </div>
-                    <span className="text-sm font-medium">Light</span>
+                    <span className="text-sm font-medium">{t("config.general.theme.light")}</span>
                   </button>
 
                   <button
@@ -138,7 +138,7 @@ export function GeneralConfigModule() {
                     <div className="w-12 h-12 rounded-full bg-slate-900 shadow-sm flex items-center justify-center border border-slate-700">
                       <Moon className="w-6 h-6 text-sky-400" />
                     </div>
-                    <span className="text-sm font-medium">Dark</span>
+                    <span className="text-sm font-medium">{t("config.general.theme.dark")}</span>
                   </button>
 
                   <button
@@ -152,7 +152,7 @@ export function GeneralConfigModule() {
                     <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800 shadow-sm flex items-center justify-center">
                       <Monitor className="w-6 h-6 text-slate-500 dark:text-slate-400" />
                     </div>
-                    <span className="text-sm font-medium">System</span>
+                    <span className="text-sm font-medium">{t("config.general.theme.system")}</span>
                   </button>
                 </div>
               </div>
@@ -161,7 +161,7 @@ export function GeneralConfigModule() {
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
               <div className="p-6">
                 <h3 className="text-[15px] font-semibold mb-4 flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-slate-500" /> Language
+                  <Globe className="w-4 h-4 text-slate-500" /> {t("config.general.language")}
                 </h3>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">

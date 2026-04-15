@@ -117,15 +117,54 @@ function formatHistoryStatus(
   }
 }
 
-function formatRuntimeFlags(runtimeStatus: EvolutionOperationStatusSnapshot | null) {
+function formatRuntimeFlags(
+  runtimeStatus: EvolutionOperationStatusSnapshot | null,
+  t: (key: string, ...args: (string | number)[]) => string,
+) {
   if (!runtimeStatus) {
     return "—";
   }
   const flags = [];
-  if (runtimeStatus.previewStale) flags.push("preview stale");
-  if (runtimeStatus.conflictDetected) flags.push("conflict");
-  if (runtimeStatus.overrideApplied) flags.push("override");
-  return flags.length > 0 ? flags.join(", ") : "clean";
+  if (runtimeStatus.previewStale) flags.push(t("evo.runtime.previewStale"));
+  if (runtimeStatus.conflictDetected) flags.push(t("memory.graph.conflict"));
+  if (runtimeStatus.overrideApplied) flags.push(t("memory.graph.override"));
+  return flags.length > 0 ? flags.join(", ") : t("memory.graph.clean");
+}
+
+function formatGraphStatus(
+  status: string,
+  t: (key: string, ...args: (string | number)[]) => string,
+) {
+  switch (status) {
+    case "baseline":
+      return t("memory.graph.status.baseline");
+    case "annotated":
+      return t("memory.graph.status.annotated");
+    case "idle":
+      return t("memory.graph.status.idle");
+    case "frozen":
+      return t("memory.graph.status.frozen");
+    case "pending":
+      return t("evo.graph.status.pending");
+    case "recorded":
+      return t("memory.graph.status.recorded");
+    case "available":
+      return t("memory.graph.status.available");
+    case "restored":
+      return t("memory.graph.status.restored");
+    case "preview_ready":
+      return t("memory.graph.status.previewReady");
+    case "running":
+      return t("memory.graph.status.running");
+    case "succeeded":
+      return t("memory.graph.status.succeeded");
+    case "failed":
+      return t("memory.graph.status.failed");
+    case "cancelled":
+      return t("memory.graph.status.cancelled");
+    default:
+      return status;
+  }
 }
 
 export function MemoryTopologyGraph({
@@ -200,7 +239,7 @@ export function MemoryTopologyGraph({
     "—";
   const latestHistorySummary = latestHistoryEntry
     ? renderEvolutionHistorySummary(latestHistoryEntry, t)
-    : "No linked history yet";
+    : t("memory.graph.noHistoryYet");
   const previewChangeCount = previewResult?.changes.length ?? 0;
   const bytesBefore = previewResult?.bytesBefore ?? latestHistoryEntry?.bytesBefore ?? 0;
   const bytesAfter = previewResult?.bytesAfter ?? latestHistoryEntry?.bytesAfter ?? bytesBefore;
@@ -209,88 +248,88 @@ export function MemoryTopologyGraph({
     () => [
       {
         id: "memory",
-        label: "Memory Root",
+        label: t("memory.graph.memoryRoot"),
         meta: sourceDocument,
         x: 72,
         y: 160,
         icon: Database,
         status: "baseline",
         tone: "neutral",
-        description: "目标 MEMORY 文档在本次操作链开始前的基线入口。",
+        description: t("memory.graph.desc.memoryRoot"),
         details: [
-          { label: "Source Document", value: sourceDocument },
-          { label: "Bytes Before", value: `${bytesBefore}` },
-          { label: "Current Node", value: currentNode?.name ?? "—" },
+          { label: t("memory.graph.sourceDocument"), value: sourceDocument },
+          { label: t("memory.graph.bytesBefore"), value: `${bytesBefore}` },
+          { label: t("memory.graph.currentNode"), value: currentNode?.name ?? "—" },
         ],
       },
       {
         id: "sources",
-        label: "Source Refs",
+        label: t("evo.runtime.sourceRefs"),
         meta: `${sourceRefs.length} refs`,
         x: 220,
         y: 76,
         icon: Network,
         status: sourceRefs.length > 0 ? "annotated" : "idle",
         tone: sourceRefs.length > 0 ? "target" : "neutral",
-        description: "本次 Evolution 绑定的来源引用与 capability tags，会驱动 traceability 与冲突检测。",
+        description: t("memory.graph.desc.sources"),
         details: [
-          { label: "Source Refs", value: joinOrDash(sourceRefs) },
-          { label: "Capability Tags", value: joinOrDash(capabilityTags) },
-          { label: "Operation Type", value: formatOperationType(previewResult?.operationType ?? latestHistoryEntry?.operationType, t) },
+          { label: t("evo.runtime.sourceRefs"), value: joinOrDash(sourceRefs) },
+          { label: t("memory.graph.capabilityTags"), value: joinOrDash(capabilityTags) },
+          { label: t("memory.graph.operationKind"), value: formatOperationType(previewResult?.operationType ?? latestHistoryEntry?.operationType, t) },
         ],
       },
       {
         id: "preview",
-        label: "Preview Overlay",
+        label: t("memory.graph.previewOverlay"),
         meta: `${previewChangeCount} changes`,
         x: 238,
         y: 244,
         icon: Split,
         status: previewResult ? previewResult.riskLevel : "pending",
         tone: previewResult ? "target" : "neutral",
-        description: "Analyze & Preview 生成的变更叠层，负责把 diff/risk 压缩成可执行提案。",
+        description: t("memory.graph.desc.preview"),
         details: [
-          { label: "Change Count", value: `${previewChangeCount}` },
-          { label: "Risk Level", value: previewResult?.riskLevel ?? "—" },
-          { label: "Bytes Delta", value: `${bytesBefore} → ${bytesAfter}` },
+          { label: t("memory.graph.changeCount"), value: `${previewChangeCount}` },
+          { label: t("memory.graph.riskLevel"), value: previewResult?.riskLevel ?? "—" },
+          { label: t("memory.graph.bytesDelta"), value: `${bytesBefore} → ${bytesAfter}` },
         ],
       },
       {
         id: "snapshot",
-        label: "Snapshot Record",
+        label: t("memory.graph.snapshotRecord"),
         meta: truncateId(snapshotId),
         x: 392,
         y: 84,
         icon: Database,
         status: snapshotId !== "—" ? "frozen" : "pending",
         tone: snapshotId !== "—" ? "warning" : "neutral",
-        description: "执行前冻结的可回滚快照，用于把 preview 提案变成可恢复的操作。",
+        description: t("memory.graph.desc.snapshot"),
         details: [
-          { label: "Snapshot Id", value: snapshotId },
-          { label: "History Snapshot", value: latestHistoryEntry?.snapshotId ?? "—" },
-          { label: "Rollback Ready", value: latestHistoryEntry ? "yes" : "pending" },
+          { label: t("memory.graph.snapshotId"), value: snapshotId },
+          { label: t("memory.graph.historySnapshot"), value: latestHistoryEntry?.snapshotId ?? "—" },
+          { label: t("memory.graph.rollbackReady"), value: latestHistoryEntry ? t("memory.graph.yes") : t("evo.graph.status.pending") },
         ],
       },
       {
         id: "runtime",
-        label: "Runtime Phase",
+        label: t("memory.graph.runtimePhase"),
         meta: runtimeStatus?.phase ?? state,
         x: 402,
         y: 236,
         icon: Cpu,
         status: runtimeStatus?.runtimeState ?? state,
         tone: runtimeStatus ? "active" : "neutral",
-        description: "真实执行阶段与运行态标记，负责把 preview 提案推进成实际写入结果。",
+        description: t("memory.graph.desc.runtime"),
         details: [
-          { label: "Runtime State", value: runtimeStatus?.runtimeState ?? "preview_only" },
-          { label: "Phase", value: runtimeStatus?.phase ?? "—" },
-          { label: "Progress", value: runtimeStatus ? `${runtimeStatus.progressPct}%` : "—" },
-          { label: "Flags", value: formatRuntimeFlags(runtimeStatus) },
+          { label: t("memory.graph.runtimeState"), value: formatGraphStatus(runtimeStatus?.runtimeState ?? "preview_ready", t) },
+          { label: t("memory.graph.phase"), value: runtimeStatus?.phase ?? "—" },
+          { label: t("memory.graph.progress"), value: runtimeStatus ? `${runtimeStatus.progressPct}%` : "—" },
+          { label: t("memory.graph.flags"), value: formatRuntimeFlags(runtimeStatus, t) },
         ],
       },
       {
         id: "history",
-        label: "History Record",
+        label: t("memory.graph.historyRecord"),
         meta: formatHistoryStatus(latestHistoryEntry?.status, t),
         x: 612,
         y: 84,
@@ -302,16 +341,16 @@ export function MemoryTopologyGraph({
             : latestHistoryEntry
               ? "warning"
               : "neutral",
-        description: "执行完成后写入的历史记录，是 graph 与 history sheet 的对接点。",
+        description: t("memory.graph.desc.history"),
         details: [
-          { label: "History Status", value: formatHistoryStatus(latestHistoryEntry?.status, t) },
-          { label: "Operation Kind", value: latestHistoryEntry?.operationKind ?? "—" },
-          { label: "Summary", value: latestHistorySummary },
+          { label: t("memory.graph.historyStatus"), value: formatHistoryStatus(latestHistoryEntry?.status, t) },
+          { label: t("memory.graph.operationKind"), value: latestHistoryEntry?.operationKind ?? "—" },
+          { label: t("memory.graph.summary"), value: latestHistorySummary },
         ],
       },
       {
         id: "rollback",
-        label: "Rollback Target",
+        label: t("memory.graph.rollbackTarget"),
         meta: truncateId(latestHistoryEntry?.snapshotId ?? snapshotId),
         x: 624,
         y: 236,
@@ -323,11 +362,11 @@ export function MemoryTopologyGraph({
               ? "available"
               : "pending",
         tone: latestHistoryEntry ? "warning" : "neutral",
-        description: "最新可恢复的目标快照，说明当前执行链最终会落到哪个 rollback object。",
+        description: t("memory.graph.desc.rollback"),
         details: [
-          { label: "Rollback Snapshot", value: latestHistoryEntry?.snapshotId ?? snapshotId },
-          { label: "Rollback State", value: latestHistoryEntry?.operationKind === "rollback" ? "restored" : latestHistoryEntry ? "available" : "pending" },
-          { label: "History Summary", value: latestHistorySummary },
+          { label: t("memory.graph.rollbackSnapshot"), value: latestHistoryEntry?.snapshotId ?? snapshotId },
+          { label: t("memory.graph.rollbackState"), value: latestHistoryEntry?.operationKind === "rollback" ? t("memory.graph.stateRestored") : latestHistoryEntry ? t("memory.graph.stateAvailable") : t("evo.graph.status.pending") },
+          { label: t("memory.graph.summary"), value: latestHistorySummary },
         ],
       },
     ],
@@ -350,14 +389,14 @@ export function MemoryTopologyGraph({
 
   const edges = useMemo<GraphEdge[]>(
     () => [
-      { id: "e1", from: "memory", to: "preview", type: "solid", label: "baseline → preview" },
-      { id: "e2", from: "sources", to: "preview", type: "solid", label: "source refs" },
-      { id: "e3", from: "preview", to: "snapshot", type: "solid", label: "freeze" },
-      { id: "e4", from: "snapshot", to: "runtime", type: "solid", label: "execute" },
-      { id: "e5", from: "runtime", to: "history", type: "dashed", animated: true, label: "record", emphasis: true },
-      { id: "e6", from: "history", to: "rollback", type: "solid", label: "restore target" },
+      { id: "e1", from: "memory", to: "preview", type: "solid", label: t("memory.graph.edge.baselinePreview") },
+      { id: "e2", from: "sources", to: "preview", type: "solid", label: t("memory.graph.sourceRefs") },
+      { id: "e3", from: "preview", to: "snapshot", type: "solid", label: t("memory.graph.edge.freeze") },
+      { id: "e4", from: "snapshot", to: "runtime", type: "solid", label: t("memory.graph.edge.execute") },
+      { id: "e5", from: "runtime", to: "history", type: "dashed", animated: true, label: t("memory.graph.edge.record"), emphasis: true },
+      { id: "e6", from: "history", to: "rollback", type: "solid", label: t("memory.graph.edge.restoreTarget") },
     ],
-    [],
+    [t],
   );
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? nodes[5];
@@ -408,10 +447,10 @@ export function MemoryTopologyGraph({
         </div>
         <div className="flex items-center gap-2 text-[11px]">
           <Badge variant="outline" className="border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-            {previewChangeCount} preview changes
+            {previewChangeCount} {t("memory.graph.previewChanges")}
           </Badge>
           <Badge variant="outline" className="border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-            {sourceRefs.length} source refs
+            {sourceRefs.length} {t("memory.graph.sourceRefs")}
           </Badge>
         </div>
       </div>
@@ -503,7 +542,7 @@ export function MemoryTopologyGraph({
                 {truncateText(node.meta, 26)}
               </span>
               <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-500">
-                {node.status}
+                {formatGraphStatus(node.status, t)}
               </span>
             </div>
           </div>
@@ -515,12 +554,12 @@ export function MemoryTopologyGraph({
           {t("evo.graph.meaning.title")}
         </h4>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-          {"当前图谱已按 source refs -> preview -> snapshot -> runtime -> history -> rollback 映射本次 Evolution 的主要对象链，而不再只是静态示意。"}
+          {t("memory.graph.mappingSummary")}
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-              Source Refs
+              {t("memory.graph.sourceRefs")}
             </div>
             <div className="font-mono text-sm text-slate-700 dark:text-slate-200">
               {sourceRefs.length}
@@ -528,7 +567,7 @@ export function MemoryTopologyGraph({
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-              Snapshot
+              {t("memory.graph.snapshot")}
             </div>
             <div className="font-mono text-sm text-slate-700 dark:text-slate-200">
               {truncateId(snapshotId)}
@@ -536,7 +575,7 @@ export function MemoryTopologyGraph({
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-              History Status
+              {t("memory.graph.historyStatus")}
             </div>
             <div className="font-mono text-sm text-slate-700 dark:text-slate-200">
               {formatHistoryStatus(latestHistoryEntry?.status, t)}
@@ -547,7 +586,7 @@ export function MemoryTopologyGraph({
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                Explain Panel
+                {t("memory.graph.explainPanel")}
               </div>
               <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                 {selectedNode.label}
@@ -564,7 +603,7 @@ export function MemoryTopologyGraph({
                   className="h-8 border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-300"
                   onClick={onOpenDiff}
                 >
-                  Open Diff
+                  {t("memory.graph.openDiff")}
                 </Button>
               ) : null}
               {onOpenHistory ? (
@@ -574,7 +613,7 @@ export function MemoryTopologyGraph({
                   className="h-8 border-slate-200 text-slate-700 dark:border-slate-800 dark:text-slate-300"
                   onClick={onOpenHistory}
                 >
-                  Open History
+                  {t("memory.graph.openHistory")}
                 </Button>
               ) : null}
             </div>
@@ -585,10 +624,10 @@ export function MemoryTopologyGraph({
               {formatOperationType(runtimeStatus?.operationType ?? previewResult?.operationType ?? latestHistoryEntry?.operationType ?? null, t)}
             </Badge>
             <Badge variant="outline" className="border-slate-200 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-              {previewChangeCount} preview changes
+              {previewChangeCount} {t("memory.graph.previewChanges")}
             </Badge>
             <Badge variant="outline" className="border-slate-200 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-              {capabilityTags.length} capability tags
+              {capabilityTags.length} {t("memory.graph.capabilityTags")}
             </Badge>
           </div>
 

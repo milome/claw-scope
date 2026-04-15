@@ -39,6 +39,8 @@ export const LANGUAGES: { code: LangCode; name: string; native: string }[] = [
   { code: "hi", name: "Hindi", native: "हिन्दी" },
 ];
 
+export const I18N_SLOT_COUNT = LANGUAGES.length;
+
 const langIndices: Record<LangCode, number> = {
   en: 0,
   zh: 1,
@@ -57,7 +59,7 @@ const langIndices: Record<LangCode, number> = {
 
 // Data array order matches the langIndices above:
 // [en, zh, zh-TW, es, fr, de, ja, ko, ru, pt, it, ar, hi]
-const DICT: Record<string, string[]> = {
+const BASE_DICT: Record<string, string[]> = {
   "app.subtitle": [
     " — Memories Visible, Evolution Expected",
     " — 记忆可见，进化可期",
@@ -253,6 +255,21 @@ const DICT: Record<string, string[]> = {
     "Cluster Agenti",
     "مجموعة الوكلاء",
     "एजेंट क्लस्टर",
+  ],
+  "profile.nodes": [
+    "Nodes",
+    "节点",
+    "節點",
+    "Nodos",
+    "Nœuds",
+    "Knoten",
+    "ノード",
+    "노드",
+    "Узлы",
+    "Nós",
+    "Nodi",
+    "العقد",
+    "नोड्स",
   ],
   "profile.status": [
     "Status",
@@ -1429,6 +1446,16 @@ const DICT: Record<string, string[]> = {
     "agents.list[*] 下的 named agent 分支会覆盖当前 Agent 看到的通用默认值。",
     "agents.list[*] 下的 named agent 分支會覆蓋目前 Agent 看到的通用預設值。",
   ],
+  "config.agentSettings.scopeMixedTitle": [
+    "Mixed Scope",
+    "混合作用域",
+    "混合作用域",
+  ],
+  "config.agentSettings.scopeMixedDesc": [
+    "Runtime-resolved values or fields that write through multiple layers are grouped here.",
+    "运行时解析值或会同时写入多层配置的字段，统一归到这一组。",
+    "執行時解析值或會同時寫入多層設定的欄位，統一歸到這一組。",
+  ],
   "config.agentSettings.meta.sourceLabel": [
     "Source",
     "来源",
@@ -1528,6 +1555,10 @@ const DICT: Record<string, string[]> = {
   "config.agentSettings.loading": ["Loading…", "加载中…", "載入中…"],
   "config.agentSettings.reload": ["Reload", "重新加载", "重新載入"],
   "config.agentSettings.save": ["Save", "保存", "儲存"],
+  "config.agentSettings.section.overview": ["Overview", "概览", "概覽"],
+  "config.agentSettings.section.effective": ["Effective", "生效配置", "生效設定"],
+  "config.agentSettings.section.policies": ["Policies", "策略补丁", "策略補丁"],
+  "config.agentSettings.section.memory": ["Memory Search", "记忆检索", "記憶檢索"],
   "config.agentSettings.unset": ["Unset", "未设置", "未設定"],
   "config.agentSettings.workspacePlaceholder": [
     "~/.openclaw/workspace-main",
@@ -2969,6 +3000,12 @@ const DICT: Record<string, string[]> = {
   ],
   "config.status.fail": ["Not Connected", "未连接", "未連接"],
   "config.advanced": ["Advanced Configuration", "高级配置", "進階配置"],
+  "config.legend.title": ["Display sections", "显示分组", "顯示分組"],
+  "config.legend.status": ["Status", "状态", "狀態"],
+  "config.legend.sessions": ["Sessions", "会话", "會話"],
+  "config.legend.connection": ["Connection", "连接", "連接"],
+  "config.legend.discovery": ["Discovery", "发现", "發現"],
+  "config.legend.advanced": ["Advanced", "高级", "進階"],
   "config.timeout": [
     "Request Timeout (ms)",
     "请求超时时间 (ms)",
@@ -3576,9 +3613,259 @@ const DICT: Record<string, string[]> = {
     "应用全局设置",
     "應用全局設定",
   ],
+  "app.logoAlt": ["ClawScope logo", "ClawScope 标志", "ClawScope 標誌"],
+  "app.footer.version": ["ClawScope v{0}", "ClawScope v{0}", "ClawScope v{0}"],
+  "app.footer.copyright": [
+    "Copyright © {0} ClawScope",
+    "版权所有 © {0} ClawScope",
+    "版權所有 © {0} ClawScope",
+  ],
+  "common.more": ["More", "更多", "更多"],
+  "common.close": ["Close", "关闭", "關閉"],
+  "common.unconfigured": ["Unconfigured", "未配置", "未配置"],
+  "common.files": ["files", "文件", "檔案"],
+  "common.chunks": ["chunks", "分块", "分塊"],
+  "common.bytes": ["bytes", "字节", "位元組"],
+  "common.entries": ["entries", "条目", "條目"],
+  "common.evidence": ["evidence", "证据", "證據"],
+  "common.available": ["available", "可用", "可用"],
+  "common.ms": ["ms", "毫秒", "毫秒"],
+  "shared.nav.breadcrumb": ["Breadcrumb", "面包屑导航", "麵包屑導航"],
+  "shared.image.errorAlt": ["Error loading image", "图片加载失败", "圖片載入失敗"],
+  "shared.carousel.previousSlide": ["Previous slide", "上一张", "上一張"],
+  "shared.carousel.nextSlide": ["Next slide", "下一张", "下一張"],
+  "shared.pagination.nav": ["Pagination", "分页导航", "分頁導航"],
+  "shared.pagination.goPrevious": ["Go to previous page", "转到上一页", "前往上一頁"],
+  "shared.pagination.goNext": ["Go to next page", "转到下一页", "前往下一頁"],
+  "shared.pagination.previous": ["Previous", "上一页", "上一頁"],
+  "shared.pagination.next": ["Next", "下一页", "下一頁"],
+  "shared.pagination.morePages": ["More pages", "更多页面", "更多頁面"],
+  "shared.sidebar.title": ["Sidebar", "侧边栏", "側邊欄"],
+  "shared.sidebar.desc": [
+    "Displays the mobile sidebar.",
+    "显示移动端侧边栏。",
+    "顯示行動端側邊欄。",
+  ],
+  "shared.sidebar.toggle": ["Toggle Sidebar", "切换侧边栏", "切換側邊欄"],
+  "config.general.appearance": ["Appearance", "外观", "外觀"],
+  "config.general.language": ["Language", "语言", "語言"],
+  "config.general.theme.light": ["Light", "浅色", "淺色"],
+  "config.general.theme.dark": ["Dark", "深色", "深色"],
+  "config.general.theme.system": ["System", "跟随系统", "跟隨系統"],
+  "config.connection.urlRequired": [
+    "URL is required to save or test connection.",
+    "保存配置或测试连接前必须填写 URL。",
+    "儲存設定或測試連線前必須填寫 URL。",
+  ],
+  "setup.gateway.urlRequired": ["URL is required", "必须填写 URL", "必須填寫 URL"],
+  "setup.auth.deviceApprovalHint": [
+    "Approve this device on the host, then return here and test the connection again.",
+    "请到宿主机批准当前设备，然后回到这里重新测试连接。",
+    "請到主機批准目前裝置，然後回到這裡重新測試連線。",
+  ],
+  "setup.auth.tokenMismatchHint": [
+    "The current Gateway Token does not match the host configuration. Verify the token on the host, update it here, and test again.",
+    "当前填写的 Gateway Token 与宿主机配置不一致。请先在宿主机核对 token，再回到这里重新测试连接。",
+    "目前填寫的 Gateway Token 與主機設定不一致。請先在主機核對 token，再回到這裡重新測試連線。",
+  ],
+  "memory.header.agents": ["Agents", "Agents", "Agents"],
+  "memory.overview.pending": [
+    "Overview is waiting for agent resolution and the first batch of memory data.",
+    "Overview 正在等待 agent 解析与首批记忆数据初始化。",
+    "Overview 正在等待 agent 解析與首批記憶資料初始化。",
+  ],
+  "memory.diag.label.indexed": ["indexed", "已索引", "已索引"],
+  "memory.diag.label.diagnostics": ["diagnostics", "诊断", "診斷"],
+  "memory.diag.label.backend": ["backend", "后端", "後端"],
+  "memory.diag.label.provider": ["provider", "提供方", "提供方"],
+  "memory.diag.label.sources": ["sources", "来源", "來源"],
+  "memory.diag.label.extraPaths": ["extra paths", "附加路径", "附加路徑"],
+  "memory.diag.label.qmdPaths": ["qmd paths", "qmd 路径", "qmd 路徑"],
+  "memory.diag.label.sourceCounts": ["source counts", "来源计数", "來源計數"],
+  "memory.diag.label.externalSummary": ["external summary", "外部摘要", "外部摘要"],
+  "memory.diag.label.sessionMemory": ["session memory", "会话记忆", "工作階段記憶"],
+  "memory.diag.label.runtime": ["runtime", "运行时", "執行時"],
+  "memory.diag.embeddingsUnavailable": [
+    "Embeddings unavailable",
+    "Embeddings 不可用",
+    "Embeddings 不可用",
+  ],
+  "memory.mindmap.titleBadge": ["Semantic Mind Map", "语义思维导图", "語意心智圖"],
+  "memory.mindmap.evidenceStat": ["evidence", "证据", "證據"],
+  "memory.graph.previewChanges": ["preview changes", "预览变更", "預覽變更"],
+  "memory.graph.sourceRefs": ["source refs", "来源引用", "來源引用"],
+  "memory.graph.mappingSummary": [
+    "The current graph maps this Evolution's main object chain as source refs -> preview -> snapshot -> runtime -> history -> rollback, instead of staying a static illustration.",
+    "当前图谱已按 source refs -> preview -> snapshot -> runtime -> history -> rollback 映射本次 Evolution 的主要对象链，而不再只是静态示意。",
+    "目前圖譜已按 source refs -> preview -> snapshot -> runtime -> history -> rollback 映射本次 Evolution 的主要物件鏈，而不再只是靜態示意。",
+  ],
+  "memory.graph.snapshot": ["Snapshot", "快照", "快照"],
+  "memory.graph.historyStatus": ["History Status", "历史状态", "歷史狀態"],
+  "memory.graph.explainPanel": ["Explain Panel", "说明面板", "說明面板"],
+  "memory.graph.openDiff": ["Open Diff", "打开 Diff", "開啟 Diff"],
+  "memory.graph.openHistory": ["Open History", "打开历史", "開啟歷史"],
+  "memory.graph.capabilityTags": ["capability tags", "能力标签", "能力標籤"],
+  "memory.graph.clean": ["clean", "干净", "乾淨"],
+  "memory.graph.override": ["override", "覆盖", "覆蓋"],
+  "memory.graph.conflict": ["conflict", "冲突", "衝突"],
+  "memory.graph.noHistoryYet": ["No linked history yet", "暂无关联历史", "暫無關聯歷史"],
+  "memory.graph.memoryRoot": ["Memory Root", "记忆根节点", "記憶根節點"],
+  "memory.graph.sourceDocument": ["Source Document", "源文档", "來源文件"],
+  "memory.graph.bytesBefore": ["Bytes Before", "变更前字节数", "變更前位元組數"],
+  "memory.graph.currentNode": ["Current Node", "当前节点", "目前節點"],
+  "memory.graph.previewOverlay": ["Preview Overlay", "预览叠层", "預覽疊層"],
+  "memory.graph.changeCount": ["Change Count", "变更数", "變更數"],
+  "memory.graph.riskLevel": ["Risk Level", "风险等级", "風險等級"],
+  "memory.graph.bytesDelta": ["Bytes Delta", "字节变化", "位元組變化"],
+  "memory.graph.snapshotRecord": ["Snapshot Record", "快照记录", "快照記錄"],
+  "memory.graph.snapshotId": ["Snapshot Id", "快照 ID", "快照 ID"],
+  "memory.graph.historySnapshot": ["History Snapshot", "历史快照", "歷史快照"],
+  "memory.graph.rollbackReady": ["Rollback Ready", "可回滚", "可回滾"],
+  "memory.graph.yes": ["yes", "是", "是"],
+  "memory.graph.previewOnly": ["preview only", "仅预览", "僅預覽"],
+  "memory.graph.runtimePhase": ["Runtime Phase", "运行阶段", "執行階段"],
+  "memory.graph.runtimeState": ["Runtime State", "运行状态", "執行狀態"],
+  "memory.graph.phase": ["Phase", "阶段", "階段"],
+  "memory.graph.progress": ["Progress", "进度", "進度"],
+  "memory.graph.flags": ["Flags", "标记", "標記"],
+  "memory.graph.historyRecord": ["History Record", "历史记录", "歷史記錄"],
+  "memory.graph.operationKind": ["Operation Kind", "操作类型", "操作類型"],
+  "memory.graph.summary": ["Summary", "摘要", "摘要"],
+  "memory.graph.rollbackTarget": ["Rollback Target", "回滚目标", "回滾目標"],
+  "memory.graph.rollbackSnapshot": ["Rollback Snapshot", "回滚快照", "回滾快照"],
+  "memory.graph.rollbackState": ["Rollback State", "回滚状态", "回滾狀態"],
+  "memory.graph.stateRestored": ["restored", "已恢复", "已恢復"],
+  "memory.graph.stateAvailable": ["available", "可用", "可用"],
+  "memory.graph.edge.baselinePreview": ["baseline → preview", "基线 → 预览", "基線 → 預覽"],
+  "memory.graph.edge.freeze": ["freeze", "冻结", "凍結"],
+  "memory.graph.edge.execute": ["execute", "执行", "執行"],
+  "memory.graph.edge.record": ["record", "写入记录", "寫入記錄"],
+  "memory.graph.edge.restoreTarget": ["restore target", "恢复目标", "恢復目標"],
+  "memory.graph.desc.memoryRoot": [
+    "The baseline entry of the target MEMORY document before this operation chain starts.",
+    "目标 MEMORY 文档在本次操作链开始前的基线入口。",
+    "目標 MEMORY 文件在本次操作鏈開始前的基線入口。",
+  ],
+  "memory.graph.desc.sources": [
+    "Source refs and capability tags bound to this Evolution drive traceability and conflict detection.",
+    "本次 Evolution 绑定的来源引用与 capability tags，会驱动 traceability 与冲突检测。",
+    "本次 Evolution 綁定的來源引用與 capability tags，會驅動 traceability 與衝突檢測。",
+  ],
+  "memory.graph.desc.preview": [
+    "The Analyze & Preview overlay compresses diff and risk into an executable proposal.",
+    "Analyze & Preview 生成的变更叠层，负责把 diff 与 risk 压缩成可执行提案。",
+    "Analyze & Preview 生成的變更疊層，負責把 diff 與 risk 壓縮成可執行提案。",
+  ],
+  "memory.graph.desc.snapshot": [
+    "The pre-execution snapshot freezes a rollback point before the proposal becomes a real write.",
+    "执行前冻结的可回滚快照，用于把 preview 提案变成可恢复的真实写入。",
+    "執行前凍結的可回滾快照，用於把 preview 提案變成可恢復的真實寫入。",
+  ],
+  "memory.graph.desc.runtime": [
+    "Runtime state shows how the preview proposal is being pushed into actual writes.",
+    "真实执行阶段与运行态标记，负责把 preview 提案推进成实际写入结果。",
+    "真實執行階段與執行態標記，負責把 preview 提案推進成實際寫入結果。",
+  ],
+  "memory.graph.desc.history": [
+    "The history record is the handoff point between the graph and the history sheet.",
+    "执行完成后写入的历史记录，是 graph 与 history sheet 的对接点。",
+    "執行完成後寫入的歷史記錄，是 graph 與 history sheet 的對接點。",
+  ],
+  "memory.graph.desc.rollback": [
+    "The latest recoverable snapshot shows which rollback object this execution chain lands on.",
+    "最新可恢复的目标快照，说明当前执行链最终会落到哪个 rollback object。",
+    "最新可恢復的目標快照，說明目前執行鏈最終會落到哪個 rollback object。",
+  ],
+  "memory.graph.status.baseline": ["baseline", "基线", "基線"],
+  "memory.graph.status.annotated": ["annotated", "已标注", "已標註"],
+  "memory.graph.status.idle": ["idle", "空闲", "閒置"],
+  "memory.graph.status.frozen": ["frozen", "已冻结", "已凍結"],
+  "memory.graph.status.recorded": ["recorded", "已记录", "已記錄"],
+  "memory.graph.status.available": ["available", "可用", "可用"],
+  "memory.graph.status.restored": ["restored", "已恢复", "已恢復"],
+  "memory.graph.status.previewReady": ["preview ready", "预览就绪", "預覽就緒"],
+  "memory.graph.status.running": ["running", "执行中", "執行中"],
+  "memory.graph.status.succeeded": ["succeeded", "已成功", "已成功"],
+  "memory.graph.status.failed": ["failed", "已失败", "已失敗"],
+  "memory.graph.status.cancelled": ["cancelled", "已取消", "已取消"],
+  "profile.connectedSummary": [
+    "Connected ({0} nodes) • {1} agents",
+    "已连接至本地工作区 ({0} 节点) • {1} 个 Agent",
+    "已連接至本地工作區 ({0} 節點) • {1} 個 Agent",
+  ],
+  "profile.error.loadAgentDetails": [
+    "Failed to load agent details.",
+    "加载 Agent 详情失败。",
+    "載入 Agent 詳情失敗。",
+  ],
+  "profile.agentVersionFallback": [
+    "OpenClaw Agent",
+    "OpenClaw Agent",
+    "OpenClaw Agent",
+  ],
+  "profile.noIdentity": ["No identity set.", "尚未设置身份定义。", "尚未設定身份定義。"],
+  "profile.noSoulQuote": [
+    "No soul quote available.",
+    "暂无灵魂引言。",
+    "暫無靈魂引言。",
+  ],
+  "profile.documentLayer": ["Document Layer", "文档层", "文件層"],
+  "profile.documentLayerDesc": [
+    "These source documents remain the long-form truth for the selected agent profile.",
+    "这些源文档仍然是当前所选 Agent 档案的长文真相层。",
+    "這些來源文件仍然是目前所選 Agent 檔案的長文真相層。",
+  ],
+  "evo.history.selectedOperation": ["Selected Operation", "当前选中操作", "目前選取操作"],
+  "shared.command.title": ["Command Palette", "命令面板", "命令面板"],
+  "shared.command.description": [
+    "Search for a command to run...",
+    "搜索要执行的命令...",
+    "搜尋要執行的命令...",
+  ],
+  "evo.nodeFallback": ["the node", "该节点", "該節點"],
+  "evo.custom.example.blockTitle": [
+    "Custom Knowledge Block",
+    "自定义知识块",
+    "自定義知識塊",
+  ],
+  "evo.custom.example.blockContent": [
+    "Use this declarative sandbox to append managed memory context.",
+    "使用这个声明式沙箱来追加受管记忆上下文。",
+    "使用這個宣告式沙箱來追加受管記憶上下文。",
+  ],
 };
 
-Object.assign(DICT, EVOLUTION_RUNTIME_DICT);
+function normalizeLocaleSlots(values: string[]) {
+  if (values.length >= I18N_SLOT_COUNT) {
+    return values;
+  }
+
+  const [en = "", zh = en, zhTW = zh] = values;
+  return [
+    en,
+    zh,
+    zhTW,
+    values[3] ?? en,
+    values[4] ?? en,
+    values[5] ?? en,
+    values[6] ?? en,
+    values[7] ?? en,
+    values[8] ?? en,
+    values[9] ?? en,
+    values[10] ?? en,
+    values[11] ?? en,
+    values[12] ?? en,
+  ];
+}
+
+export const I18N_RUNTIME_DICT: Record<string, string[]> = {
+  ...Object.fromEntries(
+    Object.entries(BASE_DICT).map(([key, values]) => [key, normalizeLocaleSlots(values)]),
+  ),
+  ...Object.fromEntries(
+    Object.entries(EVOLUTION_RUNTIME_DICT).map(([key, values]) => [key, normalizeLocaleSlots(values)]),
+  ),
+};
 
 interface I18nContextType {
   lang: LangCode;
@@ -3591,6 +3878,32 @@ const I18nContext = getSingletonValue(
   () => createContext<I18nContextType | undefined>(undefined),
 );
 
+function translateWithLang(
+  lang: LangCode,
+  key: string,
+  ...args: (string | number)[]
+) {
+  const idx = langIndices[lang];
+  let str = I18N_RUNTIME_DICT[key]?.[idx];
+
+  if (!str && str !== "") {
+    str = I18N_RUNTIME_DICT[key]?.[0] || key;
+  }
+
+  args.forEach((arg, i) => {
+    str = str.replace(`{${i}}`, String(arg));
+  });
+
+  return str;
+}
+
+const OPTIONAL_I18N_FALLBACK: I18nContextType = {
+  lang: "en",
+  setLang: () => {},
+  t: (key: string, ...args: (string | number)[]) =>
+    translateWithLang("en", key, ...args),
+};
+
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<LangCode>("zh");
 
@@ -3600,20 +3913,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, [lang]);
 
   const t = (key: string, ...args: (string | number)[]) => {
-    const idx = langIndices[lang];
-    let str = DICT[key]?.[idx];
-
-    // Fallback logic: if missing translation for target lang, fallback to English (0) or key
-    if (!str && str !== "") {
-      str = DICT[key]?.[0] || key;
-    }
-
-    // Replace {0}, {1} etc.
-    args.forEach((arg, i) => {
-      str = str.replace(`{${i}}`, String(arg));
-    });
-
-    return str;
+    return translateWithLang(lang, key, ...args);
   };
 
   return (
@@ -3627,4 +3927,8 @@ export function useI18n() {
   const context = useContext(I18nContext);
   if (!context) throw new Error("useI18n must be used within I18nProvider");
   return context;
+}
+
+export function useOptionalI18n() {
+  return useContext(I18nContext) ?? OPTIONAL_I18N_FALLBACK;
 }

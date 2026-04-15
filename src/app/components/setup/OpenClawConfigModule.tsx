@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useOpenClaw, type AuthMode, type GatewayAdvancedConnectionConfig } from '../../contexts/OpenClawContext';
-import { CheckCircle2, Server, Shield, Globe, TerminalSquare, RefreshCw, XCircle, ChevronDown, ChevronUp, AlertCircle, RotateCcw, Trash2, Wifi } from 'lucide-react';
+import { CheckCircle2, Server, Shield, Globe, TerminalSquare, RefreshCw, XCircle, AlertCircle, RotateCcw, Trash2, Wifi } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useI18n } from '../../contexts/I18nContext';
+import {
+  buildAvailableOpenClawConfigSections,
+  resolveSelectedOpenClawConfigSection,
+  type OpenClawConfigSectionId,
+} from './openClawConfigSectionState';
 
 export function OpenClawConfigModule() {
   const { t } = useI18n();
@@ -34,7 +39,6 @@ export function OpenClawConfigModule() {
   const [authSecret, setAuthSecret] = useState(savedAuthSecret);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<'none' | 'success' | 'fail'>('none');
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [applyingCandidateId, setApplyingCandidateId] = useState<string | null>(null);
@@ -180,6 +184,34 @@ export function OpenClawConfigModule() {
       ? t('config.status.unconfigured')
       : lastError?.message ?? t('config.test.fail');
   const connectedNodes = nodes.filter((node) => node.sessionId);
+  const availableSections = buildAvailableOpenClawConfigSections({
+    hasConnectedNodes: connectedNodes.length > 0,
+  });
+  const [activeSection, setActiveSection] =
+    useState<OpenClawConfigSectionId>('status');
+
+  const sectionMeta: Record<
+    OpenClawConfigSectionId,
+    { label: string; icon: typeof Globe }
+  > = {
+    status: { label: t('config.legend.status'), icon: CheckCircle2 },
+    sessions: { label: t('config.legend.sessions'), icon: Wifi },
+    connection: { label: t('config.legend.connection'), icon: Shield },
+    discovery: { label: t('config.legend.discovery'), icon: Globe },
+    advanced: { label: t('config.legend.advanced'), icon: TerminalSquare },
+  };
+
+  useEffect(() => {
+    const nextSection = resolveSelectedOpenClawConfigSection(
+      activeSection,
+      availableSections,
+    );
+
+    if (nextSection !== activeSection) {
+      setActiveSection(nextSection);
+    }
+  }, [activeSection, availableSections]);
+
 
   return (
     <div className="w-full max-w-4xl font-sans text-slate-900 dark:text-slate-100">
@@ -191,6 +223,38 @@ export function OpenClawConfigModule() {
       </div>
 
       <div className="space-y-6">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+          <div className="mb-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+              {t('config.legend.title')}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {availableSections.map((sectionId) => {
+              const meta = sectionMeta[sectionId];
+              const Icon = meta.icon;
+              const isActive = activeSection === sectionId;
+
+              return (
+                <button
+                  key={sectionId}
+                  type="button"
+                  onClick={() => setActiveSection(sectionId)}
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-200'
+                      : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-slate-100'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {meta.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {activeSection === 'status' ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 className="text-[15px] font-semibold mb-1">{t('config.status.title')}</h3>
@@ -223,18 +287,19 @@ export function OpenClawConfigModule() {
             ) : !isConfigured ? (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium">
                 <AlertCircle className="w-4 h-4" />
-                Unconfigured
+                {t('common.unconfigured')}
               </div>
             ) : (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 rounded-lg text-sm font-medium">
                 <XCircle className="w-4 h-4" />
                 {t('config.status.fail')}
               </div>
-            )}
+              )}
           </div>
         </div>
+        ) : null}
 
-        {connectedNodes.length > 0 ? (
+        {activeSection === 'sessions' && connectedNodes.length > 0 ? (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm">
             <div className="flex flex-col gap-3">
               <div>
@@ -274,8 +339,11 @@ export function OpenClawConfigModule() {
           </div>
         ) : null}
 
+        {activeSection === 'connection' || activeSection === 'discovery' || activeSection === 'advanced' ? (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden focus-within:border-blue-300 dark:focus-within:border-blue-700 transition-colors">
           <div className="p-5 sm:p-6 space-y-6">
+            {activeSection === 'connection' ? (
+            <>
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
                 {t('setup.gateway.label')} <span className="text-red-500">*</span>
@@ -294,7 +362,7 @@ export function OpenClawConfigModule() {
                   }`}
                 />
               </div>
-              {!url && <p className="text-xs text-red-500 mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> URL is required to save or test connection.</p>}
+              {!url && <p className="text-xs text-red-500 mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {t('config.connection.urlRequired')}</p>}
             </div>
 
             <div>
@@ -351,7 +419,10 @@ export function OpenClawConfigModule() {
                 <p className="text-xs text-slate-500 mt-2">{t('setup.auth.pairedDeviceHint')}</p>
               )}
             </div>
+            </>
+            ) : null}
 
+            {activeSection === 'discovery' ? (
             <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 p-5 space-y-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -479,44 +550,34 @@ export function OpenClawConfigModule() {
                 )}
               </div>
             </div>
+            ) : null}
 
-            <div className="pt-2">
-              <button
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
-              >
-                {t('config.advanced')} {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-
-              <AnimatePresence>
-                {showAdvanced && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                    <div className="mt-4 p-5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl space-y-4">
-                      <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/20 dark:text-sky-300">
-                        {t('config.advanced.localClientNote')}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('config.timeout')}</label>
-                          <input type="number" value={advancedTimeoutMs} onChange={(e) => setAdvancedTimeoutMs(e.target.value)} placeholder="30000" min={1000} max={120000} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm" />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('config.heartbeat')}</label>
-                          <input type="number" value={advancedHeartbeatMs} onChange={(e) => setAdvancedHeartbeatMs(e.target.value)} placeholder="5000" min={1000} max={60000} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm" />
-                        </div>
-                        <div className="md:col-span-2">
-                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('config.proxy')}</label>
-                          <input type="text" value={advancedProxyUrl} onChange={(e) => setAdvancedProxyUrl(e.target.value)} placeholder="http://127.0.0.1:7890" className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm" />
-                          <p className="mt-2 text-[11px] leading-5 text-amber-600 dark:text-amber-300">
-                            {t('config.advanced.proxyDeferred')}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            {activeSection === 'advanced' ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/20 dark:text-sky-300">
+                {t('config.advanced.localClientNote')}
+              </div>
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('config.timeout')}</label>
+                    <input type="number" value={advancedTimeoutMs} onChange={(e) => setAdvancedTimeoutMs(e.target.value)} placeholder="30000" min={1000} max={120000} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('config.heartbeat')}</label>
+                    <input type="number" value={advancedHeartbeatMs} onChange={(e) => setAdvancedHeartbeatMs(e.target.value)} placeholder="5000" min={1000} max={60000} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('config.proxy')}</label>
+                    <input type="text" value={advancedProxyUrl} onChange={(e) => setAdvancedProxyUrl(e.target.value)} placeholder="http://127.0.0.1:7890" className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm" />
+                    <p className="mt-2 text-[11px] leading-5 text-amber-600 dark:text-amber-300">
+                      {t('config.advanced.proxyDeferred')}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
+            ) : null}
           </div>
 
           <div className="bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 px-5 sm:px-6 py-4 flex flex-col gap-4">
@@ -572,6 +633,7 @@ export function OpenClawConfigModule() {
             </div>
           </div>
         </div>
+        ) : null}
       </div>
     </div>
   );

@@ -174,7 +174,7 @@ export function MemoryMindMapPanel({ tone = "sky", model, t, showDebug, onToggle
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700 dark:border-sky-800/80 dark:bg-slate-950/60 dark:text-sky-300">
                   <Orbit className="h-3.5 w-3.5" />
-                  SEMANTIC MIND MAP
+                  {t("memory.mindmap.titleBadge")}
                 </div>
                 <div className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{t("memory.mindmap.headerGlow")}</div>
                 <div className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">
@@ -182,7 +182,7 @@ export function MemoryMindMapPanel({ tone = "sky", model, t, showDebug, onToggle
                 </div>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-                {model.entries.length} entries
+                {model.entries.length} {t("common.entries")}
               </div>
             </div>
 
@@ -375,7 +375,7 @@ export function MemoryMindMapPanel({ tone = "sky", model, t, showDebug, onToggle
                   {selectedConcept ? <div className="mt-1 text-xs text-slate-400">{t("memory.mindmap.concept")}</div> : null}
                 </div>
                 <div className="rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-[11px] font-semibold text-slate-200">
-                  {selectedEvidence.length} evidence
+                  {selectedEvidence.length} {t("memory.mindmap.evidenceStat")}
                 </div>
               </div>
             </div>
