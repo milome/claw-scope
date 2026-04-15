@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 #[path = "../gateway/mod.rs"]
 mod gateway;
 #[path = "../evolution/mod.rs"]
