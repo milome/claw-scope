@@ -150,6 +150,13 @@ export function resolveTimelineProbeRangePreset(referenceDate: string) {
   };
 }
 
+export function hasTimelineProbeRangeChanged(
+  current: { startDate: string; endDate: string },
+  next: { startDate: string; endDate: string },
+) {
+  return current.startDate !== next.startDate || current.endDate !== next.endDate;
+}
+
 export function resolveTimelineProbeRangeError({
   startDate,
   endDate,
@@ -661,6 +668,35 @@ export function collectTextSearchMatches(
   }
 
   return matches;
+}
+
+export function resolveDocumentSearchQueryFromSearchResult(
+  executedQuery: string,
+  snippet: string,
+) {
+  const normalizedQuery = executedQuery.trim();
+  if (normalizedQuery) {
+    return normalizedQuery;
+  }
+
+  const normalizedTokens = snippet
+    .trim()
+    .split(/\s+/)
+    .map((token) =>
+      token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}_-]+$/gu, ""),
+    )
+    .filter((token) => token.length >= 3);
+
+  if (normalizedTokens.length > 0) {
+    return normalizedTokens[0] ?? "";
+  }
+
+  return (
+    snippet
+      .slice(0, 24)
+      .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}_-]+$/gu, "")
+      .trim()
+  );
 }
 
 export function moveActiveSearchMatchIndex(

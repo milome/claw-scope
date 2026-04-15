@@ -11,10 +11,12 @@ import {
   collectTextSearchMatches,
   clampActiveSearchMatchIndex,
   filterMemoryFootprintGroups,
+  hasTimelineProbeRangeChanged,
   hasSharedWorkspaceMemory,
   isMemoryDocumentDirty,
   moveActiveSearchMatchIndex,
   resolveInitialSearchMatchIndex,
+  resolveDocumentSearchQueryFromSearchResult,
   resolveFirstTimelineEntryNameFromGroups,
   resolveExternalMemorySources,
   resolveMemoryDocumentContent,
@@ -92,6 +94,20 @@ describe("collectTextSearchMatches", () => {
   it("returns an empty array when text or query is empty", () => {
     expect(collectTextSearchMatches("", "abc")).toEqual([]);
     expect(collectTextSearchMatches("abc", "")).toEqual([]);
+  });
+});
+
+describe("resolveDocumentSearchQueryFromSearchResult", () => {
+  it("prefers the executed search query over snippet-derived fallback", () => {
+    expect(
+      resolveDocumentSearchQueryFromSearchResult("exact query", "### heading exact query"),
+    ).toBe("exact query");
+  });
+
+  it("falls back to snippet parsing when the executed query is empty", () => {
+    expect(
+      resolveDocumentSearchQueryFromSearchResult("", "### heading useful-token"),
+    ).toBe("heading");
   });
 });
 
@@ -437,6 +453,29 @@ describe("resolveTimelineProbeRangePreset", () => {
       startDate: "2026-03-22",
       endDate: "2026-03-28",
     });
+  });
+});
+
+describe("hasTimelineProbeRangeChanged", () => {
+  it("detects start or end date updates", () => {
+    expect(
+      hasTimelineProbeRangeChanged(
+        { startDate: "2026-04-01", endDate: "2026-04-07" },
+        { startDate: "2026-04-02", endDate: "2026-04-07" },
+      ),
+    ).toBe(true);
+    expect(
+      hasTimelineProbeRangeChanged(
+        { startDate: "2026-04-01", endDate: "2026-04-07" },
+        { startDate: "2026-04-01", endDate: "2026-04-08" },
+      ),
+    ).toBe(true);
+    expect(
+      hasTimelineProbeRangeChanged(
+        { startDate: "2026-04-01", endDate: "2026-04-07" },
+        { startDate: "2026-04-01", endDate: "2026-04-07" },
+      ),
+    ).toBe(false);
   });
 });
 
