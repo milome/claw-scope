@@ -72,7 +72,6 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "4.7.0",
-    "bmad-speckit-sdd-flow": "file:../BMAD-Speckit-SDD-Flow",
     "jsdom": "^29.0.1",
     "playwright": "^1.59.1",
     "tailwindcss": "4.1.12",
