@@ -1,6 +1,6 @@
 [package]
 name = "claw-scope"
-version = "0.1.0"
+version = "0.1.1"
 description = "ClawScope - 记忆可见，进化可期"
 authors = ["milome"]
 license = "MIT"
