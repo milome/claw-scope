@@ -249,7 +249,7 @@ export function SetupWizard() {
                 className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 overflow-y-auto"
               >
                 <div className="w-20 h-20 sm:w-28 sm:h-28 mb-4 sm:mb-6 relative group flex items-center justify-center mix-blend-multiply dark:mix-blend-normal shrink-0">
-                  <img src={appLogo} alt="ClawScope Logo" className="w-[120%] h-[120%] object-contain drop-shadow-2xl group-hover:scale-105 transition-transform duration-500 [clip-path:circle(45%_at_50%_50%)]" />
+                  <img src={appLogo} alt={t("app.logoAlt")} className="w-[120%] h-[120%] object-contain drop-shadow-2xl group-hover:scale-105 transition-transform duration-500 [clip-path:circle(45%_at_50%_50%)]" />
                 </div>
                 <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white tracking-tight mb-2 sm:mb-3 text-center">{t('setup.welcome.title')}</h1>
                 <p className="text-base sm:text-lg font-medium bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent mb-1 text-center">{t('setup.welcome.subtitle')}</p>
@@ -322,7 +322,7 @@ export function SetupWizard() {
                         />
                       </div>
                       {!url ? (
-                        <p className="text-xs text-red-500 mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> URL is required</p>
+                        <p className="text-xs text-red-500 mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {t('setup.gateway.urlRequired')}</p>
                       ) : (
                         <p className="text-xs text-slate-500 mt-2">{t('setup.gateway.hint')}</p>
                       )}
@@ -433,7 +433,7 @@ export function SetupWizard() {
                       {isPairingRequired ? (
                         <div className="text-left bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 w-full space-y-4">
                           <p className="text-sm text-slate-700 dark:text-slate-300">
-                            请到服务端执行以下命令批准当前设备，然后回到这里重新测试连接。
+                            {t('setup.auth.deviceApprovalHint')}
                           </p>
                           <code className="block rounded-lg bg-slate-900 px-4 py-3 text-sm text-slate-100 font-mono overflow-x-auto">
                             openclaw devices approve --latest
@@ -442,7 +442,7 @@ export function SetupWizard() {
                       ) : isTokenMismatch ? (
                         <div className="text-left bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 w-full space-y-4">
                           <p className="text-sm text-slate-700 dark:text-slate-300">
-                            当前填写的 Gateway Token 与服务端配置不一致。请到服务端核对 token 后重新填写，再次测试连接。
+                            {t('setup.auth.tokenMismatchHint')}
                           </p>
                           <code className="block rounded-lg bg-slate-900 px-4 py-3 text-sm text-slate-100 font-mono overflow-x-auto">
                             openclaw config get gateway.auth.token
@@ -474,7 +474,7 @@ export function SetupWizard() {
               >
                 <div className="w-28 h-28 mb-8 relative flex items-center justify-center mix-blend-multiply dark:mix-blend-normal">
                   <motion.div className="w-full h-full flex items-center justify-center" initial={{ scale: 0.8, y: 10, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} transition={{ type: 'spring', bounce: 0.5 }}>
-                    <img src={appLogo} alt="Logo" className="w-[120%] h-[120%] object-contain drop-shadow-2xl [clip-path:circle(45%_at_50%_50%)]" />
+                    <img src={appLogo} alt={t("app.logoAlt")} className="w-[120%] h-[120%] object-contain drop-shadow-2xl [clip-path:circle(45%_at_50%_50%)]" />
                   </motion.div>
                 </div>
                 <h2 className="text-4xl font-bold text-slate-900 dark:text-white tracking-tight mb-4">{t('setup.finish.title')}</h2>
@@ -504,9 +504,9 @@ export function SetupWizard() {
                 >
                   {isTesting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Server className="w-4 h-4" />}
                   <span className="hidden sm:inline">{t('btn.test')}</span>
-                  <span className="sm:hidden">Test</span>
+                  <span className="sm:hidden">{t('btn.test')}</span>
                 </button>
-                <button disabled className="px-4 sm:px-6 py-2 sm:py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 text-sm font-semibold rounded-lg cursor-not-allowed flex items-center gap-1 sm:gap-2"><span className="hidden sm:inline">{t('btn.next')}</span><span className="sm:hidden">Next</span> <ChevronRight className="w-4 h-4" /></button>
+                <button disabled className="px-4 sm:px-6 py-2 sm:py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 text-sm font-semibold rounded-lg cursor-not-allowed flex items-center gap-1 sm:gap-2"><span className="hidden sm:inline">{t('btn.next')}</span><span className="sm:hidden">{t('btn.next')}</span> <ChevronRight className="w-4 h-4" /></button>
               </div>
             </>
           )}

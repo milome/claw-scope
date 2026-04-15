@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod commands;
 pub mod connector;
+pub mod discovery;
 pub mod device_identity;
 pub mod endpoint;
 pub mod errors;

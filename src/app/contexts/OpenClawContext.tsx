@@ -7,6 +7,7 @@ import {
   readStoredAuthSecret,
   type AuthMode,
 } from './openClawStorage';
+import { shouldShowSkippedConnectionReminder } from './openClawConnectionState';
 
 export type { AuthMode } from './openClawStorage';
 type GatewayConnectionPhase =
@@ -34,6 +35,10 @@ export interface Node {
   id: string;
   name: string;
   status: 'online' | 'offline';
+  sessionId?: string;
+  origin?: string | null;
+  grantedScopes?: string[];
+  isActive?: boolean;
 }
 
 export interface GatewayErrorSummary {
@@ -45,14 +50,52 @@ export interface GatewayErrorSummary {
 }
 
 interface GatewayStatusSnapshot {
+  sessionId?: string | null;
   phase: GatewayConnectionPhase;
   gatewayOrigin?: string | null;
+  isActive: boolean;
   deviceId?: string | null;
   grantedRole?: string | null;
   grantedScopes: string[];
   lastError?: GatewayErrorSummary | null;
   isPaired: boolean;
   canRetryWithDeviceToken: boolean;
+}
+
+export type GatewayDiscoverySource = 'lan_scan' | 'manual_saved';
+export type GatewayDiscoveryConfidence = 'high' | 'medium' | 'low';
+export type GatewayDiscoveryProbeStage = 'tcp_open' | 'websocket_open' | 'protocol_verified';
+
+export interface GatewayDiscoveredCandidate {
+  id: string;
+  label: string;
+  source: GatewayDiscoverySource;
+  wsUrl: string;
+  httpUrl?: string | null;
+  host: string;
+  port: number;
+  isPairedHint?: boolean | null;
+  lastSeenAtMs: number;
+  confidence: GatewayDiscoveryConfidence;
+  confidenceScore: number;
+  probeStage: GatewayDiscoveryProbeStage;
+  protocolVerified: boolean;
+  protocolSignal?: string | null;
+  matchedSeedSubnet: boolean;
+  matchedSeedHost: boolean;
+}
+
+export interface GatewaySavedEndpoint {
+  id: string;
+  label: string;
+  wsUrl: string;
+  httpUrl?: string | null;
+  originKey: string;
+  host: string;
+  port: number;
+  wasUserSelected: boolean;
+  lastConnectedAtMs?: number | null;
+  lastSuccessAtMs?: number | null;
 }
 
 interface GatewayAgentIdentitySummary {
@@ -206,6 +249,12 @@ export interface GatewayConfigSetResult {
   stdout: string;
 }
 
+export interface GatewayAdvancedConnectionConfig {
+  timeoutMs: number;
+  heartbeatMs: number;
+  proxyUrl?: string | null;
+}
+
 export interface GatewayAgentMemorySearchEntry {
   id: string;
   path: string;
@@ -311,6 +360,137 @@ export interface GatewayAgentSettingsResult {
   agentId: string;
   workspace?: string | null;
   model?: string | null;
+  modelOptions: string[];
+  isDefault: boolean;
+  agentDir?: string | null;
+  bindingsJson?: string | null;
+  groupChatJson?: string | null;
+  sandboxJson?: string | null;
+  toolsJson?: string | null;
+  memorySearch: GatewayAgentMemorySearchSettingsResult;
+  metadata: GatewayAgentSettingsMetadata;
+}
+
+export type GatewayAgentSettingsFieldSourceKind =
+  | 'gateway_global'
+  | 'default_agent_routing'
+  | 'universal_defaults'
+  | 'selected_agent_override'
+  | 'effective_runtime'
+  | 'mixed'
+  | 'unset';
+
+export type GatewayAgentSettingsWriteActionKind =
+  | 'agents_update'
+  | 'config_patch';
+
+export interface GatewayAgentSettingsWriteAction {
+  kind: GatewayAgentSettingsWriteActionKind;
+  path?: string | null;
+}
+
+export interface GatewayAgentSettingsFieldMetadata {
+  source: GatewayAgentSettingsFieldSourceKind;
+  path?: string | null;
+  writeActions: GatewayAgentSettingsWriteAction[];
+}
+
+export interface GatewayAgentSettingsMetadata {
+  workspace: GatewayAgentSettingsFieldMetadata;
+  model: GatewayAgentSettingsFieldMetadata;
+  isDefault: GatewayAgentSettingsFieldMetadata;
+  agentDir: GatewayAgentSettingsFieldMetadata;
+  bindings: GatewayAgentSettingsFieldMetadata;
+  groupChat: GatewayAgentSettingsFieldMetadata;
+  sandbox: GatewayAgentSettingsFieldMetadata;
+  tools: GatewayAgentSettingsFieldMetadata;
+  memorySearch: GatewayAgentSettingsFieldMetadata;
+}
+
+export interface GatewayConfigSchemaUiHint {
+  label?: string | null;
+  help?: string | null;
+  tags: string[];
+  advanced?: boolean | null;
+  sensitive?: boolean | null;
+  placeholder?: string | null;
+}
+
+export interface GatewayConfigSchemaLookupChild {
+  key: string;
+  path: string;
+  nodeType?: string | null;
+  required: boolean;
+  hasChildren: boolean;
+  hint?: GatewayConfigSchemaUiHint | null;
+  hintPath?: string | null;
+}
+
+export interface GatewayConfigSchemaLookupResult {
+  path: string;
+  title?: string | null;
+  description?: string | null;
+  nodeType?: string | null;
+  enumValues: string[];
+  hint?: GatewayConfigSchemaUiHint | null;
+  hintPath?: string | null;
+  children: GatewayConfigSchemaLookupChild[];
+}
+
+export interface GatewayAgentMemorySearchSettingsResult {
+  enabled: boolean;
+  provider?: string | null;
+  model?: string | null;
+  extraPathsText: string;
+  sourcesText: string;
+  storePath?: string | null;
+  sessionMemoryEnabled: boolean;
+  hybridEnabled: boolean;
+  mmrEnabled: boolean;
+  mmr?: string | null;
+  temporalDecay?: string | null;
+}
+
+export interface GatewayAgentMemorySearchSettingsUpdateInput {
+  enabled?: boolean | null;
+  provider?: string | null;
+  clearProvider: boolean;
+  model?: string | null;
+  clearModel: boolean;
+  extraPathsText?: string | null;
+  clearExtraPaths: boolean;
+  sourcesText?: string | null;
+  clearSources: boolean;
+  storePath?: string | null;
+  clearStorePath: boolean;
+  sessionMemoryEnabled?: boolean | null;
+  hybridEnabled?: boolean | null;
+  mmrEnabled?: boolean | null;
+  mmr?: string | null;
+  clearMmr: boolean;
+  temporalDecay?: string | null;
+  clearTemporalDecay: boolean;
+}
+
+export interface GatewayAgentSettingsUpdateInput {
+  sessionId?: string | null;
+  agentId: string;
+  workspace?: string | null;
+  model?: string | null;
+  clearWorkspace: boolean;
+  clearModel: boolean;
+  isDefault?: boolean | null;
+  agentDir?: string | null;
+  clearAgentDir: boolean;
+  bindingsJson?: string | null;
+  clearBindings: boolean;
+  groupChatJson?: string | null;
+  clearGroupChat: boolean;
+  sandboxJson?: string | null;
+  clearSandbox: boolean;
+  toolsJson?: string | null;
+  clearTools: boolean;
+  memorySearch?: GatewayAgentMemorySearchSettingsUpdateInput | null;
 }
 
 export interface GatewayAgentsListResult {
@@ -318,6 +498,200 @@ export interface GatewayAgentsListResult {
   mainKey: string;
   scope: string;
   agents: GatewayAgentSummary[];
+}
+
+export type EvolutionTemplateKind =
+  | 'conservative'
+  | 'aggressive'
+  | 'knowledge_injection'
+  | 'custom_template';
+export type EvolutionOperationStatus = 'success' | 'failed' | 'cancelled' | 'rolled_back';
+export type EvolutionOperationKind = 'execute' | 'rollback';
+export type EvolutionOperationType =
+  | 'optimize'
+  | 'inject_knowledge'
+  | 'custom_transform'
+  | 'restore_snapshot';
+export type EvolutionRuntimeState =
+  | 'preview_ready'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
+
+export interface EvolutionKnowledgeInjectionInput {
+  sourceRef: string;
+  additionalSourceRefs?: string[];
+  knowledgeBody: string;
+  capabilityTags: string[];
+}
+
+export interface EvolutionCustomTemplateInput {
+  sourceRef: string;
+  additionalSourceRefs?: string[];
+  scriptBody: string;
+  capabilityTags: string[];
+}
+export type EvolutionRuntimePhase =
+  | 'preview_ready'
+  | 'validating_preview'
+  | 'snapshotting'
+  | 'applying_changes'
+  | 'reindexing'
+  | 'finalizing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface EvolutionPreviewChange {
+  id: string;
+  group: string;
+  type: string;
+  title: string;
+  desc: string;
+  impact: string;
+}
+
+export interface EvolutionPreviewResult {
+  operationId: string;
+  agentId: string;
+  nodeLabel: string;
+  template: EvolutionTemplateKind;
+  operationType: EvolutionOperationType;
+  sourceDocument: string;
+  riskLevel: string;
+  requiresConfirmation: boolean;
+  unsafeApply: boolean;
+  unsafeReasons: string[];
+  sourceRef?: string | null;
+  sourceRefs: string[];
+  capabilityTags: string[];
+  changes: EvolutionPreviewChange[];
+  bytesBefore: number;
+  bytesAfter: number;
+  snapshotId: string;
+  createdAtMs: number;
+}
+
+export interface EvolutionHistoryEntry {
+  operationId: string;
+  operationKind: EvolutionOperationKind;
+  operationType: EvolutionOperationType;
+  status: EvolutionOperationStatus;
+  agentId: string;
+  nodeLabel: string;
+  template: EvolutionTemplateKind;
+  snapshotId: string;
+  sourceDocument: string;
+  sourceRef?: string | null;
+  sourceRefs: string[];
+  capabilityTags: string[];
+  summary: string;
+  summaryI18n?: EvolutionLocalizedMessage | null;
+  bytesBefore: number;
+  bytesAfter: number;
+  durationMs?: number | null;
+  createdAtMs: number;
+}
+
+export interface EvolutionExecuteResult {
+  operationId: string;
+  snapshotId: string;
+  historyEntry: EvolutionHistoryEntry;
+}
+
+export interface EvolutionRollbackResult {
+  operationId: string;
+  restoredSnapshotId: string;
+  historyEntry: EvolutionHistoryEntry;
+}
+
+export interface EvolutionOperationStatusSnapshot {
+  operationId: string;
+  agentId: string;
+  nodeLabel: string;
+  template: EvolutionTemplateKind;
+  operationType: EvolutionOperationType;
+  sourceDocument: string;
+  snapshotId: string;
+  riskLevel: string;
+  sourceRef?: string | null;
+  sourceRefs: string[];
+  capabilityTags: string[];
+  runtimeState: EvolutionRuntimeState;
+  phase: EvolutionRuntimePhase;
+  progressPct: number;
+  message: string;
+  messageI18n?: EvolutionLocalizedMessage | null;
+  canCancel: boolean;
+  previewStale: boolean;
+  conflictDetected: boolean;
+  overrideApplied: boolean;
+  activeConflictOperationId?: string | null;
+  updatedAtMs: number;
+  createdAtMs: number;
+  historyEntry?: EvolutionHistoryEntry | null;
+}
+
+export interface EvolutionAuditEntry {
+  operationId: string;
+  operationKind: EvolutionOperationKind;
+  operationType: EvolutionOperationType;
+  status: EvolutionOperationStatus;
+  agentId: string;
+  nodeLabel: string;
+  template: EvolutionTemplateKind;
+  snapshotId: string;
+  sourceDocument: string;
+  riskLevel: string;
+  sourceRef?: string | null;
+  sourceRefs: string[];
+  preflightBlocked: boolean;
+  blockedReasonCode?: string | null;
+  overrideApplied: boolean;
+  overrideReasonCode?: string | null;
+  capabilityTags: string[];
+  message: string;
+  messageI18n?: EvolutionLocalizedMessage | null;
+  startedAtMs: number;
+  endedAtMs: number;
+  durationMs: number;
+}
+
+export interface EvolutionLocalizedMessage {
+  key: string;
+  args: string[];
+}
+
+export interface EvolutionMetricBucket {
+  key: string;
+  count: number;
+}
+
+export interface EvolutionAuditSummary {
+  agentId: string;
+  totalOperations: number;
+  successCount: number;
+  failedCount: number;
+  cancelledCount: number;
+  rolledBackCount: number;
+  highRiskCount: number;
+  unsafeBlockedCount: number;
+  preflightBlockedCount: number;
+  overrideCount: number;
+  last24hOperations: number;
+  last24hFailures: number;
+  last24hBlocked: number;
+  last7dOperations: number;
+  last7dFailures: number;
+  last7dOverrides: number;
+  averageDurationMs?: number | null;
+  statusBreakdown: EvolutionMetricBucket[];
+  templateBreakdown: EvolutionMetricBucket[];
+  operationTypeBreakdown: EvolutionMetricBucket[];
+  blockedReasonBreakdown: EvolutionMetricBucket[];
+  recentDailyBreakdown: EvolutionMetricBucket[];
+  recentEntries: EvolutionAuditEntry[];
 }
 
 interface GatewayConnectConfig {
@@ -340,8 +714,11 @@ interface OpenClawContextType {
   connectedOrigin: string | null;
   grantedScopes: string[];
   lastError: GatewayErrorSummary | null;
+  advancedConnectionConfig: GatewayAdvancedConnectionConfig;
   setHasSkippedSetup: (skipped: boolean) => void;
   updateConfig: (url: string, mode: AuthMode, secret: string) => Promise<boolean>;
+  saveAdvancedConnectionConfig: (config: GatewayAdvancedConnectionConfig) => Promise<GatewayAdvancedConnectionConfig>;
+  saveAgentSettings: (input: GatewayAgentSettingsUpdateInput) => Promise<GatewayAgentSettingsResult>;
   testConnection: (url: string, mode: AuthMode, secret: string) => Promise<boolean>;
   disconnect: () => Promise<void>;
   refreshAgents: () => Promise<void>;
@@ -351,11 +728,23 @@ interface OpenClawContextType {
   setShowReminder: (show: boolean) => void;
   nodes: Node[];
   agents: Agent[];
+  discoveredGateways: GatewayDiscoveredCandidate[];
+  savedEndpoints: GatewaySavedEndpoint[];
+  scanLanGateways: (timeoutMs?: number) => Promise<GatewayDiscoveredCandidate[]>;
+  useDiscoveredGateway: (candidate: GatewayDiscoveredCandidate, mode: AuthMode, secret: string) => Promise<boolean>;
+  removeSavedEndpoint: (endpointId: string) => Promise<boolean>;
+  refreshSavedEndpoints: () => Promise<GatewaySavedEndpoint[]>;
+  setActiveSession: (sessionId: string) => Promise<void>;
 }
 
 const OpenClawContext = createContext<OpenClawContextType | undefined>(undefined);
 
 const DEFAULT_GATEWAY_URL = 'http://127.0.0.1:18789';
+const DEFAULT_GATEWAY_ADVANCED_CONFIG: GatewayAdvancedConnectionConfig = {
+  timeoutMs: 30000,
+  heartbeatMs: 5000,
+  proxyUrl: null,
+};
 const DEFAULT_CONNECT_ROLE = 'operator';
 const DEFAULT_CONNECT_SCOPES = ['operator.admin'];
 const AGENT_GRADIENTS = [
@@ -460,8 +849,9 @@ async function invokeGateway<T>(command: string, args?: Record<string, unknown>)
   return invoke<T>(command, args);
 }
 
-export async function gatewayAgentIdentityGet(agentId: string) {
+export async function gatewayAgentIdentityGet(agentId: string, sessionId?: string) {
   return invokeGateway<GatewayAgentIdentityResult>('gateway_agent_identity_get', {
+    sessionId,
     agentId,
   });
 }
@@ -470,21 +860,67 @@ export async function gatewayAgentsList() {
   return invokeGateway<GatewayAgentsListResult>('gateway_agents_list');
 }
 
-export async function gatewayAgentSoulGet(agentId: string) {
+export async function gatewayAgentsListForSession(sessionId?: string) {
+  return invokeGateway<GatewayAgentsListResult>('gateway_agents_list', {
+    sessionId,
+  });
+}
+
+export async function gatewaySessionsList() {
+  return invokeGateway<GatewayStatusSnapshot[]>('gateway_sessions_list');
+}
+
+export async function gatewaySetActiveSession(sessionId: string) {
+  return invokeGateway<GatewayStatusSnapshot>('gateway_set_active_session', {
+    sessionId,
+  });
+}
+
+export async function gatewayDiscover(seedUrl?: string, timeoutMs = 2400) {
+  return invokeGateway<GatewayDiscoveredCandidate[]>('gateway_discover', {
+    seedUrl,
+    timeoutMs,
+  });
+}
+
+export async function gatewaySavedEndpoints() {
+  return invokeGateway<GatewaySavedEndpoint[]>('gateway_saved_endpoints');
+}
+
+export async function gatewaySelectEndpoint(candidate: GatewayDiscoveredCandidate) {
+  return invokeGateway<GatewaySavedEndpoint>('gateway_select_endpoint', {
+    candidate,
+  });
+}
+
+export async function gatewayRemoveSavedEndpoint(endpointId: string) {
+  return invokeGateway<boolean>('gateway_remove_saved_endpoint', {
+    endpointId,
+  });
+}
+
+export async function gatewayAgentSoulGet(agentId: string, sessionId?: string) {
   return invokeGateway<GatewayAgentFileGetResult>('gateway_agent_soul_get', {
+    sessionId,
     agentId,
   });
 }
 
-export async function gatewayAgentFileRead(agentId: string, name: string) {
+export async function gatewayAgentFileRead(
+  agentId: string,
+  name: string,
+  sessionId?: string,
+) {
   return invokeGateway<GatewayAgentFileGetResult>('gateway_agent_file_read', {
+    sessionId,
     agentId,
     name,
   });
 }
 
-export async function gatewayAgentMemoryGet(agentId: string) {
+export async function gatewayAgentMemoryGet(agentId: string, sessionId?: string) {
   return invokeGateway<GatewayAgentMemoryResult>('gateway_agent_memory_get', {
+    sessionId,
     agentId,
   });
 }
@@ -494,8 +930,10 @@ export async function gatewayAgentMemorySearch(
   query: string,
   maxResults?: number,
   sourceFilter?: 'all' | 'memory' | 'sessions',
+  sessionId?: string,
 ) {
   return invokeGateway<GatewayAgentMemorySearchResult>('gateway_agent_memory_search', {
+    sessionId,
     agentId,
     query,
     maxResults,
@@ -503,16 +941,18 @@ export async function gatewayAgentMemorySearch(
   });
 }
 
-export async function gatewayAgentMemoryStatus(agentId: string) {
+export async function gatewayAgentMemoryStatus(agentId: string, sessionId?: string) {
   return invokeGateway<GatewayAgentMemoryStatusResult>('gateway_agent_memory_status', {
+    sessionId,
     agentId,
   });
 }
 
-export async function gatewayAgentMemoryRuntimeStatus(agentId: string) {
+export async function gatewayAgentMemoryRuntimeStatus(agentId: string, sessionId?: string) {
   return invokeGateway<GatewayAgentMemoryRuntimeStatusResult>(
     'gateway_agent_memory_runtime_status',
     {
+      sessionId,
       agentId,
     },
   );
@@ -522,28 +962,37 @@ export async function openExternalUrl(url: string) {
   return invokeGateway<void>('open_external_url', { url });
 }
 
-export async function gatewayAgentMemoryTimelineGet(agentId: string) {
+export async function gatewayAgentMemoryTimelineGet(agentId: string, sessionId?: string) {
   return invokeGateway<GatewayAgentMemoryTimelineResult>(
     'gateway_agent_memory_timeline_get',
     {
+      sessionId,
       agentId,
     },
   );
 }
 
-export async function gatewayAgentMemoryTimelineAccessResolve(agentId: string) {
+export async function gatewayAgentMemoryTimelineAccessResolve(
+  agentId: string,
+  sessionId?: string,
+) {
   return invokeGateway<GatewayAgentMemoryTimelineAccessResult>(
     'gateway_agent_memory_timeline_access_resolve',
     {
+      sessionId,
       agentId,
     },
   );
 }
 
-export async function gatewayAgentMemoryTimelineLocalScan(agentId: string) {
+export async function gatewayAgentMemoryTimelineLocalScan(
+  agentId: string,
+  sessionId?: string,
+) {
   return invokeGateway<GatewayAgentMemoryTimelineResult>(
     'gateway_agent_memory_timeline_local_scan',
     {
+      sessionId,
       agentId,
     },
   );
@@ -553,10 +1002,12 @@ export async function gatewayAgentMemoryTimelineRemoteProbe(
   agentId: string,
   startDate: string,
   endDate: string,
+  sessionId?: string,
 ) {
   return invokeGateway<GatewayAgentMemoryTimelineResult>(
     'gateway_agent_memory_timeline_remote_probe',
     {
+      sessionId,
       agentId,
       startDate,
       endDate,
@@ -567,10 +1018,12 @@ export async function gatewayAgentMemoryTimelineRemoteProbe(
 export async function gatewayAgentMemoryTimelineRemoteProbeDates(
   agentId: string,
   dates: string[],
+  sessionId?: string,
 ) {
   return invokeGateway<GatewayAgentMemoryTimelineResult>(
     'gateway_agent_memory_timeline_remote_probe_dates',
     {
+      sessionId,
       agentId,
       dates,
     },
@@ -580,10 +1033,12 @@ export async function gatewayAgentMemoryTimelineRemoteProbeDates(
 export async function gatewayAgentMemoryTimelineEntryGet(
   agentId: string,
   name: string,
+  sessionId?: string,
 ) {
   return invokeGateway<GatewayAgentFileGetResult>(
     'gateway_agent_memory_timeline_entry_get',
     {
+      sessionId,
       agentId,
       name,
     },
@@ -593,38 +1048,130 @@ export async function gatewayAgentMemoryTimelineEntryGet(
 export async function gatewayAgentMemoryTimelineEntryRead(
   agentId: string,
   name: string,
+  sessionId?: string,
 ) {
   return invokeGateway<GatewayAgentFileGetResult>(
     'gateway_agent_memory_timeline_entry_read',
     {
+      sessionId,
       agentId,
       name,
     },
   );
 }
 
-export async function gatewayAgentWorkspaceIdentityGet(agentId: string) {
+export async function gatewayAgentWorkspaceIdentityGet(
+  agentId: string,
+  sessionId?: string,
+) {
   return invokeGateway<GatewayAgentFileGetResult>('gateway_agent_workspace_identity_get', {
+    sessionId,
     agentId,
   });
 }
 
-export async function gatewayAgentSettingsGet(agentId: string) {
+export async function gatewayAgentSettingsGet(agentId: string, sessionId?: string) {
   return invokeGateway<GatewayAgentSettingsResult>('gateway_agent_settings_get', {
+    sessionId,
     agentId,
+  });
+}
+
+export async function gatewayAgentSettingsSet(input: GatewayAgentSettingsUpdateInput) {
+  return invokeGateway<GatewayAgentSettingsResult>('gateway_agent_settings_set', {
+    input,
+  });
+}
+
+export async function gatewayConfigSchemaLookup(path: string) {
+  return invokeGateway<GatewayConfigSchemaLookupResult>('gateway_config_schema_lookup', {
+    path,
+  });
+}
+
+export async function evolutionPreview(
+  agentId: string,
+  nodeLabel: string,
+  template: EvolutionTemplateKind,
+  knowledgeInput?: EvolutionKnowledgeInjectionInput,
+  customInput?: EvolutionCustomTemplateInput,
+) {
+  return invokeGateway<EvolutionPreviewResult>('evolution_preview', {
+    agentId,
+    nodeLabel,
+    template,
+    knowledgeInput,
+    customInput,
+  });
+}
+
+export async function evolutionExecute(operationId: string) {
+  return invokeGateway<EvolutionExecuteResult>('evolution_execute', {
+    operationId,
+  });
+}
+
+export async function evolutionExecuteStart(
+  operationId: string,
+  overrideRiskAck = false,
+) {
+  return invokeGateway<EvolutionOperationStatusSnapshot>('evolution_execute_start', {
+    operationId,
+    overrideRiskAck,
+  });
+}
+
+export async function evolutionOperationStatus(operationId: string) {
+  return invokeGateway<EvolutionOperationStatusSnapshot>('evolution_operation_status', {
+    operationId,
+  });
+}
+
+export async function evolutionCancel(operationId: string) {
+  return invokeGateway<EvolutionOperationStatusSnapshot>('evolution_cancel', {
+    operationId,
+  });
+}
+
+export async function evolutionHistoryList(agentId: string) {
+  return invokeGateway<EvolutionHistoryEntry[]>('evolution_history_list', {
+    agentId,
+  });
+}
+
+export async function evolutionAuditSummary(agentId: string) {
+  return invokeGateway<EvolutionAuditSummary>('evolution_audit_summary', {
+    agentId,
+  });
+}
+
+export async function evolutionRollback(agentId: string, snapshotId: string) {
+  return invokeGateway<EvolutionRollbackResult>('evolution_rollback', {
+    agentId,
+    snapshotId,
   });
 }
 
 // Identity-facing fields are file-backed to keep the UI aligned with IDENTITY.md.
-export async function gatewayAgentWorkspaceIdentitySet(agentId: string, content: string) {
+export async function gatewayAgentWorkspaceIdentitySet(
+  agentId: string,
+  content: string,
+  sessionId?: string,
+) {
   return invokeGateway<void>('gateway_agent_workspace_identity_set', {
+    sessionId,
     agentId,
     content,
   });
 }
 
-export async function gatewayAgentSoulSet(agentId: string, content: string) {
+export async function gatewayAgentSoulSet(
+  agentId: string,
+  content: string,
+  sessionId?: string,
+) {
   return invokeGateway<void>('gateway_agent_soul_set', {
+    sessionId,
     agentId,
     content,
   });
@@ -634,16 +1181,23 @@ export async function gatewayAgentMemorySet(
   agentId: string,
   name: string,
   content: string,
+  sessionId?: string,
 ) {
   return invokeGateway<void>('gateway_agent_memory_set', {
+    sessionId,
     agentId,
     name,
     content,
   });
 }
 
-export async function gatewayAgentMemoryIndex(agentId: string, force = false) {
+export async function gatewayAgentMemoryIndex(
+  agentId: string,
+  force = false,
+  sessionId?: string,
+) {
   return invokeGateway<GatewayAgentMemoryIndexResult>('gateway_agent_memory_index', {
+    sessionId,
     agentId,
     force,
   });
@@ -656,8 +1210,28 @@ export async function gatewayConfigSetLocal(key: string, value: string) {
   });
 }
 
+export async function gatewayAdvancedConnectionConfigGet() {
+  return invokeGateway<GatewayAdvancedConnectionConfig>('gateway_advanced_connection_config_get');
+}
+
+export async function gatewayAdvancedConnectionConfigSet(config: GatewayAdvancedConnectionConfig) {
+  return invokeGateway<GatewayAdvancedConnectionConfig>('gateway_advanced_connection_config_set', {
+    config,
+  });
+}
+
 export async function gatewayExportMarkdownDocument(suggestedFileName: string, content: string) {
   return invokeGateway<string | null>('export_markdown_document', {
+    suggestedFileName,
+    content,
+  });
+}
+
+export async function gatewayExportMarkdownDocumentQuick(
+  suggestedFileName: string,
+  content: string,
+) {
+  return invokeGateway<string>('export_markdown_document_quick', {
     suggestedFileName,
     content,
   });
@@ -679,6 +1253,22 @@ function resolveOrigin(origin: string | null | undefined, fallback?: string) {
   return null;
 }
 
+function resolveSavedEndpointUrl(endpoint: GatewaySavedEndpoint | null | undefined) {
+  if (!endpoint) {
+    return null;
+  }
+  if (endpoint.httpUrl && endpoint.httpUrl.trim().length > 0) {
+    return endpoint.httpUrl;
+  }
+  if (endpoint.wsUrl.startsWith('ws://')) {
+    return endpoint.wsUrl.replace(/^ws:\/\//, 'http://');
+  }
+  if (endpoint.wsUrl.startsWith('wss://')) {
+    return endpoint.wsUrl.replace(/^wss:\/\//, 'https://');
+  }
+  return null;
+}
+
 function buildNodeId(origin: string) {
   return `gateway:${origin}`;
 }
@@ -696,11 +1286,21 @@ function buildNodeName(origin: string) {
   }
 }
 
-function buildNode(origin: string): Node {
+function buildNodeFromSnapshot(snapshot: GatewayStatusSnapshot): Node | null {
+  const origin = resolveOrigin(snapshot.gatewayOrigin);
+  const sessionId = snapshot.sessionId?.trim();
+  if (!origin || !sessionId) {
+    return null;
+  }
+
   return {
     id: buildNodeId(origin),
     name: buildNodeName(origin),
-    status: 'online',
+    status: isConnectedPhase(snapshot.phase) ? 'online' : 'offline',
+    sessionId,
+    origin,
+    grantedScopes: snapshot.grantedScopes ?? [],
+    isActive: snapshot.isActive,
   };
 }
 
@@ -751,9 +1351,49 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
   const [connectedOrigin, setConnectedOrigin] = useState<string | null>(null);
   const [grantedScopes, setGrantedScopes] = useState<string[]>([]);
   const [lastError, setLastError] = useState<GatewayErrorSummary | null>(null);
+  const [advancedConnectionConfig, setAdvancedConnectionConfig] = useState<GatewayAdvancedConnectionConfig>(DEFAULT_GATEWAY_ADVANCED_CONFIG);
   const [showReminder, setShowReminder] = useState(false);
+  const [hasHydratedGatewayState, setHasHydratedGatewayState] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [discoveredGateways, setDiscoveredGateways] = useState<GatewayDiscoveredCandidate[]>([]);
+  const [savedEndpoints, setSavedEndpoints] = useState<GatewaySavedEndpoint[]>([]);
+
+  const refreshSessionRegistry = async () => {
+    if (!isTauriRuntimeAvailable()) {
+      setNodes([]);
+      setAgents([]);
+      setIsConnected(false);
+      setConnectedOrigin(null);
+      setGrantedScopes([]);
+      return;
+    }
+
+    const snapshots = await gatewaySessionsList();
+    const nextNodes = snapshots
+      .map(buildNodeFromSnapshot)
+      .filter((node): node is Node => node !== null);
+    const activeNode =
+      nextNodes.find((node) => node.isActive) ??
+      nextNodes.find((node) => node.status === 'online') ??
+      null;
+
+    setNodes(nextNodes);
+
+    if (!activeNode?.sessionId) {
+      setAgents([]);
+      setIsConnected(false);
+      setConnectedOrigin(null);
+      setGrantedScopes([]);
+      return;
+    }
+
+    const agentsList = await gatewayAgentsListForSession(activeNode.sessionId);
+    setAgents(mapAgents(agentsList, activeNode.id));
+    setIsConnected(activeNode.status === 'online');
+    setConnectedOrigin(activeNode.origin ?? null);
+    setGrantedScopes(activeNode.grantedScopes ?? []);
+  };
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.url, gatewayUrl);
@@ -773,18 +1413,54 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
   }, [isConfigured, hasSkippedSetup, isDev]);
 
   useEffect(() => {
-    if (hasSkippedSetup && !isConfigured && !isSetupWizardOpen) {
+    if (
+      shouldShowSkippedConnectionReminder({
+        hasSkippedSetup,
+        isConfigured,
+        isSetupWizardOpen,
+        isConnected,
+        hasHydratedGatewayState,
+      })
+    ) {
       const timer = setTimeout(() => setShowReminder(true), 1500);
       return () => clearTimeout(timer);
     }
 
     setShowReminder(false);
-  }, [hasSkippedSetup, isConfigured, isSetupWizardOpen]);
+  }, [hasSkippedSetup, isConfigured, isSetupWizardOpen, isConnected, hasHydratedGatewayState]);
 
   useEffect(() => {
     let cancelled = false;
+    setHasHydratedGatewayState(false);
 
     const hydrateGatewayState = async () => {
+      if (isTauriRuntimeAvailable()) {
+        try {
+          const nextAdvancedConfig = await gatewayAdvancedConnectionConfigGet();
+          if (!cancelled) {
+            setAdvancedConnectionConfig(nextAdvancedConfig);
+          }
+        } catch {
+          if (!cancelled) {
+            setAdvancedConnectionConfig(DEFAULT_GATEWAY_ADVANCED_CONFIG);
+          }
+        }
+      }
+
+      let nextSavedEndpoints: GatewaySavedEndpoint[] = [];
+      if (isTauriRuntimeAvailable()) {
+        try {
+          nextSavedEndpoints = await gatewaySavedEndpoints();
+          if (!cancelled) {
+            setSavedEndpoints(nextSavedEndpoints);
+          }
+        } catch {
+          if (!cancelled) {
+            setSavedEndpoints([]);
+          }
+        }
+      }
+
       try {
         const snapshot = await invokeGateway<GatewayStatusSnapshot>('gateway_status');
         if (cancelled) {
@@ -793,6 +1469,68 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
 
         const origin = resolveOrigin(snapshot.gatewayOrigin, gatewayUrl);
         if (!isConnectedPhase(snapshot.phase) || !origin) {
+          const preferredSavedEndpoint = nextSavedEndpoints.find((endpoint) => endpoint.wasUserSelected) ?? null;
+          const reconnectCandidates = [
+            ...(preferredSavedEndpoint ? [preferredSavedEndpoint] : []),
+            ...nextSavedEndpoints.filter((endpoint) => endpoint.id !== preferredSavedEndpoint?.id),
+          ]
+            .map((endpoint) => resolveSavedEndpointUrl(endpoint))
+            .filter((value): value is string => Boolean(value?.trim()));
+
+          if (
+            reconnectCandidates.length === 0 &&
+            (isConfigured || gatewayUrl !== DEFAULT_GATEWAY_URL) &&
+            gatewayUrl.trim().length > 0
+          ) {
+            reconnectCandidates.push(gatewayUrl);
+          }
+
+          let anyRecovered = false;
+          for (const reconnectUrl of reconnectCandidates) {
+            const success = await connectAndLoadAgents(
+              reconnectUrl,
+              authMode,
+              authSecret,
+              false,
+              anyRecovered,
+            );
+            if (cancelled) {
+              return;
+            }
+            if (success) {
+              anyRecovered = true;
+            }
+          }
+
+          if (anyRecovered) {
+            if (preferredSavedEndpoint?.originKey) {
+              try {
+                await gatewaySetActiveSession(preferredSavedEndpoint.originKey);
+              } catch {
+                // Fall back to whatever session remained active.
+              }
+            }
+            await refreshSessionRegistry();
+            const preferredUrl = resolveSavedEndpointUrl(preferredSavedEndpoint);
+            if (preferredUrl && preferredUrl !== gatewayUrl) {
+              setGatewayUrl(preferredUrl);
+            }
+            setIsConfigured(true);
+            setHasSkippedSetupState(false);
+            setShowReminder(false);
+            try {
+              const refreshedEndpoints = await gatewaySavedEndpoints();
+              if (!cancelled) {
+                setSavedEndpoints(refreshedEndpoints);
+              }
+            } catch {
+              if (!cancelled) {
+                setSavedEndpoints([]);
+              }
+            }
+            return;
+          }
+
           setIsConnected(false);
           setConnectedOrigin(origin);
           setGrantedScopes(snapshot.grantedScopes ?? []);
@@ -803,18 +1541,22 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         }
 
         try {
-          const agentsList = await gatewayAgentsList();
+          await refreshSessionRegistry();
           if (cancelled) {
             return;
           }
 
-          const node = buildNode(origin);
-          setIsConnected(true);
-          setConnectedOrigin(origin);
-          setGrantedScopes(snapshot.grantedScopes ?? []);
+          setIsConfigured(true);
+          setHasSkippedSetupState(false);
+          setShowReminder(false);
           setLastError(null);
-          setNodes([node]);
-          setAgents(mapAgents(agentsList, node.id));
+          if (nextSavedEndpoints.length === 0 && isTauriRuntimeAvailable()) {
+            try {
+              setSavedEndpoints(await gatewaySavedEndpoints());
+            } catch {
+              setSavedEndpoints([]);
+            }
+          }
         } catch (error) {
           if (cancelled) {
             return;
@@ -841,14 +1583,58 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    void hydrateGatewayState();
+    void hydrateGatewayState().finally(() => {
+      if (!cancelled) {
+        setHasHydratedGatewayState(true);
+      }
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [gatewayUrl]);
+  }, [authMode, authSecret, gatewayUrl, isConfigured]);
+
+  useEffect(() => {
+    if (!isConnected || !isTauriRuntimeAvailable()) {
+      return;
+    }
+
+    let disposed = false;
+    const intervalId = window.setInterval(() => {
+      void invokeGateway<GatewayStatusSnapshot>('gateway_status')
+        .then((snapshot) => {
+          if (disposed) {
+            return;
+          }
+          if (!isConnectedPhase(snapshot.phase) || !resolveOrigin(snapshot.gatewayOrigin, connectedOrigin ?? gatewayUrl)) {
+            applyDisconnectedState(snapshot.lastError ?? null, resolveOrigin(snapshot.gatewayOrigin, connectedOrigin ?? gatewayUrl), snapshot.grantedScopes ?? []);
+            return;
+          }
+          void refreshSessionRegistry().catch(() => {
+            // Keep last-known node registry on transient refresh failures.
+          });
+          setLastError(snapshot.lastError ?? null);
+        })
+        .catch(() => {
+          // Keep the last known connected state on transient heartbeat failures.
+        });
+    }, advancedConnectionConfig.heartbeatMs);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [advancedConnectionConfig.heartbeatMs, connectedOrigin, gatewayUrl, isConnected]);
 
   const setHasSkippedSetup = (skipped: boolean) => {
+    if (skipped && isConnected) {
+      setIsConfigured(true);
+      setHasSkippedSetupState(false);
+      setShowReminder(false);
+      setIsSetupWizardOpen(false);
+      return;
+    }
+
     setHasSkippedSetupState(skipped);
     if (skipped) {
       setIsSetupWizardOpen(false);
@@ -867,15 +1653,6 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     setIsSetupWizardOpen(false);
   };
 
-  const applyConnectedState = (origin: string, agentsList: GatewayAgentsListResult) => {
-    const node = buildNode(origin);
-    setIsConnected(true);
-    setConnectedOrigin(origin);
-    setLastError(null);
-    setNodes([node]);
-    setAgents(mapAgents(agentsList, node.id));
-  };
-
   const applyDisconnectedState = (
     error: GatewayErrorSummary | null,
     origin: string | null = null,
@@ -889,7 +1666,13 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
     setAgents([]);
   };
 
-  const connectAndLoadAgents = async (url: string, mode: AuthMode, secret: string, persistConfig: boolean) => {
+  const connectAndLoadAgents = async (
+    url: string,
+    mode: AuthMode,
+    secret: string,
+    persistConfig: boolean,
+    preserveExistingStateOnFailure = false,
+  ) => {
     setLastError(null);
 
     try {
@@ -899,14 +1682,19 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
       const origin = resolveOrigin(snapshot.gatewayOrigin, url);
 
       if (!isConnectedPhase(snapshot.phase) || !origin) {
-        applyDisconnectedState(snapshot.lastError ?? null, origin, snapshot.grantedScopes ?? []);
+        if (!preserveExistingStateOnFailure) {
+          applyDisconnectedState(snapshot.lastError ?? null, origin, snapshot.grantedScopes ?? []);
+        }
         return false;
       }
 
       try {
-        const agentsList = await gatewayAgentsList();
-        setGrantedScopes(snapshot.grantedScopes ?? []);
-        applyConnectedState(origin, agentsList);
+        await refreshSessionRegistry();
+        try {
+          setSavedEndpoints(await gatewaySavedEndpoints());
+        } catch {
+          setSavedEndpoints([]);
+        }
 
         if (persistConfig) {
           setGatewayUrl(url);
@@ -920,11 +1708,15 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
 
         return true;
       } catch (error) {
-        applyDisconnectedState(toGatewayErrorSummary(error), origin, snapshot.grantedScopes ?? []);
+        if (!preserveExistingStateOnFailure) {
+          applyDisconnectedState(toGatewayErrorSummary(error), origin, snapshot.grantedScopes ?? []);
+        }
         return false;
       }
     } catch (error) {
-      applyDisconnectedState(toGatewayErrorSummary(error));
+      if (!preserveExistingStateOnFailure) {
+        applyDisconnectedState(toGatewayErrorSummary(error));
+      }
       return false;
     }
   };
@@ -953,19 +1745,61 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const origin = connectedOrigin ?? resolveOrigin(null, gatewayUrl);
-    if (!origin) {
-      return;
-    }
-
     try {
-      const agentsList = await gatewayAgentsList();
-      applyConnectedState(origin, agentsList);
+      await refreshSessionRegistry();
     } catch (error) {
       const summary = toGatewayErrorSummary(error);
       setLastError(summary);
       throw error;
     }
+  };
+
+  const refreshSavedEndpoints = async () => {
+    const next = await gatewaySavedEndpoints();
+    setSavedEndpoints(next);
+    return next;
+  };
+
+  const saveAdvancedConnectionConfig = async (config: GatewayAdvancedConnectionConfig) => {
+    const next = await gatewayAdvancedConnectionConfigSet(config);
+    setAdvancedConnectionConfig(next);
+    return next;
+  };
+
+  const saveAgentSettings = async (input: GatewayAgentSettingsUpdateInput) => {
+    return gatewayAgentSettingsSet(input);
+  };
+
+  const scanLanGateways = async (timeoutMs = advancedConnectionConfig.timeoutMs) => {
+    const next = await gatewayDiscover(connectedOrigin ?? gatewayUrl, timeoutMs);
+    setDiscoveredGateways(next);
+    return next;
+  };
+
+  const useDiscoveredGateway = async (
+    candidate: GatewayDiscoveredCandidate,
+    mode: AuthMode,
+    secret: string,
+  ) => {
+    const selected = await gatewaySelectEndpoint(candidate);
+    await refreshSavedEndpoints();
+    const connectUrl =
+      resolveSavedEndpointUrl(selected) ??
+      candidate.httpUrl ??
+      candidate.wsUrl.replace(/^ws:\/\//, 'http://').replace(/^wss:\/\//, 'https://');
+    setGatewayUrl(connectUrl);
+    return connectAndLoadAgents(connectUrl, mode, secret, true);
+  };
+
+  const removeSavedEndpoint = async (endpointId: string) => {
+    const removed = await gatewayRemoveSavedEndpoint(endpointId);
+    await refreshSavedEndpoints();
+    return removed;
+  };
+
+  const setActiveSession = async (sessionId: string) => {
+    await gatewaySetActiveSession(sessionId);
+    await refreshSessionRegistry();
   };
 
   return (
@@ -981,8 +1815,11 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         connectedOrigin,
         grantedScopes,
         lastError,
+        advancedConnectionConfig,
         setHasSkippedSetup,
         updateConfig,
+        saveAdvancedConnectionConfig,
+        saveAgentSettings,
         testConnection,
         disconnect,
         refreshAgents,
@@ -992,6 +1829,13 @@ export function OpenClawProvider({ children }: { children: ReactNode }) {
         setShowReminder,
         nodes,
         agents,
+        discoveredGateways,
+        savedEndpoints,
+        scanLanGateways,
+        useDiscoveredGateway,
+        removeSavedEndpoint,
+        refreshSavedEndpoints,
+        setActiveSession,
       }}
     >
       {children}

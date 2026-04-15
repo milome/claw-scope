@@ -170,14 +170,14 @@ export function MemoryDiagnosticsDrawer({
           {runtimeStatusSummary ? (
             <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
               <div>
-                indexed: {runtimeStatusSummary.indexedFiles}
+                {t("memory.diag.label.indexed")}: {runtimeStatusSummary.indexedFiles}
                 {runtimeStatusSummary.totalFiles != null
                   ? `/${runtimeStatusSummary.totalFiles}`
-                  : ""} files · {runtimeStatusSummary.chunks} chunks
+                  : ""} {t("common.files")} · {runtimeStatusSummary.chunks} {t("common.chunks")}
               </div>
               {runtimeStatusSummary.bySource.map((item) => (
                 <div key={item.source}>
-                  {item.source}: {item.files} files · {item.chunks} chunks
+                  {item.source}: {item.files} {t("common.files")} · {item.chunks} {t("common.chunks")}
                 </div>
               ))}
             </div>
@@ -193,19 +193,19 @@ export function MemoryDiagnosticsDrawer({
           <div className="space-y-2 text-xs text-slate-500 dark:text-slate-400">
             <div>{t(memoryConfigStatusMessageKey(configStatus.statusKey))}</div>
             <div>{t(memoryConfigBridgeMessageKey(configStatus.localWritable))}</div>
-            <div>diagnostics: {knowledgeModel.diagnosticsAvailable ? t("memory.diag.ready") : t("memory.diag.unavailableShort")}</div>
-            <div>backend: {knowledgeModel.backend ?? t("memory.diag.unavailable")}</div>
-            <div>provider: {knowledgeModel.provider ?? t("memory.knowledge.providerFallback")}</div>
-            <div>sources: {knowledgeModel.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
-            <div>extra paths: {knowledgeModel.extraPaths.join(", ") || t("memory.knowledge.none")}</div>
-            <div>qmd paths: {knowledgeModel.qmdPaths.join(", ") || t("memory.knowledge.none")}</div>
-            <div>source counts: {knowledgeModel.runtimeSummary?.sourceCounts.map((item) => `${item.source}: ${item.files}/${item.chunks}`).join(" · ") || t("memory.knowledge.sourcesEmpty")}</div>
+            <div>{t("memory.diag.label.diagnostics")}: {knowledgeModel.diagnosticsAvailable ? t("memory.diag.ready") : t("memory.diag.unavailableShort")}</div>
+            <div>{t("memory.diag.label.backend")}: {knowledgeModel.backend ?? t("memory.diag.unavailable")}</div>
+            <div>{t("memory.diag.label.provider")}: {knowledgeModel.provider ?? t("memory.knowledge.providerFallback")}</div>
+            <div>{t("memory.diag.label.sources")}: {knowledgeModel.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}</div>
+            <div>{t("memory.diag.label.extraPaths")}: {knowledgeModel.extraPaths.join(", ") || t("memory.knowledge.none")}</div>
+            <div>{t("memory.diag.label.qmdPaths")}: {knowledgeModel.qmdPaths.join(", ") || t("memory.knowledge.none")}</div>
+            <div>{t("memory.diag.label.sourceCounts")}: {knowledgeModel.runtimeSummary?.sourceCounts.map((item) => `${item.source}: ${item.files}/${item.chunks}`).join(" · ") || t("memory.knowledge.sourcesEmpty")}</div>
             <div>{t(`memory.knowledge.runtimeMatch.${configStatus.runtimeMatchState}`)}</div>
-            <div>external summary: {knowledgeModel.sections.map((section) => `${t(section.titleKey)}=${section.entries.length}`).join(" · ")}</div>
-            <div>session memory: {knowledgeModel.sessionMemoryEnabled ? t("memory.diag.ready") : t("memory.diag.unavailableShort")}</div>
+            <div>{t("memory.diag.label.externalSummary")}: {knowledgeModel.sections.map((section) => `${t(section.titleKey)}=${section.entries.length}`).join(" · ")}</div>
+            <div>{t("memory.diag.label.sessionMemory")}: {knowledgeModel.sessionMemoryEnabled ? t("memory.diag.ready") : t("memory.diag.unavailableShort")}</div>
             <div>
-              runtime: {knowledgeModel.runtimeAvailable
-                ? `${knowledgeModel.runtimeSummary?.files ?? 0} files · ${knowledgeModel.runtimeSummary?.chunks ?? 0} chunks`
+              {t("memory.diag.label.runtime")}: {knowledgeModel.runtimeAvailable
+                ? `${knowledgeModel.runtimeSummary?.files ?? 0} ${t("common.files")} · ${knowledgeModel.runtimeSummary?.chunks ?? 0} ${t("common.chunks")}`
                 : t(isLocalGatewaySession ? "memory.diag.runtimePlaceholder" : "memory.diag.runtimeRemoteUnavailable")}
             </div>
             {!knowledgeModel.diagnosticsAvailable ? <div>{t("memory.knowledge.missing")}</div> : null}

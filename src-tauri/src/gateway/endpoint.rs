@@ -75,10 +75,10 @@ fn classify_transport(host: &str) -> GatewayTransportKind {
         return GatewayTransportKind::LocalLoopback;
     }
 
-    if let Ok(ip) = host.parse::<IpAddr>() {
-        if ip.is_loopback() {
-            return GatewayTransportKind::LocalLoopback;
-        }
+    if let Ok(ip) = host.parse::<IpAddr>()
+        && ip.is_loopback()
+    {
+        return GatewayTransportKind::LocalLoopback;
     }
 
     GatewayTransportKind::Direct

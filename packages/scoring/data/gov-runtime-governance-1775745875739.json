@@ -1,0 +1,53 @@
+{
+  "run_id": "gov-runtime-governance-1775745875739",
+  "scenario": "real_dev",
+  "stage": "arch",
+  "phase_score": 100,
+  "phase_weight": 0,
+  "check_items": [],
+  "timestamp": "2026-04-09T14:44:35.739Z",
+  "iteration_count": 0,
+  "iteration_records": [],
+  "first_pass": true,
+  "trigger_stage": "unmapped_arch",
+  "governance_rerun_history": [
+    {
+      "event_id": "deferred-gap-rerun-1775745873700-rcxxi6",
+      "timestamp": "2026-04-09T14:44:35.739Z",
+      "rerun_gate": "implementation-readiness",
+      "outcome": "blocked",
+      "decision_mode": "generic",
+      "attempt_id": "deferred-gap-followup-1775745873700",
+      "loop_state_id": "implementation-readiness--qa.readiness--D-Dev-claw-scope-_bmad-output-validation-consumer-governance-consumer-validation-20260409224412529-implementation-readiness-report.md",
+      "executor_routing": {
+        "routing_mode": "generic",
+        "executor_route": "default-gate-remediation",
+        "prioritized_signals": []
+      },
+      "summary_lines": [
+        "Routing Mode: generic",
+        "Executor Route: default-gate-remediation",
+        "Stop Reason: (none)",
+        "Journey Contract Signals: (none)"
+      ],
+      "runner_summary_lines": [
+        "## Governance Remediation Runner Summary",
+        "- Loop State ID: implementation-readiness--qa.readiness--D-Dev-claw-scope-_bmad-output-validation-consumer-governance-consumer-validation-20260409224412529-implementation-readiness-report.md",
+        "- Current Attempt Number: 1",
+        "- Next Attempt Number: 2",
+        "- Should Continue: yes",
+        "- Stop Reason: (none)",
+        "- Artifact Path: D:/Dev/claw-scope/_bmad-output/validation-consumer-governance/consumer-validation-20260409224412529-implementation-readiness-report.md",
+        "- Executor Packet: yes",
+        "## Loop State Trace Summary",
+        "- Routing Mode: generic",
+        "- Executor Route: default-gate-remediation",
+        "- Journey Contract Signals: (none)",
+        "## Packet Paths",
+        "- cursor: D:/Dev/claw-scope/_bmad-output/validation-consumer-governance/consumer-validation-20260409224412529-implementation-readiness-report.cursor-packet.md",
+        "- claude: D:/Dev/claw-scope/_bmad-output/validation-consumer-governance/consumer-validation-20260409224412529-implementation-readiness-report.claude-packet.md"
+      ]
+    }
+  ],
+  "path_type": "full"
+}

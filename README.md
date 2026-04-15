@@ -19,6 +19,12 @@ npm run tauri dev
 npm run tauri build
 ```
 
+说明：
+
+- 本地 `tauri build` 只会产出当前宿主平台的安装包。
+- 在 Windows 本机执行时，默认只会得到 Windows 产物（如 `msi` / `nsis`）。
+- 标准开源发布矩阵以 GitHub Actions 的跨平台 release workflow 为准，见下文“发布平台”。
+
 ## Visual Regression
 
 本仓库内置一套基于 Playwright 的明 / 暗主题截图回归流程，用于对 `Profile`、`Memory`、`Config`、`Evolution` 四个主页面做逐页基线采样。
@@ -63,6 +69,23 @@ npm run visual:ci
 - **Rust:** `rustup default stable-msvc`（Windows 上建议使用 MSVC 工具链）
 
 若构建报错 `dlltool.exe: program not found`，请安装上述工具链。
+
+## 发布平台
+
+面向开源发布时，ClawScope 目标对齐以下平台：
+
+- Windows x64：`NSIS setup.exe` / `MSI`
+- macOS Apple Silicon：`.app` / `.dmg`
+- macOS Intel：`.app` / `.dmg`
+- Linux x64：`AppImage` / `deb` / `rpm`
+
+仓库内已提供跨平台发布工作流：
+
+- [`.github/workflows/release.yml`](.github/workflows/release.yml)
+
+补充说明与发布矩阵见：
+
+- [`docs/release/platform-support.md`](docs/release/platform-support.md)
 
 ## License
 

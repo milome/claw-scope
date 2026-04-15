@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main, master]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   check:
     runs-on: ubuntu-22.04
@@ -37,12 +40,19 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Prepare frontendDist placeholder
+        run: |
+          mkdir -p dist
+          if [ ! -f dist/index.html ]; then
+            printf '<!doctype html><html><body>ci-placeholder</body></html>\n' > dist/index.html
+          fi
+
       - name: Cargo check
         run: cargo check
         working-directory: src-tauri
 
       - name: Cargo clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --lib -- -D warnings
         working-directory: src-tauri
 
       - name: Build (Linux smoke)

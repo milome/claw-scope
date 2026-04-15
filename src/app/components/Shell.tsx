@@ -116,7 +116,7 @@ export function Shell() {
         className="h-[44px] md:h-[40px] shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center px-3 md:px-2 text-[14px] md:text-[13px] select-none shadow-sm z-20 transition-colors duration-300"
       >
         <div className="w-7 h-7 md:w-6 md:h-6 mr-2.5 shrink-0 flex items-center justify-center rtl:ml-2.5 rtl:mr-0 pointer-events-none drop-shadow-sm mix-blend-multiply dark:mix-blend-normal">
-          <img src={appLogo} alt="ClawScope Logo" className="w-[120%] h-[120%] object-contain [clip-path:circle(45%_at_50%_50%)]" />
+          <img src={appLogo} alt={t("app.logoAlt")} className="w-[120%] h-[120%] object-contain [clip-path:circle(45%_at_50%_50%)]" />
         </div>
 
         <div data-tauri-drag-region className="flex-1 text-slate-700 dark:text-slate-200 font-bold md:font-medium tracking-wide">
@@ -235,8 +235,8 @@ export function Shell() {
 
           <div className="mt-auto px-4 pb-3 flex flex-col gap-3">
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
-              <div className="font-semibold text-slate-800 dark:text-slate-200">ClawScope v0.1.0</div>
-              <div className="mt-1">Copyright © 2026 ClawScope</div>
+              <div className="font-semibold text-slate-800 dark:text-slate-200">{t("app.footer.version", "0.1.0")}</div>
+              <div className="mt-1">{t("app.footer.copyright", 2026)}</div>
             </div>
           </div>
         </aside>

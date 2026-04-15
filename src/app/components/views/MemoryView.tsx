@@ -779,7 +779,7 @@ export function MemoryView() {
     if (memoryStatus.embeddingsError) {
       primaryIssue = memoryStatus.embeddingsError;
     } else if (memoryStatus.embeddingsAvailable === false) {
-      primaryIssue = "Embeddings unavailable";
+      primaryIssue = t("memory.diag.embeddingsUnavailable");
     }
 
     return {
@@ -1441,9 +1441,9 @@ export function MemoryView() {
         actions={(
           <div className="inline-flex items-center gap-2 rounded-[22px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] px-2 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:border-slate-800/80 dark:bg-[linear-gradient(135deg,rgba(15,23,42,0.92),rgba(2,6,23,0.82))] dark:shadow-none">
             <div className="flex min-w-[112px] flex-col rounded-[16px] bg-[linear-gradient(135deg,rgba(14,165,233,0.14),rgba(56,189,248,0.06))] px-3 py-2 text-slate-700 dark:bg-[linear-gradient(135deg,rgba(14,165,233,0.18),rgba(2,6,23,0.18))] dark:text-slate-200">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-700/80 dark:text-sky-300/80">Agents</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-700/80 dark:text-sky-300/80">{t("memory.header.agents")}</span>
               <span className="mt-1 text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-                {agents.length} available
+                {agents.length} {t("common.available")}
               </span>
             </div>
             <div className="relative inline-flex items-center">
@@ -1524,7 +1524,7 @@ export function MemoryView() {
 
           {activeSection === "overview" && selectedAgentId && isConnected && !memoryResult && !timelineResult ? (
             <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
-              <ArchiveNotice>Overview 正在等待 agent 解析与首批记忆数据初始化。</ArchiveNotice>
+              <ArchiveNotice>{t("memory.overview.pending")}</ArchiveNotice>
             </ArchivePane>
           ) : memoryPanels[activeSection]}
         </AnimatePresence>

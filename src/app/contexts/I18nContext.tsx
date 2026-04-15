@@ -6,6 +6,7 @@ import {
   useEffect,
 } from "react";
 import { getSingletonValue } from "./contextSingleton";
+import { EVOLUTION_RUNTIME_DICT } from "./evolutionI18n";
 
 export type LangCode =
   | "en"
@@ -38,6 +39,8 @@ export const LANGUAGES: { code: LangCode; name: string; native: string }[] = [
   { code: "hi", name: "Hindi", native: "हिन्दी" },
 ];
 
+export const I18N_SLOT_COUNT = LANGUAGES.length;
+
 const langIndices: Record<LangCode, number> = {
   en: 0,
   zh: 1,
@@ -56,7 +59,7 @@ const langIndices: Record<LangCode, number> = {
 
 // Data array order matches the langIndices above:
 // [en, zh, zh-TW, es, fr, de, ja, ko, ru, pt, it, ar, hi]
-const DICT: Record<string, string[]> = {
+const BASE_DICT: Record<string, string[]> = {
   "app.subtitle": [
     " — Memories Visible, Evolution Expected",
     " — 记忆可见，进化可期",
@@ -252,6 +255,21 @@ const DICT: Record<string, string[]> = {
     "Cluster Agenti",
     "مجموعة الوكلاء",
     "एजेंट क्लस्टर",
+  ],
+  "profile.nodes": [
+    "Nodes",
+    "节点",
+    "節點",
+    "Nodos",
+    "Nœuds",
+    "Knoten",
+    "ノード",
+    "노드",
+    "Узлы",
+    "Nós",
+    "Nodi",
+    "العقد",
+    "नोड्स",
   ],
   "profile.status": [
     "Status",
@@ -1378,6 +1396,121 @@ const DICT: Record<string, string[]> = {
     "身份与灵魂的编辑请继续使用 Profile，这里只负责运行态 Agent 设置与查看。",
     "身份與靈魂的編輯請繼續使用 Profile，這裡只負責執行態 Agent 設定與查看。",
   ],
+  "config.agentSettings.scopeLegendTitle": [
+    "Scope Legend",
+    "Scope 图例",
+    "Scope 圖例",
+  ],
+  "config.agentSettings.scopeLegendDesc": [
+    "This page mixes gateway-global config, default-agent routing, universal defaults, and selected-agent overrides. The UI below describes those layers rather than pretending everything belongs only to the selected agent.",
+    "这个页面同时包含 Gateway 全局配置、默认 Agent 路由、通用默认值以及当前 Agent 覆盖。下面的说明会按真实层级描述它们，而不是假装所有字段都只属于当前 Agent。",
+    "這個頁面同時包含 Gateway 全域配置、預設 Agent 路由、通用預設值以及目前 Agent 覆蓋。下方說明會按真實層級描述它們，而不是假裝所有欄位都只屬於目前 Agent。",
+  ],
+  "config.agentSettings.scopeGlobalTitle": [
+    "Gateway Global",
+    "Gateway 全局",
+    "Gateway 全域",
+  ],
+  "config.agentSettings.scopeGlobalDesc": [
+    "Shared across the current gateway session. Bindings live here.",
+    "作用于当前 Gateway 会话的共享配置，bindings 属于这一层。",
+    "作用於目前 Gateway 會話的共享配置，bindings 屬於這一層。",
+  ],
+  "config.agentSettings.scopeDefaultRoutingTitle": [
+    "Default Agent Routing",
+    "默认 Agent 路由",
+    "預設 Agent 路由",
+  ],
+  "config.agentSettings.scopeDefaultRoutingDesc": [
+    "This selects which agent is treated as the current default. It is not the same thing as editing agents.defaults.*.",
+    "这一层决定谁是当前默认 Agent，它不等于编辑 agents.defaults.*。",
+    "這一層決定誰是目前預設 Agent，它不等於編輯 agents.defaults.*。",
+  ],
+  "config.agentSettings.scopeConditionalDefaultsTitle": [
+    "Universal Defaults",
+    "通用默认值",
+    "通用預設值",
+  ],
+  "config.agentSettings.scopeConditionalDefaultsDesc": [
+    "agents.defaults.* now acts as the shared default layer for every agent unless an explicit per-agent override exists.",
+    "agents.defaults.* 现在会作为所有 Agent 的共享默认层，除非存在显式的 per-agent override。",
+    "agents.defaults.* 現在會作為所有 Agent 的共享預設層，除非存在顯式的 per-agent override。",
+  ],
+  "config.agentSettings.scopeSelectedOverrideTitle": [
+    "Selected Agent Override",
+    "当前 Agent 覆盖",
+    "目前 Agent 覆蓋",
+  ],
+  "config.agentSettings.scopeSelectedOverrideDesc": [
+    "Named agent branches under agents.list[*] override universal defaults for the selected agent.",
+    "agents.list[*] 下的 named agent 分支会覆盖当前 Agent 看到的通用默认值。",
+    "agents.list[*] 下的 named agent 分支會覆蓋目前 Agent 看到的通用預設值。",
+  ],
+  "config.agentSettings.scopeMixedTitle": [
+    "Mixed Scope",
+    "混合作用域",
+    "混合作用域",
+  ],
+  "config.agentSettings.scopeMixedDesc": [
+    "Runtime-resolved values or fields that write through multiple layers are grouped here.",
+    "运行时解析值或会同时写入多层配置的字段，统一归到这一组。",
+    "執行時解析值或會同時寫入多層設定的欄位，統一歸到這一組。",
+  ],
+  "config.agentSettings.meta.sourceLabel": [
+    "Source",
+    "来源",
+    "來源",
+  ],
+  "config.agentSettings.meta.writeLabel": [
+    "Writes",
+    "写向",
+    "寫向",
+  ],
+  "config.agentSettings.meta.source.gatewayGlobal": [
+    "Gateway Global",
+    "Gateway 全局",
+    "Gateway 全域",
+  ],
+  "config.agentSettings.meta.source.defaultAgentRouting": [
+    "Default Agent Routing",
+    "默认 Agent 路由",
+    "預設 Agent 路由",
+  ],
+  "config.agentSettings.meta.source.universalDefaults": [
+    "Universal Defaults",
+    "通用默认值",
+    "通用預設值",
+  ],
+  "config.agentSettings.meta.source.selectedAgentOverride": [
+    "Selected Agent Override",
+    "当前 Agent 覆盖",
+    "目前 Agent 覆蓋",
+  ],
+  "config.agentSettings.meta.source.effectiveRuntime": [
+    "Effective Runtime",
+    "运行态有效值",
+    "執行態有效值",
+  ],
+  "config.agentSettings.meta.source.mixed": [
+    "Mixed",
+    "混合来源",
+    "混合來源",
+  ],
+  "config.agentSettings.meta.source.unset": [
+    "Unset",
+    "未设置",
+    "未設定",
+  ],
+  "config.agentSettings.meta.action.agentsUpdate": [
+    "agents.update",
+    "agents.update",
+    "agents.update",
+  ],
+  "config.agentSettings.meta.action.configPatch": [
+    "config.patch",
+    "config.patch",
+    "config.patch",
+  ],
   "config.agentSettings.openProfile": [
     "Open Profile",
     "打开 Profile",
@@ -1401,6 +1534,16 @@ const DICT: Record<string, string[]> = {
     "后续还可以继续在这里补充更多运行态 Agent 设置。",
     "後續還可以繼續在這裡補充更多執行態 Agent 設定。",
   ],
+  "config.agentSettings.partial": [
+    "Workspace/model/agentDir/default/bindings/groupChat/sandbox/tools/memorySearch writeback is enabled in this wave.",
+    "本 wave 已开放 workspace/model/agentDir/default/bindings/groupChat/sandbox/tools/memorySearch 写回。",
+    "本 wave 已開放 workspace/model/agentDir/default/bindings/groupChat/sandbox/tools/memorySearch 寫回。",
+  ],
+  "config.agentSettings.resolvedTruth": [
+    "The fields below combine effective values with backend source and write-target metadata. Use the scope colors to tell global, routing, shared-default, and agent-override work apart.",
+    "下面的字段同时展示 effective 值、后端来源和写入目标元数据；请直接用 scope 颜色区分全局、路由、共享默认值和当前 Agent 覆盖。",
+    "下方欄位同時顯示 effective 值、後端來源與寫入目標中繼資料；請直接用 scope 顏色區分全域、路由、共享預設值與目前 Agent 覆蓋。",
+  ],
   "config.agentSettings.loadFailed": [
     "Failed to load agent settings.",
     "加载 Agent 设置失败。",
@@ -1408,10 +1551,372 @@ const DICT: Record<string, string[]> = {
   ],
   "config.agentSettings.workspace": ["Workspace", "工作区", "工作區"],
   "config.agentSettings.model": ["Model", "模型", "模型"],
+  "config.agentSettings.agentDir": ["Agent Directory", "Agent 目录", "Agent 目錄"],
   "config.agentSettings.loading": ["Loading…", "加载中…", "載入中…"],
   "config.agentSettings.reload": ["Reload", "重新加载", "重新載入"],
   "config.agentSettings.save": ["Save", "保存", "儲存"],
+  "config.agentSettings.section.overview": ["Overview", "概览", "概覽"],
+  "config.agentSettings.section.effective": ["Effective", "生效配置", "生效設定"],
+  "config.agentSettings.section.policies": ["Policies", "策略补丁", "策略補丁"],
+  "config.agentSettings.section.memory": ["Memory Search", "记忆检索", "記憶檢索"],
   "config.agentSettings.unset": ["Unset", "未设置", "未設定"],
+  "config.agentSettings.workspacePlaceholder": [
+    "~/.openclaw/workspace-main",
+    "~/.openclaw/workspace-main",
+    "~/.openclaw/workspace-main",
+  ],
+  "config.agentSettings.modelPlaceholder": [
+    "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-sonnet-4-6",
+  ],
+  "config.agentSettings.agentDirPlaceholder": [
+    "~/.openclaw/agents/research",
+    "~/.openclaw/agents/research",
+    "~/.openclaw/agents/research",
+  ],
+  "config.agentSettings.effectiveSectionTitle": [
+    "Effective Runtime View",
+    "运行态有效值",
+    "執行態有效值",
+  ],
+  "config.agentSettings.effectiveSectionDesc": [
+    "These runtime-facing fields are still shown as effective values first, but each card now keeps its source and write-target truth next to the editor.",
+    "这些运行态字段依然以 effective 值为主，但每张卡片现在都会把来源和写向真相放在编辑器旁边。",
+    "這些執行態欄位仍然以 effective 值為主，但每張卡片現在都會把來源與寫向真相放在編輯器旁邊。",
+  ],
+  "config.agentSettings.workspaceHint": [
+    "Workspace is shown as the effective value for the selected agent. Saving it is currently not a single-route write path.",
+    "Workspace 展示的是当前 Agent 的有效值；当前保存它并不是单一路由写入。",
+    "Workspace 顯示的是目前 Agent 的有效值；目前保存它並不是單一路由寫入。",
+  ],
+  "config.agentSettings.modelHint": [
+    "Only models whose providers are configured and ready for this node appear in the dropdown. Current save flow may still touch more than one backend path.",
+    "下拉列表只展示当前节点上 provider 已配置完成、可直接使用的模型；当前保存流程仍可能触达不止一条后端路径。",
+    "下拉列表只顯示目前節點上 provider 已設定完成、可直接使用的模型；目前儲存流程仍可能觸達不止一條後端路徑。",
+  ],
+  "config.agentSettings.modelNoReadyOptions": [
+    "No directly usable models were found for this node. Configure provider credentials first.",
+    "当前节点还没有可直接使用的模型；请先完成 provider 凭据配置。",
+    "目前節點還沒有可直接使用的模型；請先完成 provider 憑證設定。",
+  ],
+  "config.agentSettings.modelCurrentUnavailable": [
+    "Current value (provider not ready):",
+    "当前值（provider 未就绪）：",
+    "目前值（provider 未就緒）：",
+  ],
+  "config.agentSettings.agentDirHint": [
+    "Agent Directory belongs to config patch semantics, not to a dedicated agents.update field.",
+    "Agent Directory 属于 config patch 语义，不是专门的 agents.update 字段。",
+    "Agent Directory 屬於 config patch 語義，不是專門的 agents.update 欄位。",
+  ],
+  "config.agentSettings.defaultAgentSectionTitle": [
+    "Default Agent Routing",
+    "默认 Agent 路由",
+    "預設 Agent 路由",
+  ],
+  "config.agentSettings.defaultAgentSectionDesc": [
+    "This card controls which agent is treated as the current default. It is separate from the universal defaults stored under agents.defaults.*.",
+    "这里控制谁是当前默认 Agent，它与 agents.defaults.* 下的通用默认值是两回事。",
+    "這裡控制誰是目前預設 Agent，它與 agents.defaults.* 下的通用預設值是兩回事。",
+  ],
+  "config.agentSettings.defaultAgent": [
+    "Default Agent",
+    "默认 Agent",
+    "預設 Agent",
+  ],
+  "config.agentSettings.defaultAgentHint": [
+    "Selecting this agent as the default may require a config patch and gateway reload.",
+    "将该 Agent 设为默认可能需要 config patch，并触发 Gateway 重载。",
+    "將該 Agent 設為預設可能需要 config patch，並觸發 Gateway 重載。",
+  ],
+  "config.agentSettings.advancedPatchTitle": [
+    "Advanced JSON Patch Surface",
+    "高级 JSON Patch 面",
+    "高級 JSON Patch 面",
+  ],
+  "config.agentSettings.advancedPatchDesc": [
+    "This area is where shared defaults and selected-agent overrides become explicit. Each editor keeps the same scope color as the legend so you can tell what layer you are touching before you save.",
+    "这里是共享默认值与当前 Agent 覆盖真正落地的区域。每个编辑器都会沿用图例里的 scope 颜色，便于你在保存前判断自己正在碰哪一层。",
+    "這裡是共享預設值與目前 Agent 覆蓋真正落地的區域。每個編輯器都會沿用圖例裡的 scope 顏色，方便你在儲存前判斷自己正在碰哪一層。",
+  ],
+  "config.agentSettings.conditionalDefaultsDefaultHint": [
+    "You are viewing this page on the current default agent. Universal-default fields here may write back to agents.defaults.* for all agents.",
+    "你当前看到的是默认 Agent；这里的通用默认字段可能会写回 agents.defaults.*，并影响所有 Agent。",
+    "你目前看到的是預設 Agent；這裡的通用預設欄位可能會寫回 agents.defaults.*，並影響所有 Agent。",
+  ],
+  "config.agentSettings.conditionalDefaultsOverrideHint": [
+    "You are viewing a non-default agent. Universal defaults still apply here unless this page creates or updates a named override branch for the selected agent.",
+    "你当前看到的是非默认 Agent；除非这里为该 Agent 创建或更新 named override 分支，否则通用默认值仍然生效。",
+    "你目前看到的是非預設 Agent；除非這裡為該 Agent 建立或更新 named override 分支，否則通用預設值仍然生效。",
+  ],
+  "config.agentSettings.bindings": [
+    "Bindings (Global)",
+    "Bindings（全局）",
+    "Bindings（全域）",
+  ],
+  "config.agentSettings.bindingsHint": [
+    "Inbound routing rules shared across the gateway.",
+    "整个 Gateway 共享的入站路由规则。",
+    "整個 Gateway 共用的入站路由規則。",
+  ],
+  "config.agentSettings.bindingsPlaceholder": [
+    "[\n  {\n    \"agentId\": \"research\",\n    \"match\": { \"channel\": \"telegram\" }\n  }\n]",
+    "[\n  {\n    \"agentId\": \"research\",\n    \"match\": { \"channel\": \"telegram\" }\n  }\n]",
+    "[\n  {\n    \"agentId\": \"research\",\n    \"match\": { \"channel\": \"telegram\" }\n  }\n]",
+  ],
+  "config.agentSettings.schemaTitle": [
+    "Schema",
+    "Schema",
+    "Schema",
+  ],
+  "config.agentSettings.schemaLoading": [
+    "Loading schema…",
+    "正在载入 schema…",
+    "正在載入 schema…",
+  ],
+  "config.agentSettings.schemaUnavailable": [
+    "Schema unavailable.",
+    "Schema 不可用。",
+    "Schema 不可用。",
+  ],
+  "config.agentSettings.schemaPath": [
+    "Path:",
+    "路径：",
+    "路徑：",
+  ],
+  "config.agentSettings.groupChat": [
+    "Group Chat",
+    "Group Chat",
+    "Group Chat",
+  ],
+  "config.agentSettings.groupChatHint": [
+    "Agent-level group chat coordination config. This stays as JSON until the upstream schema is stable.",
+    "Agent 级 group chat 协调配置；在上游 schema 稳定前保持 JSON 方式。",
+    "Agent 層級 group chat 協調配置；在上游 schema 穩定前保持 JSON 方式。",
+  ],
+  "config.agentSettings.groupChatPlaceholder": [
+    "{\n  \"enabled\": true,\n  \"mode\": \"managed\"\n}",
+    "{\n  \"enabled\": true,\n  \"mode\": \"managed\"\n}",
+    "{\n  \"enabled\": true,\n  \"mode\": \"managed\"\n}",
+  ],
+  "config.agentSettings.sandbox": ["Sandbox", "Sandbox", "Sandbox"],
+  "config.agentSettings.sandboxHint": [
+    "Agent-level sandbox branch. Falls back to the universal defaults in agents.defaults.sandbox.",
+    "Agent 级 sandbox 分支；未配置时回退到 agents.defaults.sandbox 中的通用默认值。",
+    "Agent 層級 sandbox 分支；未配置時回退到 agents.defaults.sandbox 中的通用預設值。",
+  ],
+  "config.agentSettings.sandboxPlaceholder": [
+    "{\n  \"mode\": \"workspace-write\",\n  \"network\": \"deny\"\n}",
+    "{\n  \"mode\": \"workspace-write\",\n  \"network\": \"deny\"\n}",
+    "{\n  \"mode\": \"workspace-write\",\n  \"network\": \"deny\"\n}",
+  ],
+  "config.agentSettings.tools": ["Tools", "Tools", "Tools"],
+  "config.agentSettings.toolsHint": [
+    "Agent-level tools profile or allow/deny tree. This patches config, not TOOLS.md.",
+    "Agent 级 tools profile 或 allow/deny 树；这里修改的是 config，不是 TOOLS.md。",
+    "Agent 層級 tools profile 或 allow/deny 樹；這裡修改的是 config，不是 TOOLS.md。",
+  ],
+  "config.agentSettings.toolsPlaceholder": [
+    "{\n  \"profile\": \"safe\",\n  \"allow\": [\"memory_search\"]\n}",
+    "{\n  \"profile\": \"safe\",\n  \"allow\": [\"memory_search\"]\n}",
+    "{\n  \"profile\": \"safe\",\n  \"allow\": [\"memory_search\"]\n}",
+  ],
+  "config.agentSettings.memorySearchTitle": [
+    "Memory Search",
+    "Memory Search",
+    "Memory Search",
+  ],
+  "config.agentSettings.memorySearchDesc": [
+    "Configure how this agent indexes, stores, and ranks searchable memory.",
+    "配置当前 Agent 如何索引、存储并排序可检索记忆。",
+    "配置目前 Agent 如何索引、儲存並排序可檢索記憶。",
+  ],
+  "config.agentSettings.memorySearchControlTitle": [
+    "Control Surface",
+    "控制面",
+    "控制面",
+  ],
+  "config.agentSettings.memorySearchControlDesc": [
+    "Decide whether this agent should index and query semantic memory at all.",
+    "先决定这个 Agent 是否真的要启用语义记忆索引与检索。",
+    "先決定這個 Agent 是否真的要啟用語義記憶索引與檢索。",
+  ],
+  "config.agentSettings.memorySearchProviderBlockTitle": [
+    "Embedding And Store",
+    "Embedding 与存储",
+    "Embedding 與儲存",
+  ],
+  "config.agentSettings.memorySearchProviderBlockDesc": [
+    "Choose the embedding backend and the storage target for this agent's vectors.",
+    "这里定义 embedding 后端，以及当前 Agent 向量存到哪里。",
+    "這裡定義 embedding 後端，以及目前 Agent 向量存到哪裡。",
+  ],
+  "config.agentSettings.memorySearchBehaviorTitle": [
+    "Behavior Switches",
+    "行为开关",
+    "行為開關",
+  ],
+  "config.agentSettings.memorySearchBehaviorDesc": [
+    "These switches shape what gets indexed and how retrieval expands beyond the base vector search.",
+    "这些开关决定索引覆盖什么内容，以及检索是否在基础向量召回之外继续扩展。",
+    "這些開關決定索引覆蓋什麼內容，以及檢索是否在基礎向量召回之外繼續擴展。",
+  ],
+  "config.agentSettings.memorySearchTuningTitle": [
+    "Ranking Tuning",
+    "排序调参",
+    "排序調參",
+  ],
+  "config.agentSettings.memorySearchTuningDesc": [
+    "Touch these numbers only when retrieval quality needs explicit diversity or recency tuning.",
+    "只有在检索质量确实需要人工干预时，再改这里的多样性与时间偏置参数。",
+    "只有在檢索品質確實需要人工干預時，再改這裡的多樣性與時間偏置參數。",
+  ],
+  "config.agentSettings.memorySearchCorpusTitle": [
+    "Indexed Inputs",
+    "索引输入",
+    "索引輸入",
+  ],
+  "config.agentSettings.memorySearchCorpusDesc": [
+    "Point memory search at extra folders and source pools when the default corpus is not enough.",
+    "如果默认语料不够，就在这里补额外目录和来源池。",
+    "如果預設語料不夠，就在這裡補額外目錄與來源池。",
+  ],
+  "config.agentSettings.memorySearchEnabled": [
+    "Enable Memory Search",
+    "启用 Memory Search",
+    "啟用 Memory Search",
+  ],
+  "config.agentSettings.memorySearchEnabledHint": [
+    "Turns vector/semantic recall on or off for this agent.",
+    "控制当前 Agent 是否启用向量 / 语义召回。",
+    "控制目前 Agent 是否啟用向量 / 語義召回。",
+  ],
+  "config.agentSettings.memorySearchProvider": [
+    "Provider",
+    "Provider",
+    "Provider",
+  ],
+  "config.agentSettings.memorySearchProviderPlaceholder": [
+    "openai",
+    "openai",
+    "openai",
+  ],
+  "config.agentSettings.memorySearchModel": [
+    "Embedding Model",
+    "Embedding 模型",
+    "Embedding 模型",
+  ],
+  "config.agentSettings.memorySearchModelPlaceholder": [
+    "text-embedding-3-large",
+    "text-embedding-3-large",
+    "text-embedding-3-large",
+  ],
+  "config.agentSettings.memorySearchStorePath": [
+    "Store Path Template",
+    "存储路径模板",
+    "儲存路徑模板",
+  ],
+  "config.agentSettings.memorySearchStorePathPlaceholder": [
+    "~/.openclaw/memory/{agentId}.sqlite",
+    "~/.openclaw/memory/{agentId}.sqlite",
+    "~/.openclaw/memory/{agentId}.sqlite",
+  ],
+  "config.agentSettings.memorySearchSessionMemory": [
+    "Index Session Memory",
+    "索引 Session Memory",
+    "索引 Session Memory",
+  ],
+  "config.agentSettings.memorySearchSessionMemoryHint": [
+    "Include live session traces in the searchable corpus.",
+    "把会话痕迹也纳入可检索语料。",
+    "把會話痕跡也納入可檢索語料。",
+  ],
+  "config.agentSettings.memorySearchHybridEnabled": [
+    "Enable Hybrid Ranking",
+    "启用 Hybrid 排序",
+    "啟用 Hybrid 排序",
+  ],
+  "config.agentSettings.memorySearchHybridEnabledHint": [
+    "Blend semantic recall with an extra ranking pass.",
+    "在语义召回之外再叠一层额外排序。",
+    "在語義召回之外再疊一層額外排序。",
+  ],
+  "config.agentSettings.memorySearchMmrEnabled": [
+    "Enable MMR Gate",
+    "启用 MMR 开关",
+    "啟用 MMR 開關",
+  ],
+  "config.agentSettings.memorySearchMmrEnabledHint": [
+    "Favor diverse retrieval results instead of near-duplicates.",
+    "优先拉开结果多样性，减少相似命中堆叠。",
+    "優先拉開結果多樣性，減少相似命中堆疊。",
+  ],
+  "config.agentSettings.memorySearchMmr": [
+    "MMR",
+    "MMR",
+    "MMR",
+  ],
+  "config.agentSettings.memorySearchMmrPlaceholder": [
+    "0.35",
+    "0.35",
+    "0.35",
+  ],
+  "config.agentSettings.memorySearchTemporalDecay": [
+    "Temporal Decay",
+    "时间衰减",
+    "時間衰減",
+  ],
+  "config.agentSettings.memorySearchTemporalDecayPlaceholder": [
+    "0.15",
+    "0.15",
+    "0.15",
+  ],
+  "config.agentSettings.memorySearchExtraPaths": [
+    "Extra Paths",
+    "额外路径",
+    "額外路徑",
+  ],
+  "config.agentSettings.memorySearchExtraPathsPlaceholder": [
+    "../team-docs",
+    "../team-docs",
+    "../team-docs",
+  ],
+  "config.agentSettings.memorySearchSources": [
+    "Sources",
+    "来源",
+    "來源",
+  ],
+  "config.agentSettings.memorySearchSourcesPlaceholder": [
+    "memory\nsessions",
+    "memory\nsessions",
+    "memory\nsessions",
+  ],
+  "config.agentSettings.memorySearchListHint": [
+    "One item per line. Leave empty to clear this branch.",
+    "每行一个值；留空即清除此分支。",
+    "每行一個值；留空即清除此分支。",
+  ],
+  "config.agentSettings.saveOk": [
+    "Agent settings saved.",
+    "Agent 设置已保存。",
+    "Agent 設定已保存。",
+  ],
+  "config.agentSettings.saveFail": [
+    "Failed to save agent settings.",
+    "保存 Agent 设置失败。",
+    "保存 Agent 設定失敗。",
+  ],
+  "config.agentSettings.saveTruthDefault": [
+    "Save truth: on the default agent, this page may touch routing, shared defaults, and the current dual-path workspace/model flow.",
+    "保存真相：在默认 Agent 上，这里可能同时触达路由、共享默认值，以及 workspace/model 的双路径流程。",
+    "保存真相：在預設 Agent 上，這裡可能同時觸達路由、共享預設值，以及 workspace/model 的雙路徑流程。",
+  ],
+  "config.agentSettings.saveTruthOverride": [
+    "Save truth: on a non-default agent, advanced fields may create or update an override branch. Workspace/model is still not single-route.",
+    "保存真相：在非默认 Agent 上，高级字段可能创建或更新 override 分支；workspace/model 仍不是单一路径。",
+    "保存真相：在非預設 Agent 上，高級欄位可能建立或更新 override 分支；workspace/model 仍不是單一路徑。",
+  ],
   "memory.diag.indexedShort": ["Indexed", "已索引", "已索引"],
   "memory.diag.totalShort": ["Total", "总数", "總數"],
   "memory.diag.chunks": ["Chunks", "分块", "分塊"],
@@ -2495,6 +3000,12 @@ const DICT: Record<string, string[]> = {
   ],
   "config.status.fail": ["Not Connected", "未连接", "未連接"],
   "config.advanced": ["Advanced Configuration", "高级配置", "進階配置"],
+  "config.legend.title": ["Display sections", "显示分组", "顯示分組"],
+  "config.legend.status": ["Status", "状态", "狀態"],
+  "config.legend.sessions": ["Sessions", "会话", "會話"],
+  "config.legend.connection": ["Connection", "连接", "連接"],
+  "config.legend.discovery": ["Discovery", "发现", "發現"],
+  "config.legend.advanced": ["Advanced", "高级", "進階"],
   "config.timeout": [
     "Request Timeout (ms)",
     "请求超时时间 (ms)",
@@ -2510,6 +3021,31 @@ const DICT: Record<string, string[]> = {
     "自定义系统代理 (Proxy)",
     "自訂系統代理 (Proxy)",
   ],
+  "config.advanced.localClientNote": [
+    "These advanced settings are local to this ClawScope desktop client.",
+    "这些高级配置仅作用于当前 ClawScope 桌面端。",
+    "這些進階設定僅作用於目前的 ClawScope 桌面端。",
+  ],
+  "config.advanced.proxyDeferred": [
+    "Proxy value is stored locally in this wave, but current gateway transport does not enforce proxy routing yet.",
+    "本 wave 仅本地保存 proxy 值，当前 gateway transport 还不会真正走代理。",
+    "本 wave 僅本地保存 proxy 值，目前 gateway transport 尚未真正走代理。",
+  ],
+  "config.advanced.saveOk": [
+    "Advanced connection settings saved.",
+    "高级连接配置已保存。",
+    "進階連線設定已保存。",
+  ],
+  "config.advanced.saveFail": [
+    "Failed to save advanced connection settings.",
+    "保存高级连接配置失败。",
+    "保存進階連線設定失敗。",
+  ],
+  "config.advanced.savePartial": [
+    "Advanced settings were saved, but base connection update failed.",
+    "高级配置已保存，但基础连接更新失败。",
+    "進階設定已保存，但基礎連線更新失敗。",
+  ],
   "config.test.ok": ["Test Passed", "测试通过", "測試通過"],
   "config.test.fail": [
     "Connection failed, check config",
@@ -2521,6 +3057,144 @@ const DICT: Record<string, string[]> = {
     "Rerun Setup Wizard",
     "重新运行设置向导",
     "重新執行設定精靈",
+  ],
+  "config.discovery.title": [
+    "LAN Gateways",
+    "局域网 Gateway",
+    "區域網 Gateway",
+  ],
+  "config.discovery.desc": [
+    "Scan the current LAN, adopt one visible Gateway explicitly, and keep saved endpoints manageable.",
+    "扫描当前局域网，显式采用可见 Gateway，并管理已保存 endpoint。",
+    "掃描目前區域網，顯式採用可見 Gateway，並管理已保存 endpoint。",
+  ],
+  "config.discovery.scan": [
+    "Scan LAN Gateways",
+    "扫描局域网 Gateway",
+    "掃描區域網 Gateway",
+  ],
+  "config.discovery.scanning": [
+    "Scanning...",
+    "扫描中...",
+    "掃描中...",
+  ],
+  "config.discovery.savedTitle": [
+    "Saved endpoints",
+    "已保存 endpoint",
+    "已保存 endpoint",
+  ],
+  "config.discovery.savedEmpty": [
+    "No saved Gateway endpoints yet.",
+    "当前还没有已保存的 Gateway endpoint。",
+    "目前還沒有已保存的 Gateway endpoint。",
+  ],
+  "config.discovery.candidatesTitle": [
+    "Discovered candidates",
+    "扫描候选",
+    "掃描候選",
+  ],
+  "config.discovery.candidatesEmpty": [
+    "No LAN Gateway candidates found yet. Run a scan to refresh the list.",
+    "当前还没有 LAN Gateway 候选，请先执行扫描。",
+    "目前還沒有 LAN Gateway 候選，請先執行掃描。",
+  ],
+  "config.discovery.use": [
+    "Use this gateway",
+    "使用此 Gateway",
+    "使用此 Gateway",
+  ],
+  "config.discovery.remove": [
+    "Remove",
+    "移除",
+    "移除",
+  ],
+  "config.discovery.preferred": [
+    "Preferred",
+    "当前首选",
+    "目前首選",
+  ],
+  "config.discovery.lastSeen": [
+    "Last seen",
+    "最近发现",
+    "最近發現",
+  ],
+  "config.discovery.lastSuccess": [
+    "Last success",
+    "最近成功连接",
+    "最近成功連線",
+  ],
+  "config.sessions.title": [
+    "Connected Nodes",
+    "已连接节点",
+    "已連接節點",
+  ],
+  "config.sessions.desc": [
+    "Multiple gateway sessions can stay connected at once. Mark one as active to keep legacy single-session views aligned.",
+    "现在可以同时保持多个 Gateway session 连接。将某个节点设为 active，可让遗留的单 session 页面继续跟随它。",
+    "現在可以同時保持多個 Gateway session 連線。將某個節點設為 active，可讓遺留的單 session 頁面繼續跟隨它。",
+  ],
+  "config.sessions.active": ["Active", "当前 active", "目前 active"],
+  "config.sessions.online": ["Online", "在线", "在線"],
+  "config.sessions.offline": ["Offline", "离线", "離線"],
+  "config.sessions.makeActive": [
+    "Make Active",
+    "设为 Active",
+    "設為 Active",
+  ],
+  "config.discovery.confidenceHigh": [
+    "High confidence",
+    "高可信",
+    "高可信",
+  ],
+  "config.discovery.confidenceMedium": [
+    "Medium confidence",
+    "中可信",
+    "中可信",
+  ],
+  "config.discovery.confidenceLow": [
+    "Low confidence",
+    "低可信",
+    "低可信",
+  ],
+  "config.discovery.protocolVerified": [
+    "Protocol verified",
+    "协议已验证",
+    "協議已驗證",
+  ],
+  "config.discovery.seedSubnet": [
+    "Known subnet",
+    "匹配已知网段",
+    "匹配已知網段",
+  ],
+  "config.discovery.seedHost": [
+    "Known host",
+    "匹配已知地址",
+    "匹配已知位址",
+  ],
+  "config.discovery.score": [
+    "Score",
+    "评分",
+    "評分",
+  ],
+  "config.discovery.signal": [
+    "Signal",
+    "信号",
+    "訊號",
+  ],
+  "config.discovery.never": [
+    "Never",
+    "从未",
+    "從未",
+  ],
+  "config.discovery.authHint": [
+    "Complete the current auth fields before adopting a LAN Gateway.",
+    "采用 LAN Gateway 之前，请先补齐当前认证字段。",
+    "採用 LAN Gateway 之前，請先補齊目前認證欄位。",
+  ],
+  "config.discovery.removeConfirm": [
+    "Remove saved Gateway endpoint: {0}?",
+    "确认移除已保存 Gateway endpoint：{0}？",
+    "確認移除已保存 Gateway endpoint：{0}？",
   ],
 
   "config.tab.general": ["General", "通用设置", "通用設定"],
@@ -2939,6 +3613,258 @@ const DICT: Record<string, string[]> = {
     "应用全局设置",
     "應用全局設定",
   ],
+  "app.logoAlt": ["ClawScope logo", "ClawScope 标志", "ClawScope 標誌"],
+  "app.footer.version": ["ClawScope v{0}", "ClawScope v{0}", "ClawScope v{0}"],
+  "app.footer.copyright": [
+    "Copyright © {0} ClawScope",
+    "版权所有 © {0} ClawScope",
+    "版權所有 © {0} ClawScope",
+  ],
+  "common.more": ["More", "更多", "更多"],
+  "common.close": ["Close", "关闭", "關閉"],
+  "common.unconfigured": ["Unconfigured", "未配置", "未配置"],
+  "common.files": ["files", "文件", "檔案"],
+  "common.chunks": ["chunks", "分块", "分塊"],
+  "common.bytes": ["bytes", "字节", "位元組"],
+  "common.entries": ["entries", "条目", "條目"],
+  "common.evidence": ["evidence", "证据", "證據"],
+  "common.available": ["available", "可用", "可用"],
+  "common.ms": ["ms", "毫秒", "毫秒"],
+  "shared.nav.breadcrumb": ["Breadcrumb", "面包屑导航", "麵包屑導航"],
+  "shared.image.errorAlt": ["Error loading image", "图片加载失败", "圖片載入失敗"],
+  "shared.carousel.previousSlide": ["Previous slide", "上一张", "上一張"],
+  "shared.carousel.nextSlide": ["Next slide", "下一张", "下一張"],
+  "shared.pagination.nav": ["Pagination", "分页导航", "分頁導航"],
+  "shared.pagination.goPrevious": ["Go to previous page", "转到上一页", "前往上一頁"],
+  "shared.pagination.goNext": ["Go to next page", "转到下一页", "前往下一頁"],
+  "shared.pagination.previous": ["Previous", "上一页", "上一頁"],
+  "shared.pagination.next": ["Next", "下一页", "下一頁"],
+  "shared.pagination.morePages": ["More pages", "更多页面", "更多頁面"],
+  "shared.sidebar.title": ["Sidebar", "侧边栏", "側邊欄"],
+  "shared.sidebar.desc": [
+    "Displays the mobile sidebar.",
+    "显示移动端侧边栏。",
+    "顯示行動端側邊欄。",
+  ],
+  "shared.sidebar.toggle": ["Toggle Sidebar", "切换侧边栏", "切換側邊欄"],
+  "config.general.appearance": ["Appearance", "外观", "外觀"],
+  "config.general.language": ["Language", "语言", "語言"],
+  "config.general.theme.light": ["Light", "浅色", "淺色"],
+  "config.general.theme.dark": ["Dark", "深色", "深色"],
+  "config.general.theme.system": ["System", "跟随系统", "跟隨系統"],
+  "config.connection.urlRequired": [
+    "URL is required to save or test connection.",
+    "保存配置或测试连接前必须填写 URL。",
+    "儲存設定或測試連線前必須填寫 URL。",
+  ],
+  "setup.gateway.urlRequired": ["URL is required", "必须填写 URL", "必須填寫 URL"],
+  "setup.auth.deviceApprovalHint": [
+    "Approve this device on the host, then return here and test the connection again.",
+    "请到宿主机批准当前设备，然后回到这里重新测试连接。",
+    "請到主機批准目前裝置，然後回到這裡重新測試連線。",
+  ],
+  "setup.auth.tokenMismatchHint": [
+    "The current Gateway Token does not match the host configuration. Verify the token on the host, update it here, and test again.",
+    "当前填写的 Gateway Token 与宿主机配置不一致。请先在宿主机核对 token，再回到这里重新测试连接。",
+    "目前填寫的 Gateway Token 與主機設定不一致。請先在主機核對 token，再回到這裡重新測試連線。",
+  ],
+  "memory.header.agents": ["Agents", "Agents", "Agents"],
+  "memory.overview.pending": [
+    "Overview is waiting for agent resolution and the first batch of memory data.",
+    "Overview 正在等待 agent 解析与首批记忆数据初始化。",
+    "Overview 正在等待 agent 解析與首批記憶資料初始化。",
+  ],
+  "memory.diag.label.indexed": ["indexed", "已索引", "已索引"],
+  "memory.diag.label.diagnostics": ["diagnostics", "诊断", "診斷"],
+  "memory.diag.label.backend": ["backend", "后端", "後端"],
+  "memory.diag.label.provider": ["provider", "提供方", "提供方"],
+  "memory.diag.label.sources": ["sources", "来源", "來源"],
+  "memory.diag.label.extraPaths": ["extra paths", "附加路径", "附加路徑"],
+  "memory.diag.label.qmdPaths": ["qmd paths", "qmd 路径", "qmd 路徑"],
+  "memory.diag.label.sourceCounts": ["source counts", "来源计数", "來源計數"],
+  "memory.diag.label.externalSummary": ["external summary", "外部摘要", "外部摘要"],
+  "memory.diag.label.sessionMemory": ["session memory", "会话记忆", "工作階段記憶"],
+  "memory.diag.label.runtime": ["runtime", "运行时", "執行時"],
+  "memory.diag.embeddingsUnavailable": [
+    "Embeddings unavailable",
+    "Embeddings 不可用",
+    "Embeddings 不可用",
+  ],
+  "memory.mindmap.titleBadge": ["Semantic Mind Map", "语义思维导图", "語意心智圖"],
+  "memory.mindmap.evidenceStat": ["evidence", "证据", "證據"],
+  "memory.graph.previewChanges": ["preview changes", "预览变更", "預覽變更"],
+  "memory.graph.sourceRefs": ["source refs", "来源引用", "來源引用"],
+  "memory.graph.mappingSummary": [
+    "The current graph maps this Evolution's main object chain as source refs -> preview -> snapshot -> runtime -> history -> rollback, instead of staying a static illustration.",
+    "当前图谱已按 source refs -> preview -> snapshot -> runtime -> history -> rollback 映射本次 Evolution 的主要对象链，而不再只是静态示意。",
+    "目前圖譜已按 source refs -> preview -> snapshot -> runtime -> history -> rollback 映射本次 Evolution 的主要物件鏈，而不再只是靜態示意。",
+  ],
+  "memory.graph.snapshot": ["Snapshot", "快照", "快照"],
+  "memory.graph.historyStatus": ["History Status", "历史状态", "歷史狀態"],
+  "memory.graph.explainPanel": ["Explain Panel", "说明面板", "說明面板"],
+  "memory.graph.openDiff": ["Open Diff", "打开 Diff", "開啟 Diff"],
+  "memory.graph.openHistory": ["Open History", "打开历史", "開啟歷史"],
+  "memory.graph.capabilityTags": ["capability tags", "能力标签", "能力標籤"],
+  "memory.graph.clean": ["clean", "干净", "乾淨"],
+  "memory.graph.override": ["override", "覆盖", "覆蓋"],
+  "memory.graph.conflict": ["conflict", "冲突", "衝突"],
+  "memory.graph.noHistoryYet": ["No linked history yet", "暂无关联历史", "暫無關聯歷史"],
+  "memory.graph.memoryRoot": ["Memory Root", "记忆根节点", "記憶根節點"],
+  "memory.graph.sourceDocument": ["Source Document", "源文档", "來源文件"],
+  "memory.graph.bytesBefore": ["Bytes Before", "变更前字节数", "變更前位元組數"],
+  "memory.graph.currentNode": ["Current Node", "当前节点", "目前節點"],
+  "memory.graph.previewOverlay": ["Preview Overlay", "预览叠层", "預覽疊層"],
+  "memory.graph.changeCount": ["Change Count", "变更数", "變更數"],
+  "memory.graph.riskLevel": ["Risk Level", "风险等级", "風險等級"],
+  "memory.graph.bytesDelta": ["Bytes Delta", "字节变化", "位元組變化"],
+  "memory.graph.snapshotRecord": ["Snapshot Record", "快照记录", "快照記錄"],
+  "memory.graph.snapshotId": ["Snapshot Id", "快照 ID", "快照 ID"],
+  "memory.graph.historySnapshot": ["History Snapshot", "历史快照", "歷史快照"],
+  "memory.graph.rollbackReady": ["Rollback Ready", "可回滚", "可回滾"],
+  "memory.graph.yes": ["yes", "是", "是"],
+  "memory.graph.previewOnly": ["preview only", "仅预览", "僅預覽"],
+  "memory.graph.runtimePhase": ["Runtime Phase", "运行阶段", "執行階段"],
+  "memory.graph.runtimeState": ["Runtime State", "运行状态", "執行狀態"],
+  "memory.graph.phase": ["Phase", "阶段", "階段"],
+  "memory.graph.progress": ["Progress", "进度", "進度"],
+  "memory.graph.flags": ["Flags", "标记", "標記"],
+  "memory.graph.historyRecord": ["History Record", "历史记录", "歷史記錄"],
+  "memory.graph.operationKind": ["Operation Kind", "操作类型", "操作類型"],
+  "memory.graph.summary": ["Summary", "摘要", "摘要"],
+  "memory.graph.rollbackTarget": ["Rollback Target", "回滚目标", "回滾目標"],
+  "memory.graph.rollbackSnapshot": ["Rollback Snapshot", "回滚快照", "回滾快照"],
+  "memory.graph.rollbackState": ["Rollback State", "回滚状态", "回滾狀態"],
+  "memory.graph.stateRestored": ["restored", "已恢复", "已恢復"],
+  "memory.graph.stateAvailable": ["available", "可用", "可用"],
+  "memory.graph.edge.baselinePreview": ["baseline → preview", "基线 → 预览", "基線 → 預覽"],
+  "memory.graph.edge.freeze": ["freeze", "冻结", "凍結"],
+  "memory.graph.edge.execute": ["execute", "执行", "執行"],
+  "memory.graph.edge.record": ["record", "写入记录", "寫入記錄"],
+  "memory.graph.edge.restoreTarget": ["restore target", "恢复目标", "恢復目標"],
+  "memory.graph.desc.memoryRoot": [
+    "The baseline entry of the target MEMORY document before this operation chain starts.",
+    "目标 MEMORY 文档在本次操作链开始前的基线入口。",
+    "目標 MEMORY 文件在本次操作鏈開始前的基線入口。",
+  ],
+  "memory.graph.desc.sources": [
+    "Source refs and capability tags bound to this Evolution drive traceability and conflict detection.",
+    "本次 Evolution 绑定的来源引用与 capability tags，会驱动 traceability 与冲突检测。",
+    "本次 Evolution 綁定的來源引用與 capability tags，會驅動 traceability 與衝突檢測。",
+  ],
+  "memory.graph.desc.preview": [
+    "The Analyze & Preview overlay compresses diff and risk into an executable proposal.",
+    "Analyze & Preview 生成的变更叠层，负责把 diff 与 risk 压缩成可执行提案。",
+    "Analyze & Preview 生成的變更疊層，負責把 diff 與 risk 壓縮成可執行提案。",
+  ],
+  "memory.graph.desc.snapshot": [
+    "The pre-execution snapshot freezes a rollback point before the proposal becomes a real write.",
+    "执行前冻结的可回滚快照，用于把 preview 提案变成可恢复的真实写入。",
+    "執行前凍結的可回滾快照，用於把 preview 提案變成可恢復的真實寫入。",
+  ],
+  "memory.graph.desc.runtime": [
+    "Runtime state shows how the preview proposal is being pushed into actual writes.",
+    "真实执行阶段与运行态标记，负责把 preview 提案推进成实际写入结果。",
+    "真實執行階段與執行態標記，負責把 preview 提案推進成實際寫入結果。",
+  ],
+  "memory.graph.desc.history": [
+    "The history record is the handoff point between the graph and the history sheet.",
+    "执行完成后写入的历史记录，是 graph 与 history sheet 的对接点。",
+    "執行完成後寫入的歷史記錄，是 graph 與 history sheet 的對接點。",
+  ],
+  "memory.graph.desc.rollback": [
+    "The latest recoverable snapshot shows which rollback object this execution chain lands on.",
+    "最新可恢复的目标快照，说明当前执行链最终会落到哪个 rollback object。",
+    "最新可恢復的目標快照，說明目前執行鏈最終會落到哪個 rollback object。",
+  ],
+  "memory.graph.status.baseline": ["baseline", "基线", "基線"],
+  "memory.graph.status.annotated": ["annotated", "已标注", "已標註"],
+  "memory.graph.status.idle": ["idle", "空闲", "閒置"],
+  "memory.graph.status.frozen": ["frozen", "已冻结", "已凍結"],
+  "memory.graph.status.recorded": ["recorded", "已记录", "已記錄"],
+  "memory.graph.status.available": ["available", "可用", "可用"],
+  "memory.graph.status.restored": ["restored", "已恢复", "已恢復"],
+  "memory.graph.status.previewReady": ["preview ready", "预览就绪", "預覽就緒"],
+  "memory.graph.status.running": ["running", "执行中", "執行中"],
+  "memory.graph.status.succeeded": ["succeeded", "已成功", "已成功"],
+  "memory.graph.status.failed": ["failed", "已失败", "已失敗"],
+  "memory.graph.status.cancelled": ["cancelled", "已取消", "已取消"],
+  "profile.connectedSummary": [
+    "Connected ({0} nodes) • {1} agents",
+    "已连接至本地工作区 ({0} 节点) • {1} 个 Agent",
+    "已連接至本地工作區 ({0} 節點) • {1} 個 Agent",
+  ],
+  "profile.error.loadAgentDetails": [
+    "Failed to load agent details.",
+    "加载 Agent 详情失败。",
+    "載入 Agent 詳情失敗。",
+  ],
+  "profile.agentVersionFallback": [
+    "OpenClaw Agent",
+    "OpenClaw Agent",
+    "OpenClaw Agent",
+  ],
+  "profile.noIdentity": ["No identity set.", "尚未设置身份定义。", "尚未設定身份定義。"],
+  "profile.noSoulQuote": [
+    "No soul quote available.",
+    "暂无灵魂引言。",
+    "暫無靈魂引言。",
+  ],
+  "profile.documentLayer": ["Document Layer", "文档层", "文件層"],
+  "profile.documentLayerDesc": [
+    "These source documents remain the long-form truth for the selected agent profile.",
+    "这些源文档仍然是当前所选 Agent 档案的长文真相层。",
+    "這些來源文件仍然是目前所選 Agent 檔案的長文真相層。",
+  ],
+  "evo.history.selectedOperation": ["Selected Operation", "当前选中操作", "目前選取操作"],
+  "shared.command.title": ["Command Palette", "命令面板", "命令面板"],
+  "shared.command.description": [
+    "Search for a command to run...",
+    "搜索要执行的命令...",
+    "搜尋要執行的命令...",
+  ],
+  "evo.nodeFallback": ["the node", "该节点", "該節點"],
+  "evo.custom.example.blockTitle": [
+    "Custom Knowledge Block",
+    "自定义知识块",
+    "自定義知識塊",
+  ],
+  "evo.custom.example.blockContent": [
+    "Use this declarative sandbox to append managed memory context.",
+    "使用这个声明式沙箱来追加受管记忆上下文。",
+    "使用這個宣告式沙箱來追加受管記憶上下文。",
+  ],
+};
+
+function normalizeLocaleSlots(values: string[]) {
+  if (values.length >= I18N_SLOT_COUNT) {
+    return values;
+  }
+
+  const [en = "", zh = en, zhTW = zh] = values;
+  return [
+    en,
+    zh,
+    zhTW,
+    values[3] ?? en,
+    values[4] ?? en,
+    values[5] ?? en,
+    values[6] ?? en,
+    values[7] ?? en,
+    values[8] ?? en,
+    values[9] ?? en,
+    values[10] ?? en,
+    values[11] ?? en,
+    values[12] ?? en,
+  ];
+}
+
+export const I18N_RUNTIME_DICT: Record<string, string[]> = {
+  ...Object.fromEntries(
+    Object.entries(BASE_DICT).map(([key, values]) => [key, normalizeLocaleSlots(values)]),
+  ),
+  ...Object.fromEntries(
+    Object.entries(EVOLUTION_RUNTIME_DICT).map(([key, values]) => [key, normalizeLocaleSlots(values)]),
+  ),
 };
 
 interface I18nContextType {
@@ -2952,6 +3878,32 @@ const I18nContext = getSingletonValue(
   () => createContext<I18nContextType | undefined>(undefined),
 );
 
+function translateWithLang(
+  lang: LangCode,
+  key: string,
+  ...args: (string | number)[]
+) {
+  const idx = langIndices[lang];
+  let str = I18N_RUNTIME_DICT[key]?.[idx];
+
+  if (!str && str !== "") {
+    str = I18N_RUNTIME_DICT[key]?.[0] || key;
+  }
+
+  args.forEach((arg, i) => {
+    str = str.replace(`{${i}}`, String(arg));
+  });
+
+  return str;
+}
+
+const OPTIONAL_I18N_FALLBACK: I18nContextType = {
+  lang: "en",
+  setLang: () => {},
+  t: (key: string, ...args: (string | number)[]) =>
+    translateWithLang("en", key, ...args),
+};
+
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<LangCode>("zh");
 
@@ -2961,20 +3913,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, [lang]);
 
   const t = (key: string, ...args: (string | number)[]) => {
-    const idx = langIndices[lang];
-    let str = DICT[key]?.[idx];
-
-    // Fallback logic: if missing translation for target lang, fallback to English (0) or key
-    if (!str && str !== "") {
-      str = DICT[key]?.[0] || key;
-    }
-
-    // Replace {0}, {1} etc.
-    args.forEach((arg, i) => {
-      str = str.replace(`{${i}}`, String(arg));
-    });
-
-    return str;
+    return translateWithLang(lang, key, ...args);
   };
 
   return (
@@ -2988,4 +3927,8 @@ export function useI18n() {
   const context = useContext(I18nContext);
   if (!context) throw new Error("useI18n must be used within I18nProvider");
   return context;
+}
+
+export function useOptionalI18n() {
+  return useContext(I18nContext) ?? OPTIONAL_I18N_FALLBACK;
 }

@@ -8,6 +8,9 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use crate::gateway::errors::GatewayError;
+use crate::gateway::types::{
+    GatewayAdvancedConnectionConfig, GatewayDiscoveredCandidate, GatewaySavedEndpoint,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -43,17 +46,35 @@ pub struct GatewayStorePaths {
     pub root: PathBuf,
     pub identity_file: PathBuf,
     pub device_auth_file: PathBuf,
+    pub saved_endpoints_file: PathBuf,
+    pub advanced_config_file: PathBuf,
 }
 
 impl GatewayStorePaths {
     pub fn from_root(root: PathBuf) -> Self {
         let identity_dir = root.join("identity");
+        let saved_endpoints_file = root.join("saved-endpoints.json");
         Self {
-            root,
+            root: root.clone(),
             identity_file: identity_dir.join("device.json"),
             device_auth_file: identity_dir.join("device-auth.json"),
+            saved_endpoints_file,
+            advanced_config_file: root.join("advanced-connection-config.json"),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct SavedGatewayEndpointStore {
+    pub version: u8,
+    pub endpoints: Vec<GatewaySavedEndpoint>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct StoredGatewayAdvancedConnectionConfig {
+    pub version: u8,
+    #[serde(flatten)]
+    pub config: GatewayAdvancedConnectionConfig,
 }
 
 pub fn resolve_store_paths() -> GatewayStorePaths {
@@ -198,6 +219,162 @@ pub fn normalize_scopes(scopes: &[String]) -> Vec<String> {
 
 pub fn normalize_gateway_origin(gateway_origin: &str) -> String {
     gateway_origin.trim().to_string()
+}
+
+pub fn load_saved_endpoints(paths: &GatewayStorePaths) -> Result<Vec<GatewaySavedEndpoint>, GatewayError> {
+    Ok(read_json::<SavedGatewayEndpointStore>(&paths.saved_endpoints_file)?
+        .map(|store| sort_saved_endpoints(store.endpoints))
+        .unwrap_or_default())
+}
+
+pub fn load_advanced_connection_config(
+    paths: &GatewayStorePaths,
+) -> Result<Option<GatewayAdvancedConnectionConfig>, GatewayError> {
+    Ok(read_json::<StoredGatewayAdvancedConnectionConfig>(&paths.advanced_config_file)?
+        .map(|store| store.config))
+}
+
+pub fn store_advanced_connection_config(
+    paths: &GatewayStorePaths,
+    config: &GatewayAdvancedConnectionConfig,
+) -> Result<(), GatewayError> {
+    write_json(
+        &paths.advanced_config_file,
+        &StoredGatewayAdvancedConnectionConfig {
+            version: 1,
+            config: config.clone(),
+        },
+    )
+}
+
+pub fn select_saved_endpoint(
+    paths: &GatewayStorePaths,
+    candidate: &GatewayDiscoveredCandidate,
+) -> Result<GatewaySavedEndpoint, GatewayError> {
+    let mut endpoints = load_saved_endpoints(paths)?;
+    let selected = GatewaySavedEndpoint {
+        id: saved_endpoint_id(candidate.ws_url.as_str(), candidate.host.as_str(), candidate.port),
+        label: candidate.label.clone(),
+        ws_url: candidate.ws_url.clone(),
+        http_url: candidate.http_url.clone(),
+        origin_key: normalize_gateway_origin(&candidate.ws_url),
+        host: candidate.host.clone(),
+        port: candidate.port,
+        was_user_selected: true,
+        last_connected_at_ms: None,
+        last_success_at_ms: None,
+    };
+
+    let mut replaced = false;
+    for endpoint in &mut endpoints {
+        endpoint.was_user_selected = false;
+        if endpoint.origin_key == selected.origin_key || endpoint.id == selected.id {
+            endpoint.label = selected.label.clone();
+            endpoint.ws_url = selected.ws_url.clone();
+            endpoint.http_url = selected.http_url.clone();
+            endpoint.host = selected.host.clone();
+            endpoint.port = selected.port;
+            endpoint.was_user_selected = true;
+            replaced = true;
+        }
+    }
+    if !replaced {
+        endpoints.push(selected.clone());
+    }
+
+    let endpoints = sort_saved_endpoints(endpoints);
+    write_json(
+        &paths.saved_endpoints_file,
+        &SavedGatewayEndpointStore {
+            version: 1,
+            endpoints: endpoints.clone(),
+        },
+    )?;
+
+    endpoints
+        .into_iter()
+        .find(|endpoint| endpoint.origin_key == selected.origin_key)
+        .ok_or_else(|| GatewayError::Storage {
+            message: "saved endpoint was not persisted after selection".to_string(),
+        })
+}
+
+pub fn remove_saved_endpoint(paths: &GatewayStorePaths, endpoint_id: &str) -> Result<bool, GatewayError> {
+    let mut endpoints = load_saved_endpoints(paths)?;
+    let original_len = endpoints.len();
+    endpoints.retain(|endpoint| endpoint.id != endpoint_id);
+    if endpoints.len() == original_len {
+        return Ok(false);
+    }
+
+    let endpoints = sort_saved_endpoints(endpoints);
+    write_json(
+        &paths.saved_endpoints_file,
+        &SavedGatewayEndpointStore {
+            version: 1,
+            endpoints,
+        },
+    )?;
+    Ok(true)
+}
+
+pub fn mark_saved_endpoint_success(
+    paths: &GatewayStorePaths,
+    origin_key: &str,
+) -> Result<(), GatewayError> {
+    let mut endpoints = load_saved_endpoints(paths)?;
+    let now_ms = Utc::now().timestamp_millis();
+    let mut changed = false;
+    for endpoint in &mut endpoints {
+        if endpoint.origin_key == normalize_gateway_origin(origin_key) {
+            endpoint.last_connected_at_ms = Some(now_ms);
+            endpoint.last_success_at_ms = Some(now_ms);
+            changed = true;
+        }
+    }
+    if !changed {
+        return Ok(());
+    }
+
+    write_json(
+        &paths.saved_endpoints_file,
+        &SavedGatewayEndpointStore {
+            version: 1,
+            endpoints: sort_saved_endpoints(endpoints),
+        },
+    )
+}
+
+fn sort_saved_endpoints(mut endpoints: Vec<GatewaySavedEndpoint>) -> Vec<GatewaySavedEndpoint> {
+    endpoints.sort_by(|left, right| {
+        right
+            .was_user_selected
+            .cmp(&left.was_user_selected)
+            .then_with(|| right.last_success_at_ms.cmp(&left.last_success_at_ms))
+            .then_with(|| right.last_connected_at_ms.cmp(&left.last_connected_at_ms))
+            .then_with(|| left.label.cmp(&right.label))
+    });
+    endpoints
+}
+
+fn saved_endpoint_id(ws_url: &str, host: &str, port: u16) -> String {
+    let sanitized = ws_url
+        .chars()
+        .map(|char| {
+            if char.is_ascii_alphanumeric() {
+                char
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string();
+    if sanitized.is_empty() {
+        format!("saved-{host}-{port}")
+    } else {
+        format!("saved-{sanitized}")
+    }
 }
 
 fn device_auth_binding_key(gateway_origin: &str, role: &str, scopes: &[String]) -> String {
@@ -361,6 +538,72 @@ mod tests {
         .expect("load token")
         .expect("fallback token");
         assert_eq!(loaded.token, "token-admin");
+        let _ = fs::remove_dir_all(paths.root);
+    }
+
+    #[test]
+    fn saved_endpoint_round_trips_and_marks_selected() {
+        let paths = temp_paths();
+        let selected = select_saved_endpoint(
+            &paths,
+            &GatewayDiscoveredCandidate {
+                id: "candidate-1".to_string(),
+                label: "OpenClaw 192.168.1.112:18789".to_string(),
+                source: crate::gateway::types::GatewayDiscoverySource::LanScan,
+                ws_url: "ws://192.168.1.112:18789".to_string(),
+                http_url: Some("http://192.168.1.112:18789".to_string()),
+                host: "192.168.1.112".to_string(),
+                port: 18789,
+                is_paired_hint: None,
+                last_seen_at_ms: 1,
+                confidence: crate::gateway::types::GatewayDiscoveryConfidence::High,
+                confidence_score: 100,
+                probe_stage: crate::gateway::types::GatewayDiscoveryProbeStage::ProtocolVerified,
+                protocol_verified: true,
+                protocol_signal: Some("connect.challenge".to_string()),
+                matched_seed_subnet: true,
+                matched_seed_host: true,
+            },
+        )
+        .expect("select saved endpoint");
+
+        let loaded = load_saved_endpoints(&paths).expect("load saved endpoints");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].origin_key, "ws://192.168.1.112:18789");
+        assert!(loaded[0].was_user_selected);
+        assert_eq!(loaded[0].id, selected.id);
+        let _ = fs::remove_dir_all(paths.root);
+    }
+
+    #[test]
+    fn remove_saved_endpoint_deletes_entry() {
+        let paths = temp_paths();
+        let selected = select_saved_endpoint(
+            &paths,
+            &GatewayDiscoveredCandidate {
+                id: "candidate-1".to_string(),
+                label: "OpenClaw 192.168.1.112:18789".to_string(),
+                source: crate::gateway::types::GatewayDiscoverySource::LanScan,
+                ws_url: "ws://192.168.1.112:18789".to_string(),
+                http_url: Some("http://192.168.1.112:18789".to_string()),
+                host: "192.168.1.112".to_string(),
+                port: 18789,
+                is_paired_hint: None,
+                last_seen_at_ms: 1,
+                confidence: crate::gateway::types::GatewayDiscoveryConfidence::High,
+                confidence_score: 100,
+                probe_stage: crate::gateway::types::GatewayDiscoveryProbeStage::ProtocolVerified,
+                protocol_verified: true,
+                protocol_signal: Some("connect.challenge".to_string()),
+                matched_seed_subnet: true,
+                matched_seed_host: true,
+            },
+        )
+        .expect("select saved endpoint");
+
+        let removed = remove_saved_endpoint(&paths, &selected.id).expect("remove saved endpoint");
+        assert!(removed);
+        assert!(load_saved_endpoints(&paths).expect("reload").is_empty());
         let _ = fs::remove_dir_all(paths.root);
     }
 }

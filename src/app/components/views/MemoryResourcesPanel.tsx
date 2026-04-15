@@ -114,7 +114,7 @@ export function MemoryResourcesPanel({
           <ArchiveStatCard
             label={t("memory.diag.runtimeStatus")}
             value={<span className="text-sm font-medium">{runtimeStatusSummary ? `${runtimeStatusSummary.indexedFiles}${runtimeStatusSummary.totalFiles != null ? `/${runtimeStatusSummary.totalFiles}` : ""}` : t(isLocalGatewaySession ? "memory.diag.runtimePlaceholder" : "memory.diag.runtimeRemoteUnavailable")}</span>}
-            meta={runtimeStatusSummary ? `${runtimeStatusSummary.chunks} chunks` : "-"}
+            meta={runtimeStatusSummary ? `${runtimeStatusSummary.chunks} ${t("common.chunks")}` : "-"}
           />
           <ArchiveStatCard
             label={t("memory.resources.tree")}
@@ -308,7 +308,7 @@ export function MemoryResourcesPanel({
                 {runtimeStatusSummary ? (
                   <div className="mt-1 text-slate-800 dark:text-slate-100">
                     {runtimeStatusSummary.indexedFiles}
-                    {runtimeStatusSummary.totalFiles != null ? `/${runtimeStatusSummary.totalFiles}` : ""} files · {runtimeStatusSummary.chunks} chunks
+                    {runtimeStatusSummary.totalFiles != null ? `/${runtimeStatusSummary.totalFiles}` : ""} {t("common.files")} · {runtimeStatusSummary.chunks} {t("common.chunks")}
                   </div>
                 ) : (
                   <div className="mt-1 text-slate-800 dark:text-slate-100">{isLocalGatewaySession ? t("memory.diag.runtimePlaceholder") : t("memory.diag.runtimeRemoteUnavailable")}</div>
