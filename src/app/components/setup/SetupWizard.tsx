@@ -42,6 +42,7 @@ export function SetupWizard() {
   const [pairingStatus, setPairingStatus] = useState<GatewayPairingStatusResult | null>(null);
   const [pairingStatusLoading, setPairingStatusLoading] = useState(false);
   const [authModeTouched, setAuthModeTouched] = useState(false);
+  const [pairingActionHint, setPairingActionHint] = useState<string | null>(null);
 
   const shouldShowWizard = isSetupWizardOpen || (!isConfigured && !hasSkippedSetup);
   const isPairingRequired = lastError?.code === 'PAIRING_REQUIRED';
@@ -85,6 +86,7 @@ export function SetupWizard() {
     setTestResult('none');
     setIsDetecting(false);
     setAuthModeTouched(false);
+    setPairingActionHint(null);
   }, [shouldShowWizard, gatewayUrl, savedAuthMode, savedAuthSecret]);
 
   useEffect(() => {
@@ -103,11 +105,7 @@ export function SetupWizard() {
         if (cancelled) {
           return;
         }
-        setPairingStatus(next);
-        if (!authModeTouched && next.pairedReady) {
-          setAuthMode('paired_device');
-          setAuthSecret('');
-        }
+        applyPairingStatus(next, !authModeTouched);
       } catch {
         if (!cancelled) {
           setPairingStatus(null);
@@ -157,11 +155,47 @@ export function SetupWizard() {
     }, 800);
   };
 
+  const applyPairingStatus = (
+    next: GatewayPairingStatusResult | null,
+    adoptPairedDevice = false,
+  ) => {
+    setPairingStatus(next);
+
+    if (next?.pairedReady && adoptPairedDevice) {
+      setAuthMode('paired_device');
+      setAuthSecret('');
+      setAuthModeTouched(false);
+    }
+  };
+
   const handleTestAndNext = async () => {
+    const targetUrl = url.trim();
+    const effectiveMode = authMode;
+    const effectiveSecret = authSecret;
+    const usedBootstrapToken =
+      effectiveMode === 'paired_device' && effectiveSecret.trim().length > 0;
+
     setIsTesting(true);
     setTestResult('none');
+    setPairingActionHint(null);
 
-    const success = await testConnection(url, authMode, authSecret);
+    const success = await testConnection(targetUrl, effectiveMode, effectiveSecret);
+
+    if (success) {
+      setPairingStatusLoading(true);
+      try {
+        const next = await gatewayPairingStatusLookup(targetUrl);
+        applyPairingStatus(next, true);
+
+        if (next.pairedReady && usedBootstrapToken) {
+          setPairingActionHint(t('setup.pairing.deviceTokenReady'));
+        }
+      } catch {
+        // Ignore refresh failures and keep the test result visible.
+      } finally {
+        setPairingStatusLoading(false);
+      }
+    }
 
     setIsTesting(false);
     setTestResult(success ? 'success' : 'fail');
@@ -500,6 +534,11 @@ export function SetupWizard() {
                         {connectedOrigin}
                       </div>
                     )}
+                    {pairingActionHint ? (
+                      <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300">
+                        {pairingActionHint}
+                      </div>
+                    ) : null}
                   </>
                 ) : (
                   <>
@@ -607,7 +646,22 @@ export function SetupWizard() {
                 {testResult === 'fail' ? t('btn.back') : t('btn.prev')}
               </button>
               {testResult === 'success' && (
-                <button onClick={() => setStep(4)} className="px-5 sm:px-6 py-2 sm:py-2.5 bg-[#165DFF] hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md shadow-blue-500/20 transition-all active:scale-95 flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 dark:focus:ring-offset-slate-900">{t('btn.enter')} <ChevronRight className="w-4 h-4" /></button>
+                <button
+                  onClick={pairingActionHint ? handleSaveAndFinish : () => setStep(4)}
+                  disabled={pairingActionHint ? isSaving : false}
+                  className="px-5 sm:px-6 py-2 sm:py-2.5 bg-[#165DFF] hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+                >
+                  {pairingActionHint ? (
+                    <>
+                      {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      {t('config.save')}
+                    </>
+                  ) : (
+                    <>
+                      {t('btn.enter')} <ChevronRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
               )}
             </>
           )}
@@ -629,5 +683,3 @@ export function SetupWizard() {
     </div>
   );
 }
-
-

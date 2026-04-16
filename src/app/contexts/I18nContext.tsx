@@ -2921,6 +2921,11 @@ const BASE_DICT: Record<string, string[]> = {
     "开始首次配对",
     "開始首次配對",
   ],
+  "setup.pairing.deviceTokenReady": [
+    "Device token received. Click Save to finish setup.",
+    "已拿到 device token，请点击保存完成配置。",
+    "已拿到 device token，請點擊儲存完成設定。",
+  ],
   "setup.pairing.knownTitle": [
     "Known Paired Gateways",
     "已配对网关",

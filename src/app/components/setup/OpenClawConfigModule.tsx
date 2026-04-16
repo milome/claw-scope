@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { gatewayPairingStatusLookup, useOpenClaw, type AuthMode, type GatewayAdvancedConnectionConfig, type GatewayPairingStatusResult, type GatewayPairedEndpoint } from '../../contexts/OpenClawContext';
 import { CheckCircle2, Server, Shield, Globe, TerminalSquare, RefreshCw, XCircle, AlertCircle, RotateCcw, Trash2, Wifi } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -47,10 +47,11 @@ export function OpenClawConfigModule() {
   const [advancedTimeoutMs, setAdvancedTimeoutMs] = useState(String(advancedConnectionConfig.timeoutMs));
   const [advancedHeartbeatMs, setAdvancedHeartbeatMs] = useState(String(advancedConnectionConfig.heartbeatMs));
   const [advancedProxyUrl, setAdvancedProxyUrl] = useState(advancedConnectionConfig.proxyUrl ?? '');
-  const [saveFeedback, setSaveFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<{ kind: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [pairingStatus, setPairingStatus] = useState<GatewayPairingStatusResult | null>(null);
   const [pairingStatusLoading, setPairingStatusLoading] = useState(false);
   const [authModeTouched, setAuthModeTouched] = useState(false);
+  const bootstrapTokenInputRef = useRef<HTMLInputElement | null>(null);
   const pairedReady = pairingStatus?.pairedReady ?? false;
   const pairedDeviceBootstrapVisible =
     authMode === 'paired_device' &&
@@ -87,11 +88,7 @@ export function OpenClawConfigModule() {
         if (cancelled) {
           return;
         }
-        setPairingStatus(next);
-        if (!authModeTouched && next.pairedReady) {
-          setAuthMode('paired_device');
-          setAuthSecret('');
-        }
+        applyPairingStatus(next, !authModeTouched);
       } catch {
         if (!cancelled) {
           setPairingStatus(null);
@@ -115,20 +112,83 @@ export function OpenClawConfigModule() {
     setAdvancedProxyUrl(advancedConnectionConfig.proxyUrl ?? '');
   }, [advancedConnectionConfig]);
 
-  const handleTestConnection = async () => {
-    if (!url) {
+  const applyPairingStatus = (
+    next: GatewayPairingStatusResult | null,
+    adoptPairedDevice = false,
+  ) => {
+    setPairingStatus(next);
+
+    if (next?.pairedReady && adoptPairedDevice) {
+      setAuthMode('paired_device');
+      setAuthSecret('');
+      setAuthModeTouched(false);
+    }
+  };
+
+  const handleTestConnection = async (overrides?: {
+    mode?: AuthMode;
+    secret?: string;
+  }) => {
+    const targetUrl = url.trim();
+    const effectiveMode = overrides?.mode ?? authMode;
+    const effectiveSecret = overrides?.secret ?? authSecret;
+    const usedBootstrapToken =
+      effectiveMode === 'paired_device' && effectiveSecret.trim().length > 0;
+
+    if (!targetUrl) {
       return;
     }
 
     setIsTesting(true);
     setTestResult('none');
-    const success = await testConnection(url, authMode, authSecret);
+    setSaveFeedback(null);
+    const success = await testConnection(targetUrl, effectiveMode, effectiveSecret);
+
+    if (success) {
+      setPairingStatusLoading(true);
+      try {
+        const next = await gatewayPairingStatusLookup(targetUrl);
+        applyPairingStatus(next, true);
+
+        if (next.pairedReady && usedBootstrapToken) {
+          setSaveFeedback({
+            kind: 'info',
+            message: t('setup.pairing.deviceTokenReady'),
+          });
+        }
+      } catch {
+        // Ignore refresh failures and keep the latest visible state.
+      } finally {
+        setPairingStatusLoading(false);
+      }
+    }
+
     setIsTesting(false);
     setTestResult(success ? 'success' : 'fail');
 
     if (success) {
       setTimeout(() => setTestResult('none'), 3000);
     }
+  };
+
+  const handleStartBootstrap = async () => {
+    setAuthMode('paired_device');
+    setAuthModeTouched(false);
+    setSaveFeedback(null);
+
+    const bootstrapToken = authSecret.trim();
+    if (!bootstrapToken) {
+      setSaveFeedback({ kind: 'error', message: t('setup.auth.requiredToken') });
+      window.requestAnimationFrame(() => {
+        bootstrapTokenInputRef.current?.focus();
+      });
+      return;
+    }
+
+    await handleTestConnection({
+      mode: 'paired_device',
+      secret: bootstrapToken,
+    });
   };
 
   const handleSave = async () => {
@@ -467,13 +527,11 @@ export function OpenClawConfigModule() {
                   ) : pairingStatus ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        setAuthMode('paired_device');
-                        setAuthModeTouched(false);
-                      }}
-                      className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300"
+                      onClick={() => void handleStartBootstrap()}
+                      disabled={!url.trim() || isTesting}
+                      className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300"
                     >
-                      <Shield className="w-3.5 h-3.5" />
+                      {isTesting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Shield className="w-3.5 h-3.5" />}
                       {t('setup.pairing.startBootstrap')}
                     </button>
                   ) : null}
@@ -562,6 +620,7 @@ export function OpenClawConfigModule() {
                     <div className="relative mt-2">
                       <Shield className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
+                        ref={bootstrapTokenInputRef}
                         type="password"
                         value={authSecret}
                         onChange={(e) => setAuthSecret(e.target.value)}
@@ -765,6 +824,8 @@ export function OpenClawConfigModule() {
               <div className={`rounded-xl border px-4 py-3 text-sm ${
                 saveFeedback.kind === 'success'
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300'
+                  : saveFeedback.kind === 'info'
+                    ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300'
                   : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300'
               }`}>
                 {saveFeedback.message}
@@ -785,7 +846,7 @@ export function OpenClawConfigModule() {
                   {t('config.setup.rerun')}
                 </button>
                 <button
-                  onClick={handleTestConnection}
+                  onClick={() => void handleTestConnection()}
                   disabled={!url || authSecretRequired || isTesting}
                   className="flex-1 sm:flex-none px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-semibold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-slate-400/50 active:scale-95"
                 >
