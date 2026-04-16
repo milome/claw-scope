@@ -2926,6 +2926,31 @@ const BASE_DICT: Record<string, string[]> = {
     "已拿到 device token，请点击保存完成配置。",
     "已拿到 device token，請點擊儲存完成設定。",
   ],
+  "setup.pairing.deviceTokenValid": [
+    "Device token status: valid",
+    "device token 状态：有效",
+    "device token 狀態：有效",
+  ],
+  "setup.pairing.awaitingApprovalTitle": [
+    "Pairing request sent. Waiting for host approval",
+    "已发起配对请求，等待宿主机批准",
+    "已發起配對請求，等待主機批准",
+  ],
+  "setup.pairing.awaitingApprovalDesc": [
+    "Approve the latest device request on the OpenClaw host, then retry pairing here.",
+    "请先在 OpenClaw 宿主机执行 approve latest，再回到这里重试配对。",
+    "請先在 OpenClaw 主機執行 approve latest，再回到這裡重試配對。",
+  ],
+  "setup.pairing.retryAfterApproval": [
+    "Retry After Approval",
+    "批准后重试配对",
+    "批准後重試配對",
+  ],
+  "setup.pairing.pairedDeviceDisabled": [
+    "Paired Device becomes available after first pairing is completed.",
+    "完成首次配对后，“已配对设备”才会可用。",
+    "完成首次配對後，「已配對裝置」才會可用。",
+  ],
   "setup.pairing.knownTitle": [
     "Known Paired Gateways",
     "已配对网关",

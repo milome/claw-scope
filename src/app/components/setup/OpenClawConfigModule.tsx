@@ -3,7 +3,6 @@ import { gatewayPairingStatusLookup, useOpenClaw, type AuthMode, type GatewayAdv
 import { CheckCircle2, Server, Shield, Globe, TerminalSquare, RefreshCw, XCircle, AlertCircle, RotateCcw, Trash2, Wifi } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useI18n } from '../../contexts/I18nContext';
-import { isLoopbackGatewayUrl } from '../../contexts/openClawConnectionPolicy';
 import {
   buildAvailableOpenClawConfigSections,
   resolveSelectedOpenClawConfigSection,
@@ -51,17 +50,18 @@ export function OpenClawConfigModule() {
   const [pairingStatus, setPairingStatus] = useState<GatewayPairingStatusResult | null>(null);
   const [pairingStatusLoading, setPairingStatusLoading] = useState(false);
   const [authModeTouched, setAuthModeTouched] = useState(false);
-  const bootstrapTokenInputRef = useRef<HTMLInputElement | null>(null);
+  const pairingBootstrapTokenInputRef = useRef<HTMLInputElement | null>(null);
+  const [pairingBootstrapToken, setPairingBootstrapToken] = useState(
+    savedAuthMode === 'token' ? savedAuthSecret : '',
+  );
+  const [pairingAttempted, setPairingAttempted] = useState(false);
+  const [pairingCompletionPending, setPairingCompletionPending] = useState(false);
   const pairedReady = pairingStatus?.pairedReady ?? false;
-  const pairedDeviceBootstrapVisible =
-    authMode === 'paired_device' &&
-    !pairedReady &&
-    !pairingStatusLoading &&
-    pairingStatus !== null &&
-    Boolean(url.trim());
-  const pairedDeviceBootstrapHintVisible = pairedDeviceBootstrapVisible && isLoopbackGatewayUrl(url);
+  const pairedDeviceAvailable = pairedReady;
+  const awaitingPairApproval =
+    pairingAttempted && lastError?.code === 'PAIRING_REQUIRED' && !pairedDeviceAvailable;
   const authSecretRequired =
-    ((authMode === 'token' || authMode === 'password') || pairedDeviceBootstrapVisible) &&
+    (authMode === 'token' || authMode === 'password') &&
     authSecret.trim().length === 0;
   const authSecretRequiredMessage = authMode === 'password' ? t('setup.auth.requiredPassword') : t('setup.auth.requiredToken');
 
@@ -70,6 +70,9 @@ export function OpenClawConfigModule() {
     setAuthMode(savedAuthMode);
     setAuthSecret(savedAuthSecret);
     setAuthModeTouched(false);
+    setPairingBootstrapToken(savedAuthMode === 'token' ? savedAuthSecret : '');
+    setPairingAttempted(false);
+    setPairingCompletionPending(false);
   }, [gatewayUrl, savedAuthMode, savedAuthSecret]);
 
   useEffect(() => {
@@ -122,6 +125,11 @@ export function OpenClawConfigModule() {
       setAuthMode('paired_device');
       setAuthSecret('');
       setAuthModeTouched(false);
+      return;
+    }
+
+    if (!next?.pairedReady && !authModeTouched && authMode === 'paired_device') {
+      setAuthMode('token');
     }
   };
 
@@ -142,6 +150,8 @@ export function OpenClawConfigModule() {
     setIsTesting(true);
     setTestResult('none');
     setSaveFeedback(null);
+    setPairingAttempted(false);
+    setPairingCompletionPending(false);
     const success = await testConnection(targetUrl, effectiveMode, effectiveSecret);
 
     if (success) {
@@ -171,24 +181,54 @@ export function OpenClawConfigModule() {
     }
   };
 
-  const handleStartBootstrap = async () => {
-    setAuthMode('paired_device');
-    setAuthModeTouched(false);
-    setSaveFeedback(null);
+  const handleStartPairing = async () => {
+    const bootstrapToken = pairingBootstrapToken.trim();
 
-    const bootstrapToken = authSecret.trim();
+    setSaveFeedback(null);
+    setPairingAttempted(true);
+    setPairingCompletionPending(false);
+
     if (!bootstrapToken) {
       setSaveFeedback({ kind: 'error', message: t('setup.auth.requiredToken') });
       window.requestAnimationFrame(() => {
-        bootstrapTokenInputRef.current?.focus();
+        pairingBootstrapTokenInputRef.current?.focus();
       });
       return;
     }
 
-    await handleTestConnection({
-      mode: 'paired_device',
-      secret: bootstrapToken,
-    });
+    const targetUrl = url.trim();
+    if (!targetUrl) {
+      return;
+    }
+
+    setIsTesting(true);
+    setTestResult('none');
+
+    const success = await testConnection(targetUrl, 'paired_device', bootstrapToken);
+
+    if (success) {
+      setPairingStatusLoading(true);
+      try {
+        const next = await gatewayPairingStatusLookup(targetUrl);
+        applyPairingStatus(next, true);
+
+        if (next.pairedReady) {
+          setPairingAttempted(false);
+          setPairingCompletionPending(true);
+          setSaveFeedback({
+            kind: 'info',
+            message: t('setup.pairing.deviceTokenReady'),
+          });
+        }
+      } catch {
+        // Ignore refresh failures and keep the latest visible state.
+      } finally {
+        setPairingStatusLoading(false);
+      }
+    }
+
+    setIsTesting(false);
+    setTestResult(success ? 'success' : 'fail');
   };
 
   const handleSave = async () => {
@@ -214,11 +254,20 @@ export function OpenClawConfigModule() {
       return;
     }
 
-    const success = hasBaseChanges
-      ? await updateConfig(url, authMode, authSecret)
+    const needsConnectionPersist = hasBaseChanges || pairingCompletionPending;
+    const success = needsConnectionPersist
+      ? await updateConfig(
+          url,
+          pairingCompletionPending ? 'paired_device' : authMode,
+          pairingCompletionPending ? '' : authSecret,
+        )
       : true;
     setIsSaving(false);
     setTestResult(success ? 'none' : 'fail');
+    if (success) {
+      setPairingAttempted(false);
+      setPairingCompletionPending(false);
+    }
     setSaveFeedback(
       success
         ? { kind: 'success', message: t('config.advanced.saveOk') }
@@ -271,6 +320,8 @@ export function OpenClawConfigModule() {
     setAuthMode('paired_device');
     setAuthSecret('');
     setAuthModeTouched(false);
+    setPairingAttempted(false);
+    setPairingCompletionPending(false);
   };
 
   const candidateConfidenceLabel = (confidence: (typeof discoveredGateways)[number]['confidence']) => {
@@ -298,7 +349,7 @@ export function OpenClawConfigModule() {
     Number(advancedTimeoutMs || 0) !== advancedConnectionConfig.timeoutMs ||
     Number(advancedHeartbeatMs || 0) !== advancedConnectionConfig.heartbeatMs ||
     advancedProxyUrl.trim() !== (advancedConnectionConfig.proxyUrl ?? '');
-  const hasChanges = hasBaseChanges || hasAdvancedChanges;
+  const hasChanges = hasBaseChanges || hasAdvancedChanges || pairingCompletionPending;
   const connectedLabel = connectedOrigin ?? gatewayUrl;
   const statusDescription = isConnected
     ? `${t('config.status.connected')} ${connectedLabel}`
@@ -478,6 +529,9 @@ export function OpenClawConfigModule() {
                   onChange={(e) => {
                     setUrl(e.target.value);
                     setAuthModeTouched(false);
+                    setPairingAttempted(false);
+                    setPairingCompletionPending(false);
+                    setSaveFeedback(null);
                   }}
                   placeholder="http://127.0.0.1:18789"
                   className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border rounded-xl text-sm outline-none transition-all dark:text-slate-100 ${
@@ -503,6 +557,12 @@ export function OpenClawConfigModule() {
                       <>
                         <div className="mt-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">{t('setup.pairing.readyTitle')}</div>
                         <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('setup.pairing.readyDesc')}</div>
+                        <div className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">{t('setup.pairing.deviceTokenValid')}</div>
+                      </>
+                    ) : awaitingPairApproval ? (
+                      <>
+                        <div className="mt-2 text-sm font-semibold text-amber-700 dark:text-amber-300">{t('setup.pairing.awaitingApprovalTitle')}</div>
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('setup.pairing.awaitingApprovalDesc')}</div>
                       </>
                     ) : pairingStatus ? (
                       <>
@@ -527,15 +587,46 @@ export function OpenClawConfigModule() {
                   ) : pairingStatus ? (
                     <button
                       type="button"
-                      onClick={() => void handleStartBootstrap()}
+                      onClick={() => void handleStartPairing()}
                       disabled={!url.trim() || isTesting}
                       className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300"
                     >
                       {isTesting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Shield className="w-3.5 h-3.5" />}
-                      {t('setup.pairing.startBootstrap')}
+                      {awaitingPairApproval ? t('setup.pairing.retryAfterApproval') : t('setup.pairing.startBootstrap')}
                     </button>
                   ) : null}
                 </div>
+
+                {!pairedDeviceAvailable && pairingStatus ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3 dark:border-amber-900/30 dark:bg-amber-950/20">
+                    {awaitingPairApproval ? (
+                      <div className="space-y-3">
+                        <p className="text-xs text-amber-800 dark:text-amber-200">{t('setup.auth.deviceApprovalHint')}</p>
+                        <code className="block rounded-lg bg-slate-900 px-3 py-2 text-xs text-slate-100 font-mono overflow-x-auto">
+                          openclaw devices approve --latest
+                        </code>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                          {t('setup.auth.pairedDeviceBootstrapLabel')}
+                        </label>
+                        <div className="relative">
+                          <Shield className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            ref={pairingBootstrapTokenInputRef}
+                            type="password"
+                            value={pairingBootstrapToken}
+                            onChange={(e) => setPairingBootstrapToken(e.target.value)}
+                            placeholder={t('setup.ph.token')}
+                            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none transition-all focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-slate-100"
+                          />
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t('setup.auth.pairedDeviceBootstrapHint')}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
 
                 <div className="space-y-2">
                   <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
@@ -594,14 +685,28 @@ export function OpenClawConfigModule() {
                 ].map((modeOption) => {
                   const Icon = modeOption.icon;
                   const isActive = authMode === modeOption.id;
+                  const isDisabled = modeOption.id === 'paired_device' && !pairedDeviceAvailable;
                   return (
                     <button
                       key={modeOption.id}
                       onClick={() => {
+                        if (isDisabled) {
+                          return;
+                        }
+                        setPairingAttempted(false);
+                        setPairingCompletionPending(false);
+                        setSaveFeedback(null);
                         setAuthMode(modeOption.id as AuthMode);
                         setAuthModeTouched(true);
                       }}
-                      className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${isActive ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-400' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                      disabled={isDisabled}
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                        isDisabled
+                          ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500'
+                          : isActive
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-400'
+                            : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
                     >
                       <Icon className="w-4 h-4" /> {modeOption.label}
                     </button>
@@ -610,17 +715,11 @@ export function OpenClawConfigModule() {
               </div>
 
               <AnimatePresence>
-                {(authMode !== 'paired_device' || pairedDeviceBootstrapVisible) && (
+                {authMode !== 'paired_device' && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                    {pairedDeviceBootstrapVisible ? (
-                      <label className="mt-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                        {t('setup.auth.pairedDeviceBootstrapLabel')}
-                      </label>
-                    ) : null}
                     <div className="relative mt-2">
                       <Shield className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
-                        ref={bootstrapTokenInputRef}
                         type="password"
                         value={authSecret}
                         onChange={(e) => setAuthSecret(e.target.value)}
@@ -638,15 +737,14 @@ export function OpenClawConfigModule() {
                         {authSecretRequiredMessage}
                       </p>
                     )}
-                    {pairedDeviceBootstrapHintVisible ? (
-                      <p className="text-xs text-slate-500 mt-2">{t('setup.auth.pairedDeviceBootstrapHint')}</p>
-                    ) : null}
                   </motion.div>
                 )}
               </AnimatePresence>
-              {authMode === 'paired_device' && (
+              {authMode === 'paired_device' && pairedDeviceAvailable ? (
                 <p className="text-xs text-slate-500 mt-2">{t('setup.auth.pairedDeviceHint')}</p>
-              )}
+              ) : !pairedDeviceAvailable ? (
+                <p className="text-xs text-slate-500 mt-2">{t('setup.pairing.pairedDeviceDisabled')}</p>
+              ) : null}
             </div>
             </>
             ) : null}

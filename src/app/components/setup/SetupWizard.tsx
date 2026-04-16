@@ -4,7 +4,6 @@ import { gatewayPairingStatusLookup, useOpenClaw, type AuthMode, type GatewayPai
 import { CheckCircle2, XCircle, RefreshCw, Server, Shield, Globe, TerminalSquare, LayoutGrid, Cpu, Check, AlertCircle, ChevronRight, Moon, Sun } from 'lucide-react';
 import { useI18n, LANGUAGES } from '../../contexts/I18nContext';
 import { useTheme } from 'next-themes';
-import { isLoopbackGatewayUrl } from '../../contexts/openClawConnectionPolicy';
 import appLogo from '../../../assets/270226c058e3f12ad7bb9e96e3b029bc0e2c0461.png';
 
 const DEFAULT_GATEWAY_URL = 'http://127.0.0.1:18789';
@@ -33,7 +32,7 @@ export function SetupWizard() {
   const [ripplePos, setRipplePos] = useState({ x: 0, y: 0, active: false });
   const [step, setStep] = useState(1);
   const [url, setUrl] = useState(DEFAULT_GATEWAY_URL);
-  const [authMode, setAuthMode] = useState<AuthMode>('paired_device');
+  const [authMode, setAuthMode] = useState<AuthMode>('token');
   const [authSecret, setAuthSecret] = useState('');
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -43,20 +42,20 @@ export function SetupWizard() {
   const [pairingStatusLoading, setPairingStatusLoading] = useState(false);
   const [authModeTouched, setAuthModeTouched] = useState(false);
   const [pairingActionHint, setPairingActionHint] = useState<string | null>(null);
+  const [pairingBootstrapToken, setPairingBootstrapToken] = useState('');
+  const [pairingAttempted, setPairingAttempted] = useState(false);
+  const [pairingCompletionPending, setPairingCompletionPending] = useState(false);
+  const pairingBootstrapTokenInputRef = useRef<HTMLInputElement | null>(null);
 
   const shouldShowWizard = isSetupWizardOpen || (!isConfigured && !hasSkippedSetup);
   const isPairingRequired = lastError?.code === 'PAIRING_REQUIRED';
   const isTokenMismatch = lastError?.code === 'AUTH_TOKEN_MISMATCH';
   const pairedReady = pairingStatus?.pairedReady ?? false;
-  const pairedDeviceBootstrapVisible =
-    authMode === 'paired_device' &&
-    !pairedReady &&
-    !pairingStatusLoading &&
-    pairingStatus !== null &&
-    Boolean(url.trim());
-  const pairedDeviceBootstrapHintVisible = pairedDeviceBootstrapVisible && isLoopbackGatewayUrl(url);
+  const pairedDeviceAvailable = pairedReady;
+  const awaitingPairApproval =
+    pairingAttempted && isPairingRequired && !pairedDeviceAvailable;
   const authSecretRequired =
-    ((authMode === 'token' || authMode === 'password') || pairedDeviceBootstrapVisible) &&
+    (authMode === 'token' || authMode === 'password') &&
     authSecret.trim().length === 0;
   const authSecretRequiredMessage = authMode === 'password' ? t('setup.auth.requiredPassword') : t('setup.auth.requiredToken');
 
@@ -79,7 +78,7 @@ export function SetupWizard() {
 
     setStep(1);
     setUrl(gatewayUrl || DEFAULT_GATEWAY_URL);
-    setAuthMode(savedAuthMode);
+    setAuthMode(savedAuthMode === 'paired_device' ? 'token' : savedAuthMode);
     setAuthSecret(savedAuthSecret);
     setIsTesting(false);
     setIsSaving(false);
@@ -87,6 +86,9 @@ export function SetupWizard() {
     setIsDetecting(false);
     setAuthModeTouched(false);
     setPairingActionHint(null);
+    setPairingBootstrapToken(savedAuthMode === 'token' ? savedAuthSecret : '');
+    setPairingAttempted(false);
+    setPairingCompletionPending(false);
   }, [shouldShowWizard, gatewayUrl, savedAuthMode, savedAuthSecret]);
 
   useEffect(() => {
@@ -151,6 +153,9 @@ export function SetupWizard() {
       setAuthMode('paired_device');
       setAuthSecret('');
       setAuthModeTouched(false);
+      setPairingAttempted(false);
+      setPairingCompletionPending(false);
+      setPairingActionHint(null);
       setIsDetecting(false);
     }, 800);
   };
@@ -165,6 +170,11 @@ export function SetupWizard() {
       setAuthMode('paired_device');
       setAuthSecret('');
       setAuthModeTouched(false);
+      return;
+    }
+
+    if (!next?.pairedReady && !authModeTouched && authMode === 'paired_device') {
+      setAuthMode('token');
     }
   };
 
@@ -172,12 +182,12 @@ export function SetupWizard() {
     const targetUrl = url.trim();
     const effectiveMode = authMode;
     const effectiveSecret = authSecret;
-    const usedBootstrapToken =
-      effectiveMode === 'paired_device' && effectiveSecret.trim().length > 0;
 
     setIsTesting(true);
     setTestResult('none');
     setPairingActionHint(null);
+    setPairingAttempted(false);
+    setPairingCompletionPending(false);
 
     const success = await testConnection(targetUrl, effectiveMode, effectiveSecret);
 
@@ -186,8 +196,49 @@ export function SetupWizard() {
       try {
         const next = await gatewayPairingStatusLookup(targetUrl);
         applyPairingStatus(next, true);
+      } catch {
+        // Ignore refresh failures and keep the test result visible.
+      } finally {
+        setPairingStatusLoading(false);
+      }
+    }
 
-        if (next.pairedReady && usedBootstrapToken) {
+    setIsTesting(false);
+    setTestResult(success ? 'success' : 'fail');
+    setStep(3);
+  };
+
+  const handleStartPairing = async () => {
+    const targetUrl = url.trim();
+    const bootstrapToken = pairingBootstrapToken.trim();
+
+    setPairingActionHint(null);
+    setPairingAttempted(true);
+    setPairingCompletionPending(false);
+
+    if (!targetUrl) {
+      return;
+    }
+
+    if (!bootstrapToken) {
+      window.requestAnimationFrame(() => pairingBootstrapTokenInputRef.current?.focus());
+      return;
+    }
+
+    setIsTesting(true);
+    setTestResult('none');
+
+    const success = await testConnection(targetUrl, 'paired_device', bootstrapToken);
+
+    if (success) {
+      setPairingStatusLoading(true);
+      try {
+        const next = await gatewayPairingStatusLookup(targetUrl);
+        applyPairingStatus(next, true);
+
+        if (next.pairedReady) {
+          setPairingAttempted(false);
+          setPairingCompletionPending(true);
           setPairingActionHint(t('setup.pairing.deviceTokenReady'));
         }
       } catch {
@@ -204,13 +255,21 @@ export function SetupWizard() {
 
   const handleSaveAndFinish = async () => {
     setIsSaving(true);
-    const success = await updateConfig(url, authMode, authSecret);
+    const success = await updateConfig(
+      url,
+      pairingCompletionPending ? 'paired_device' : authMode,
+      pairingCompletionPending ? '' : authSecret,
+    );
     setIsSaving(false);
 
     if (!success) {
       setTestResult('fail');
       setStep(3);
+      return;
     }
+
+    setPairingAttempted(false);
+    setPairingCompletionPending(false);
   };
 
   if (!shouldShowWizard) {
@@ -403,6 +462,9 @@ export function SetupWizard() {
                           onChange={(e) => {
                             setUrl(e.target.value);
                             setAuthModeTouched(false);
+                            setPairingAttempted(false);
+                            setPairingCompletionPending(false);
+                            setPairingActionHint(null);
                           }}
                           placeholder={DEFAULT_GATEWAY_URL}
                           className={`w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border rounded-xl text-sm outline-none transition-all dark:text-slate-100 ${
@@ -430,11 +492,45 @@ export function SetupWizard() {
                           <>
                             <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{t('setup.pairing.readyTitle')}</div>
                             <div className="text-xs text-slate-500 dark:text-slate-400">{t('setup.pairing.readyDesc')}</div>
+                            <div className="text-xs font-medium text-emerald-700 dark:text-emerald-300">{t('setup.pairing.deviceTokenValid')}</div>
+                          </>
+                        ) : awaitingPairApproval ? (
+                          <>
+                            <div className="text-sm font-semibold text-amber-700 dark:text-amber-300">{t('setup.pairing.awaitingApprovalTitle')}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">{t('setup.pairing.awaitingApprovalDesc')}</div>
+                            <code className="mt-2 block rounded-lg bg-slate-900 px-3 py-2 text-xs text-slate-100 font-mono overflow-x-auto">
+                              openclaw devices approve --latest
+                            </code>
                           </>
                         ) : pairingStatus ? (
                           <>
                             <div className="text-sm font-semibold text-amber-700 dark:text-amber-300">{t('setup.pairing.bootstrapTitle')}</div>
                             <div className="text-xs text-slate-500 dark:text-slate-400">{t('setup.pairing.bootstrapDesc')}</div>
+                            <div className="space-y-3 pt-1">
+                              <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                                {t('setup.auth.pairedDeviceBootstrapLabel')}
+                              </label>
+                              <div className="relative">
+                                <Shield className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                  ref={pairingBootstrapTokenInputRef}
+                                  type="password"
+                                  value={pairingBootstrapToken}
+                                  onChange={(e) => setPairingBootstrapToken(e.target.value)}
+                                  placeholder={t('setup.ph.token')}
+                                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none transition-all focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-slate-100"
+                                />
+                              </div>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">{t('setup.auth.pairedDeviceBootstrapHint')}</p>
+                              <button
+                                onClick={handleStartPairing}
+                                disabled={!url || isTesting}
+                                className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300"
+                              >
+                                {isTesting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                                {t('setup.pairing.startBootstrap')}
+                              </button>
+                            </div>
                           </>
                         ) : null}
                       </div>
@@ -452,14 +548,28 @@ export function SetupWizard() {
                         ].map((modeOption) => {
                           const Icon = modeOption.icon;
                           const isActive = authMode === modeOption.id;
+                          const isDisabled = modeOption.id === 'paired_device' && !pairedDeviceAvailable;
                           return (
                             <button
                               key={modeOption.id}
                               onClick={() => {
+                                if (isDisabled) {
+                                  return;
+                                }
+                                setPairingAttempted(false);
+                                setPairingCompletionPending(false);
+                                setPairingActionHint(null);
                                 setAuthMode(modeOption.id as AuthMode);
                                 setAuthModeTouched(true);
                               }}
-                              className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${isActive ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-400' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                              disabled={isDisabled}
+                              className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                                isDisabled
+                                  ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500'
+                                  : isActive
+                                    ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-400'
+                                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                              }`}
                             >
                               <Icon className="w-4 h-4" /> {modeOption.label}
                             </button>
@@ -468,13 +578,8 @@ export function SetupWizard() {
                       </div>
 
                       <AnimatePresence>
-                        {(authMode !== 'paired_device' || pairedDeviceBootstrapVisible) && (
+                        {authMode !== 'paired_device' && (
                           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                            {pairedDeviceBootstrapVisible ? (
-                              <label className="mt-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                                {t('setup.auth.pairedDeviceBootstrapLabel')}
-                              </label>
-                            ) : null}
                             <div className="relative mt-2">
                               <Shield className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                               <input
@@ -495,17 +600,15 @@ export function SetupWizard() {
                                 {authSecretRequiredMessage}
                               </p>
                             )}
-                            {pairedDeviceBootstrapHintVisible ? (
-                              <p className="text-xs text-slate-500 mt-2">{t('setup.auth.pairedDeviceBootstrapHint')}</p>
-                            ) : (
-                              <p className="text-xs text-slate-500 mt-2">{t('setup.hint.token1')} <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[10px] font-mono">openclaw config get gateway.auth.token</code> {t('setup.hint.token2')}</p>
-                            )}
+                            <p className="text-xs text-slate-500 mt-2">{t('setup.hint.token1')} <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[10px] font-mono">openclaw config get gateway.auth.token</code> {t('setup.hint.token2')}</p>
                           </motion.div>
                         )}
                       </AnimatePresence>
-                      {authMode === 'paired_device' && (
+                      {authMode === 'paired_device' && pairedDeviceAvailable ? (
                         <p className="text-xs text-slate-500 mt-2">{t('setup.auth.pairedDeviceHint')}</p>
-                      )}
+                      ) : !pairedDeviceAvailable ? (
+                        <p className="text-xs text-slate-500 mt-2">{t('setup.pairing.pairedDeviceDisabled')}</p>
+                      ) : null}
                     </div>
                   </div>
                 </div>
