@@ -153,6 +153,48 @@ pub fn load_device_auth_token(
     Ok(legacy_fallback)
 }
 
+pub fn load_exact_device_auth_token(
+    paths: &GatewayStorePaths,
+    device_id: &str,
+    gateway_origin: &str,
+    role: &str,
+    scopes: &[String],
+) -> Result<Option<DeviceAuthEntry>, GatewayError> {
+    let Some(store) = read_json::<DeviceAuthStore>(&paths.device_auth_file)? else {
+        return Ok(None);
+    };
+    if store.device_id != device_id {
+        return Ok(None);
+    }
+
+    let normalized_origin = normalize_gateway_origin(gateway_origin);
+    let normalized_role = normalize_role(role);
+    let normalized_scopes = normalize_scopes(scopes);
+    let binding_key = device_auth_binding_key(&normalized_origin, &normalized_role, &normalized_scopes);
+    Ok(store.tokens.get(&binding_key).cloned())
+}
+
+pub fn list_device_auth_tokens(
+    paths: &GatewayStorePaths,
+    device_id: &str,
+    role: &str,
+) -> Result<Vec<DeviceAuthEntry>, GatewayError> {
+    let Some(store) = read_json::<DeviceAuthStore>(&paths.device_auth_file)? else {
+        return Ok(Vec::new());
+    };
+    if store.device_id != device_id {
+        return Ok(Vec::new());
+    }
+
+    let normalized_role = normalize_role(role);
+    Ok(store
+        .tokens
+        .values()
+        .filter(|entry| entry.role == normalized_role)
+        .cloned()
+        .collect())
+}
+
 pub fn store_device_auth_token(
     paths: &GatewayStorePaths,
     device_id: &str,
@@ -538,6 +580,32 @@ mod tests {
         .expect("load token")
         .expect("fallback token");
         assert_eq!(loaded.token, "token-admin");
+        let _ = fs::remove_dir_all(paths.root);
+    }
+
+    #[test]
+    fn exact_device_auth_lookup_does_not_fallback_to_other_origins() {
+        let paths = temp_paths();
+        store_device_auth_token(
+            &paths,
+            "device-a",
+            "ws://192.168.1.112:18789",
+            "operator",
+            "token-lan",
+            &["operator.admin".to_string()],
+        )
+        .expect("store lan token");
+
+        let loaded = load_exact_device_auth_token(
+            &paths,
+            "device-a",
+            "ws://127.0.0.1:18789",
+            "operator",
+            &["operator.admin".to_string()],
+        )
+        .expect("load exact token");
+
+        assert!(loaded.is_none());
         let _ = fs::remove_dir_all(paths.root);
     }
 

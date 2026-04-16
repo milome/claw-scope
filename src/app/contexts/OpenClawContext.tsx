@@ -102,6 +102,34 @@ export interface GatewaySavedEndpoint {
   lastSuccessAtMs?: number | null;
 }
 
+export type GatewayPairingStatusKind = 'paired_ready' | 'bootstrap_required';
+
+export interface GatewayPairedEndpoint {
+  originKey: string;
+  label: string;
+  wsUrl: string;
+  httpUrl?: string | null;
+  role: string;
+  scopes: string[];
+  updatedAtMs: number;
+  wasUserSelected: boolean;
+  lastSuccessAtMs?: number | null;
+  exactMatch: boolean;
+}
+
+export interface GatewayPairingStatusResult {
+  originKey: string;
+  label: string;
+  wsUrl: string;
+  httpUrl?: string | null;
+  status: GatewayPairingStatusKind;
+  pairedReady: boolean;
+  bootstrapRequired: boolean;
+  savedEndpoint?: GatewaySavedEndpoint | null;
+  matchedEndpoint?: GatewayPairedEndpoint | null;
+  knownPairedEndpoints: GatewayPairedEndpoint[];
+}
+
 interface GatewayAgentIdentitySummary {
   name?: string | null;
   theme?: string | null;
@@ -889,6 +917,12 @@ export async function gatewayDiscover(seedUrl?: string, timeoutMs = 2400) {
 
 export async function gatewaySavedEndpoints() {
   return invokeGateway<GatewaySavedEndpoint[]>('gateway_saved_endpoints');
+}
+
+export async function gatewayPairingStatusLookup(url: string) {
+  return invokeGateway<GatewayPairingStatusResult>('gateway_pairing_status_lookup', {
+    config: createConnectConfig(url, 'paired_device', ''),
+  });
 }
 
 export async function gatewaySelectEndpoint(candidate: GatewayDiscoveredCandidate) {

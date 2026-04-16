@@ -78,6 +78,20 @@ describe('openClawConnectionPolicy', () => {
     });
   });
 
+  it('keeps paired_device bootstrap secret until pairing is completed', () => {
+    expect(
+      resolvePersistedAuthModeAfterConnect(
+        'http://127.0.0.1:18789',
+        'paired_device',
+        'shared-token',
+        { isPaired: false },
+      ),
+    ).toEqual({
+      mode: 'paired_device',
+      secret: 'shared-token',
+    });
+  });
+
   it('does not coerce remote token connections into paired device mode', () => {
     expect(
       resolvePersistedAuthModeAfterConnect(

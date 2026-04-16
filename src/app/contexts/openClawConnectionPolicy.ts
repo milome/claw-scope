@@ -55,7 +55,7 @@ export function resolvePersistedAuthModeAfterConnect(
   requestedSecret: string,
   snapshot?: GatewayConnectionSnapshotLike | null,
 ) {
-  if (isLoopbackGatewayUrl(url) && requestedMode !== 'paired_device' && snapshot?.isPaired) {
+  if (isLoopbackGatewayUrl(url) && snapshot?.isPaired) {
     return {
       mode: 'paired_device' as const,
       secret: '',
@@ -64,6 +64,6 @@ export function resolvePersistedAuthModeAfterConnect(
 
   return {
     mode: requestedMode,
-    secret: requestedMode === 'paired_device' ? '' : requestedSecret,
+    secret: requestedSecret,
   };
 }

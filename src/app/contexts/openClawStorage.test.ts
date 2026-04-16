@@ -41,7 +41,15 @@ describe('openClawStorage migration', () => {
     expect(readStoredAuthSecret(localStorage)).toBe('gateway-password');
   });
 
-  it('normalizes paired_device secret to null', () => {
-    expect(normalizeAuthSecret('paired_device', '  should-be-ignored  ')).toBeNull();
+  it('restores paired_device bootstrap secret when present', () => {
+    localStorage.setItem(OPENCLAW_STORAGE_KEYS.authMode, 'paired_device');
+    localStorage.setItem(OPENCLAW_STORAGE_KEYS.authSecret, 'bootstrap-token');
+
+    expect(readStoredAuthSecret(localStorage)).toBe('bootstrap-token');
+  });
+
+  it('normalizes paired_device bootstrap secret like other auth secrets', () => {
+    expect(normalizeAuthSecret('paired_device', '  bootstrap-token  ')).toBe('bootstrap-token');
+    expect(normalizeAuthSecret('paired_device', '   ')).toBeNull();
   });
 });

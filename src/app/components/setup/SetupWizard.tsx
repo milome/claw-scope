@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useOpenClaw, type AuthMode } from '../../contexts/OpenClawContext';
+import { gatewayPairingStatusLookup, useOpenClaw, type AuthMode, type GatewayPairingStatusResult } from '../../contexts/OpenClawContext';
 import { CheckCircle2, XCircle, RefreshCw, Server, Shield, Globe, TerminalSquare, LayoutGrid, Cpu, Check, AlertCircle, ChevronRight, Moon, Sun } from 'lucide-react';
 import { useI18n, LANGUAGES } from '../../contexts/I18nContext';
 import { useTheme } from 'next-themes';
+import { isLoopbackGatewayUrl } from '../../contexts/openClawConnectionPolicy';
 import appLogo from '../../../assets/270226c058e3f12ad7bb9e96e3b029bc0e2c0461.png';
 
 const DEFAULT_GATEWAY_URL = 'http://127.0.0.1:18789';
@@ -38,12 +39,25 @@ export function SetupWizard() {
   const [isSaving, setIsSaving] = useState(false);
   const [testResult, setTestResult] = useState<'none' | 'success' | 'fail'>('none');
   const [isDetecting, setIsDetecting] = useState(false);
+  const [pairingStatus, setPairingStatus] = useState<GatewayPairingStatusResult | null>(null);
+  const [pairingStatusLoading, setPairingStatusLoading] = useState(false);
+  const [authModeTouched, setAuthModeTouched] = useState(false);
 
   const shouldShowWizard = isSetupWizardOpen || (!isConfigured && !hasSkippedSetup);
   const isPairingRequired = lastError?.code === 'PAIRING_REQUIRED';
   const isTokenMismatch = lastError?.code === 'AUTH_TOKEN_MISMATCH';
-  const authSecretRequired = authMode !== 'paired_device' && authSecret.trim().length === 0;
-  const authSecretRequiredMessage = authMode === 'token' ? t('setup.auth.requiredToken') : t('setup.auth.requiredPassword');
+  const pairedReady = pairingStatus?.pairedReady ?? false;
+  const pairedDeviceBootstrapVisible =
+    authMode === 'paired_device' &&
+    !pairedReady &&
+    !pairingStatusLoading &&
+    pairingStatus !== null &&
+    Boolean(url.trim());
+  const pairedDeviceBootstrapHintVisible = pairedDeviceBootstrapVisible && isLoopbackGatewayUrl(url);
+  const authSecretRequired =
+    ((authMode === 'token' || authMode === 'password') || pairedDeviceBootstrapVisible) &&
+    authSecret.trim().length === 0;
+  const authSecretRequiredMessage = authMode === 'password' ? t('setup.auth.requiredPassword') : t('setup.auth.requiredToken');
 
   useEffect(() => {
     setMounted(true);
@@ -70,7 +84,46 @@ export function SetupWizard() {
     setIsSaving(false);
     setTestResult('none');
     setIsDetecting(false);
+    setAuthModeTouched(false);
   }, [shouldShowWizard, gatewayUrl, savedAuthMode, savedAuthSecret]);
+
+  useEffect(() => {
+    if (!shouldShowWizard || !url.trim()) {
+      setPairingStatus(null);
+      setPairingStatusLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setPairingStatus(null);
+    setPairingStatusLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const next = await gatewayPairingStatusLookup(url);
+        if (cancelled) {
+          return;
+        }
+        setPairingStatus(next);
+        if (!authModeTouched && next.pairedReady) {
+          setAuthMode('paired_device');
+          setAuthSecret('');
+        }
+      } catch {
+        if (!cancelled) {
+          setPairingStatus(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setPairingStatusLoading(false);
+        }
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [authModeTouched, shouldShowWizard, url]);
 
   const handleThemeToggle = (e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -99,6 +152,7 @@ export function SetupWizard() {
       setUrl(DEFAULT_GATEWAY_URL);
       setAuthMode('paired_device');
       setAuthSecret('');
+      setAuthModeTouched(false);
       setIsDetecting(false);
     }, 800);
   };
@@ -312,7 +366,10 @@ export function SetupWizard() {
                         <input
                           type="text"
                           value={url}
-                          onChange={(e) => setUrl(e.target.value)}
+                          onChange={(e) => {
+                            setUrl(e.target.value);
+                            setAuthModeTouched(false);
+                          }}
                           placeholder={DEFAULT_GATEWAY_URL}
                           className={`w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border rounded-xl text-sm outline-none transition-all dark:text-slate-100 ${
                             !url
@@ -327,6 +384,27 @@ export function SetupWizard() {
                         <p className="text-xs text-slate-500 mt-2">{t('setup.gateway.hint')}</p>
                       )}
                     </div>
+
+                    {url && (pairingStatusLoading || pairingStatus) ? (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/40 space-y-3">
+                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                          {t('setup.pairing.statusTitle')}
+                        </div>
+                        {pairingStatusLoading ? (
+                          <div className="text-sm text-slate-500 dark:text-slate-400">{t('setup.pairing.detecting')}</div>
+                        ) : pairingStatus?.pairedReady ? (
+                          <>
+                            <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{t('setup.pairing.readyTitle')}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">{t('setup.pairing.readyDesc')}</div>
+                          </>
+                        ) : pairingStatus ? (
+                          <>
+                            <div className="text-sm font-semibold text-amber-700 dark:text-amber-300">{t('setup.pairing.bootstrapTitle')}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">{t('setup.pairing.bootstrapDesc')}</div>
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
 
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
@@ -343,7 +421,10 @@ export function SetupWizard() {
                           return (
                             <button
                               key={modeOption.id}
-                              onClick={() => setAuthMode(modeOption.id as AuthMode)}
+                              onClick={() => {
+                                setAuthMode(modeOption.id as AuthMode);
+                                setAuthModeTouched(true);
+                              }}
                               className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${isActive ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-400' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
                             >
                               <Icon className="w-4 h-4" /> {modeOption.label}
@@ -353,15 +434,20 @@ export function SetupWizard() {
                       </div>
 
                       <AnimatePresence>
-                        {authMode !== 'paired_device' && (
+                        {(authMode !== 'paired_device' || pairedDeviceBootstrapVisible) && (
                           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                            {pairedDeviceBootstrapVisible ? (
+                              <label className="mt-2 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                                {t('setup.auth.pairedDeviceBootstrapLabel')}
+                              </label>
+                            ) : null}
                             <div className="relative mt-2">
                               <Shield className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                               <input
                                 type="password"
                                 value={authSecret}
                                 onChange={(e) => setAuthSecret(e.target.value)}
-                                placeholder={authMode === 'token' ? t('setup.ph.token') : t('setup.ph.pwd')}
+                                placeholder={authMode === 'password' ? t('setup.ph.pwd') : t('setup.ph.token')}
                                 className={`w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border rounded-xl text-sm outline-none transition-all dark:text-slate-100 ${
                                   authSecretRequired
                                     ? 'border-red-300 dark:border-red-500/50 focus:ring-2 focus:ring-red-500/50 focus:border-red-500'
@@ -375,7 +461,11 @@ export function SetupWizard() {
                                 {authSecretRequiredMessage}
                               </p>
                             )}
-                            <p className="text-xs text-slate-500 mt-2">{t('setup.hint.token1')} <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[10px] font-mono">openclaw config get gateway.auth.token</code> {t('setup.hint.token2')}</p>
+                            {pairedDeviceBootstrapHintVisible ? (
+                              <p className="text-xs text-slate-500 mt-2">{t('setup.auth.pairedDeviceBootstrapHint')}</p>
+                            ) : (
+                              <p className="text-xs text-slate-500 mt-2">{t('setup.hint.token1')} <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[10px] font-mono">openclaw config get gateway.auth.token</code> {t('setup.hint.token2')}</p>
+                            )}
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -539,9 +629,5 @@ export function SetupWizard() {
     </div>
   );
 }
-
-
-
-
 
 

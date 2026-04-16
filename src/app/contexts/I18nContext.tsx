@@ -2867,9 +2867,89 @@ const BASE_DICT: Record<string, string[]> = {
   "setup.auth.token": ["Token Auth", "Token认证", "Token認證"],
   "setup.auth.pwd": ["Password Auth", "Password认证", "Password認證"],
   "setup.auth.pairedDeviceHint": [
-    "Use the device token issued to this paired device. First-time connection still requires pairing approval.",
-    "使用当前已配对设备签发的 device token 连接；首次连接仍需先完成配对批准。",
-    "使用目前已配對裝置簽發的 device token 連線；首次連線仍需先完成配對批准。",
+    "Use the device token issued to this paired device. For first pairing or re-pairing, provide the Gateway Token below as a bootstrap credential, approve on the host if prompted, then save again.",
+    "使用当前已配对设备签发的 device token 连接；首次配对或重配时，请在下方填写 Gateway Token 作为首次配对凭据，若宿主机提示批准，再批准后重新保存。",
+    "使用目前已配對裝置簽發的 device token 連線；首次配對或重配時，請在下方填寫 Gateway Token 作為首次配對憑據，若主機提示批准，再批准後重新儲存。",
+  ],
+  "setup.auth.pairedDeviceBootstrapLabel": [
+    "Gateway Token For First Pairing",
+    "首次配对 Gateway Token",
+    "首次配對 Gateway Token",
+  ],
+  "setup.auth.pairedDeviceBootstrapHint": [
+    "Optional after the device is already paired. Required only for first pairing or re-pairing.",
+    "设备已配对后可留空；仅首次配对或重配时需要填写。",
+    "裝置已配對後可留空；僅首次配對或重配時需要填寫。",
+  ],
+  "setup.pairing.statusTitle": [
+    "Pairing Status",
+    "配对状态",
+    "配對狀態",
+  ],
+  "setup.pairing.readyTitle": [
+    "This gateway is already paired on this device",
+    "当前地址已在此设备上完成配对",
+    "目前位址已在此裝置上完成配對",
+  ],
+  "setup.pairing.readyDesc": [
+    "A cached device token is available for the current gateway address. Paired Device is recommended.",
+    "当前网关地址已有可复用的 device token，推荐直接使用“已配对设备”。",
+    "目前網關位址已有可重用的 device token，建議直接使用「已配對裝置」。",
+  ],
+  "setup.pairing.bootstrapTitle": [
+    "This gateway still needs first pairing",
+    "当前地址尚未完成首次配对",
+    "目前位址尚未完成首次配對",
+  ],
+  "setup.pairing.bootstrapDesc": [
+    "Use Paired Device together with the Gateway Token once. After the host approves and returns a device token, future reconnects no longer need the shared token.",
+    "使用“已配对设备”并填写一次 Gateway Token 完成首次配对。宿主机批准并签发 device token 后，后续重连将不再需要共享 token。",
+    "使用「已配對裝置」並填寫一次 Gateway Token 完成首次配對。主機批准並簽發 device token 後，後續重連將不再需要共享 token。",
+  ],
+  "setup.pairing.detecting": [
+    "Detecting pairing status...",
+    "正在检测配对状态...",
+    "正在檢測配對狀態...",
+  ],
+  "setup.pairing.usePaired": [
+    "Use Paired Device",
+    "使用已配对设备",
+    "使用已配對裝置",
+  ],
+  "setup.pairing.startBootstrap": [
+    "Start First Pairing",
+    "开始首次配对",
+    "開始首次配對",
+  ],
+  "setup.pairing.knownTitle": [
+    "Known Paired Gateways",
+    "已配对网关",
+    "已配對網關",
+  ],
+  "setup.pairing.knownEmpty": [
+    "No paired gateways are known on this device yet.",
+    "此设备上还没有已知的已配对网关。",
+    "此裝置上尚無已知的已配對網關。",
+  ],
+  "setup.pairing.useEndpoint": [
+    "Use this address",
+    "使用此地址",
+    "使用此位址",
+  ],
+  "setup.pairing.currentBadge": [
+    "Current URL",
+    "当前地址",
+    "目前位址",
+  ],
+  "setup.pairing.savedBadge": [
+    "Saved",
+    "已保存",
+    "已儲存",
+  ],
+  "setup.pairing.lastSuccess": [
+    "Last success: {0}",
+    "最近成功: {0}",
+    "最近成功: {0}",
   ],
   "setup.ph.token": [
     "Please enter Gateway Token",

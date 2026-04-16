@@ -12,6 +12,8 @@ use crate::gateway::protocol::{
     CONNECT_ERROR_PAIRING_REQUIRED,
 };
 
+const CONNECT_ERROR_AUTH_TOKEN_REQUIRED: &str = "AUTH_TOKEN_REQUIRED";
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct GatewayErrorSummary {
@@ -283,6 +285,11 @@ fn normalize_connect_rejection_code(code: Option<&str>, message: &str) -> Option
     if normalized_message.contains("gateway token mismatch") {
         return Some(CONNECT_ERROR_AUTH_TOKEN_MISMATCH.to_string());
     }
+    if normalized_message.contains("gateway token missing")
+        || normalized_message.contains("token missing")
+    {
+        return Some(CONNECT_ERROR_AUTH_TOKEN_REQUIRED.to_string());
+    }
     if normalized_message.contains("gateway password mismatch") {
         return Some(CONNECT_ERROR_AUTH_PASSWORD_MISMATCH.to_string());
     }
@@ -328,6 +335,9 @@ fn connect_rejection_message(code: Option<&str>, message: &str, pairing_reason: 
             Some("not-paired") => "当前设备尚未完成配对，需要先在服务端批准当前设备。".to_string(),
             _ => "当前连接需要先完成设备配对批准。".to_string(),
         },
+        Some(CONNECT_ERROR_AUTH_TOKEN_REQUIRED) => {
+            "当前连接缺少 Gateway Token，无法完成首次配对或重配。".to_string()
+        }
         _ => message.to_string(),
     }
 }
@@ -360,6 +370,9 @@ fn connect_rejection_hint(
         },
         Some(CONNECT_ERROR_AUTH_TOKEN_MISMATCH) if can_retry_with_device_token => Some(
             "共享 token 未通过校验，但服务端允许改用已签发的 device token。".to_string(),
+        ),
+        Some(CONNECT_ERROR_AUTH_TOKEN_REQUIRED) => Some(
+            "当前是首次配对或重配，请在“已配对设备”模式下填写 Gateway Token 作为首次配对凭据。配对成功后会自动切换为 device token。".to_string(),
         ),
         Some(CONNECT_ERROR_AUTH_TOKEN_MISMATCH) => {
             Some("请检查 Gateway token 是否与 OpenClaw 当前配置一致。".to_string())
@@ -489,6 +502,25 @@ mod tests {
         assert_eq!(
             summary.hint.as_deref(),
             Some("请检查 Gateway token 是否与 OpenClaw 当前配置一致。")
+        );
+    }
+
+    #[test]
+    fn token_missing_is_inferred_from_message_when_code_is_missing() {
+        let error = GatewayError::ConnectRejected {
+            code: None,
+            message: "unauthorized: gateway token missing (provide gateway auth token)".to_string(),
+            retryable: false,
+            can_retry_with_device_token: false,
+            recommended_next_step: Some("update_auth_configuration".to_string()),
+            pairing_reason: None,
+        };
+        let summary = GatewayErrorSummary::from_error(&error);
+        assert_eq!(summary.category, "auth");
+        assert_eq!(summary.code.as_deref(), Some(CONNECT_ERROR_AUTH_TOKEN_REQUIRED));
+        assert_eq!(
+            summary.hint.as_deref(),
+            Some("当前是首次配对或重配，请在“已配对设备”模式下填写 Gateway Token 作为首次配对凭据。配对成功后会自动切换为 device token。")
         );
     }
 }
