@@ -8,6 +8,11 @@ import {
   resolveSelectedOpenClawConfigSection,
   type OpenClawConfigSectionId,
 } from './openClawConfigSectionState';
+import {
+  resolveOpenClawPairingFollowup,
+  resolveOpenClawStartPairingTransition,
+  shouldShowNoPendingPairingHint,
+} from './openClawPairingState';
 
 export function OpenClawConfigModule() {
   const { t } = useI18n();
@@ -56,10 +61,18 @@ export function OpenClawConfigModule() {
   );
   const [pairingAttempted, setPairingAttempted] = useState(false);
   const [pairingCompletionPending, setPairingCompletionPending] = useState(false);
+  const [pairingSucceededWithoutDeviceToken, setPairingSucceededWithoutDeviceToken] = useState(false);
   const pairedReady = pairingStatus?.pairedReady ?? false;
   const pairedDeviceAvailable = pairedReady;
-  const awaitingPairApproval =
-    pairingAttempted && lastError?.code === 'PAIRING_REQUIRED' && !pairedDeviceAvailable;
+  const pairingFollowup = resolveOpenClawPairingFollowup({
+    pairedReady,
+    pairingAttempted,
+    pairingCompletionPending,
+    pairingSucceededWithoutDeviceToken,
+    lastError,
+  });
+  const awaitingPairApproval = pairingFollowup === 'awaiting_host_approval';
+  const showNoPendingPairingHint = shouldShowNoPendingPairingHint(pairingFollowup);
   const authSecretRequired =
     (authMode === 'token' || authMode === 'password') &&
     authSecret.trim().length === 0;
@@ -73,6 +86,7 @@ export function OpenClawConfigModule() {
     setPairingBootstrapToken(savedAuthMode === 'token' ? savedAuthSecret : '');
     setPairingAttempted(false);
     setPairingCompletionPending(false);
+    setPairingSucceededWithoutDeviceToken(false);
   }, [gatewayUrl, savedAuthMode, savedAuthSecret]);
 
   useEffect(() => {
@@ -152,6 +166,7 @@ export function OpenClawConfigModule() {
     setSaveFeedback(null);
     setPairingAttempted(false);
     setPairingCompletionPending(false);
+    setPairingSucceededWithoutDeviceToken(false);
     const success = await testConnection(targetUrl, effectiveMode, effectiveSecret);
 
     if (success) {
@@ -187,6 +202,7 @@ export function OpenClawConfigModule() {
     setSaveFeedback(null);
     setPairingAttempted(true);
     setPairingCompletionPending(false);
+    setPairingSucceededWithoutDeviceToken(false);
 
     if (!bootstrapToken) {
       setSaveFeedback({ kind: 'error', message: t('setup.auth.requiredToken') });
@@ -211,14 +227,25 @@ export function OpenClawConfigModule() {
       try {
         const next = await gatewayPairingStatusLookup(targetUrl);
         applyPairingStatus(next, true);
+        const transition = resolveOpenClawStartPairingTransition({
+          connectSucceeded: true,
+          pairedReady: next.pairedReady,
+        });
 
-        if (next.pairedReady) {
+        setPairingSucceededWithoutDeviceToken(
+          transition.pairingSucceededWithoutDeviceToken,
+        );
+        setPairingCompletionPending(transition.pairingCompletionPending);
+
+        if (transition.pairingCompletionPending) {
           setPairingAttempted(false);
-          setPairingCompletionPending(true);
           setSaveFeedback({
             kind: 'info',
             message: t('setup.pairing.deviceTokenReady'),
           });
+          setTestResult('success');
+        } else {
+          setTestResult('none');
         }
       } catch {
         // Ignore refresh failures and keep the latest visible state.
@@ -228,7 +255,9 @@ export function OpenClawConfigModule() {
     }
 
     setIsTesting(false);
-    setTestResult(success ? 'success' : 'fail');
+    if (!success) {
+      setTestResult('fail');
+    }
   };
 
   const handleSave = async () => {
@@ -531,6 +560,7 @@ export function OpenClawConfigModule() {
                     setAuthModeTouched(false);
                     setPairingAttempted(false);
                     setPairingCompletionPending(false);
+                    setPairingSucceededWithoutDeviceToken(false);
                     setSaveFeedback(null);
                   }}
                   placeholder="http://127.0.0.1:18789"
@@ -578,6 +608,7 @@ export function OpenClawConfigModule() {
                         setAuthMode('paired_device');
                         setAuthSecret('');
                         setAuthModeTouched(false);
+                        setPairingSucceededWithoutDeviceToken(false);
                       }}
                       className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300"
                     >
@@ -608,6 +639,41 @@ export function OpenClawConfigModule() {
                       </div>
                     ) : (
                       <div className="space-y-3">
+                        {pairingAttempted && lastError ? (
+                          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 dark:border-red-900/40 dark:bg-red-950/30">
+                            <div className="flex items-start gap-2 text-xs font-medium text-red-700 dark:text-red-300">
+                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                              <span>{lastError.message}</span>
+                            </div>
+                            {lastError.hint ? (
+                              <p className="mt-2 text-xs text-red-600 dark:text-red-300/80">
+                                {lastError.hint}
+                              </p>
+                        ) : null}
+                            {showNoPendingPairingHint ? (
+                              <p className="mt-2 text-xs text-red-700 dark:text-red-200">
+                                {pairingFollowup === 'connected_without_pairing'
+                                  ? t('setup.pairing.connectedWithoutPairingDesc')
+                                  : t('setup.pairing.requestNotQueuedDesc')}
+                              </p>
+                            ) : null}
+                            {pairingFollowup === 'token_mismatch' || pairingFollowup === 'token_required' ? (
+                              <code className="mt-2 block rounded-lg bg-slate-900 px-3 py-2 text-xs text-slate-100 font-mono overflow-x-auto">
+                                openclaw config get gateway.auth.token
+                              </code>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {pairingFollowup === 'connected_without_pairing' ? (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 dark:border-amber-900/40 dark:bg-amber-950/30">
+                            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                              {t('setup.pairing.connectedWithoutPairingTitle')}
+                            </p>
+                            <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">
+                              {t('setup.pairing.connectedWithoutPairingDesc')}
+                            </p>
+                          </div>
+                        ) : null}
                         <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                           {t('setup.auth.pairedDeviceBootstrapLabel')}
                         </label>
@@ -617,7 +683,10 @@ export function OpenClawConfigModule() {
                             ref={pairingBootstrapTokenInputRef}
                             type="password"
                             value={pairingBootstrapToken}
-                            onChange={(e) => setPairingBootstrapToken(e.target.value)}
+                            onChange={(e) => {
+                              setPairingBootstrapToken(e.target.value);
+                              setPairingSucceededWithoutDeviceToken(false);
+                            }}
                             placeholder={t('setup.ph.token')}
                             className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none transition-all focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-slate-100"
                           />
@@ -695,6 +764,7 @@ export function OpenClawConfigModule() {
                         }
                         setPairingAttempted(false);
                         setPairingCompletionPending(false);
+                        setPairingSucceededWithoutDeviceToken(false);
                         setSaveFeedback(null);
                         setAuthMode(modeOption.id as AuthMode);
                         setAuthModeTouched(true);

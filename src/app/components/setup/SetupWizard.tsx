@@ -5,6 +5,11 @@ import { CheckCircle2, XCircle, RefreshCw, Server, Shield, Globe, TerminalSquare
 import { useI18n, LANGUAGES } from '../../contexts/I18nContext';
 import { useTheme } from 'next-themes';
 import appLogo from '../../../assets/270226c058e3f12ad7bb9e96e3b029bc0e2c0461.png';
+import {
+  resolveOpenClawPairingFollowup,
+  resolveOpenClawStartPairingTransition,
+  shouldShowNoPendingPairingHint,
+} from './openClawPairingState';
 
 const DEFAULT_GATEWAY_URL = 'http://127.0.0.1:18789';
 
@@ -45,6 +50,7 @@ export function SetupWizard() {
   const [pairingBootstrapToken, setPairingBootstrapToken] = useState('');
   const [pairingAttempted, setPairingAttempted] = useState(false);
   const [pairingCompletionPending, setPairingCompletionPending] = useState(false);
+  const [pairingSucceededWithoutDeviceToken, setPairingSucceededWithoutDeviceToken] = useState(false);
   const pairingBootstrapTokenInputRef = useRef<HTMLInputElement | null>(null);
 
   const shouldShowWizard = isSetupWizardOpen || (!isConfigured && !hasSkippedSetup);
@@ -52,8 +58,15 @@ export function SetupWizard() {
   const isTokenMismatch = lastError?.code === 'AUTH_TOKEN_MISMATCH';
   const pairedReady = pairingStatus?.pairedReady ?? false;
   const pairedDeviceAvailable = pairedReady;
-  const awaitingPairApproval =
-    pairingAttempted && isPairingRequired && !pairedDeviceAvailable;
+  const pairingFollowup = resolveOpenClawPairingFollowup({
+    pairedReady,
+    pairingAttempted,
+    pairingCompletionPending,
+    pairingSucceededWithoutDeviceToken,
+    lastError,
+  });
+  const awaitingPairApproval = pairingFollowup === 'awaiting_host_approval';
+  const showNoPendingPairingHint = shouldShowNoPendingPairingHint(pairingFollowup);
   const authSecretRequired =
     (authMode === 'token' || authMode === 'password') &&
     authSecret.trim().length === 0;
@@ -89,6 +102,7 @@ export function SetupWizard() {
     setPairingBootstrapToken(savedAuthMode === 'token' ? savedAuthSecret : '');
     setPairingAttempted(false);
     setPairingCompletionPending(false);
+    setPairingSucceededWithoutDeviceToken(false);
   }, [shouldShowWizard, gatewayUrl, savedAuthMode, savedAuthSecret]);
 
   useEffect(() => {
@@ -155,6 +169,7 @@ export function SetupWizard() {
       setAuthModeTouched(false);
       setPairingAttempted(false);
       setPairingCompletionPending(false);
+      setPairingSucceededWithoutDeviceToken(false);
       setPairingActionHint(null);
       setIsDetecting(false);
     }, 800);
@@ -188,6 +203,7 @@ export function SetupWizard() {
     setPairingActionHint(null);
     setPairingAttempted(false);
     setPairingCompletionPending(false);
+    setPairingSucceededWithoutDeviceToken(false);
 
     const success = await testConnection(targetUrl, effectiveMode, effectiveSecret);
 
@@ -215,6 +231,7 @@ export function SetupWizard() {
     setPairingActionHint(null);
     setPairingAttempted(true);
     setPairingCompletionPending(false);
+    setPairingSucceededWithoutDeviceToken(false);
 
     if (!targetUrl) {
       return;
@@ -235,11 +252,25 @@ export function SetupWizard() {
       try {
         const next = await gatewayPairingStatusLookup(targetUrl);
         applyPairingStatus(next, true);
+        const transition = resolveOpenClawStartPairingTransition({
+          connectSucceeded: true,
+          pairedReady: next.pairedReady,
+        });
 
-        if (next.pairedReady) {
+        setPairingSucceededWithoutDeviceToken(
+          transition.pairingSucceededWithoutDeviceToken,
+        );
+
+        if (transition.pairingCompletionPending) {
           setPairingAttempted(false);
           setPairingCompletionPending(true);
           setPairingActionHint(t('setup.pairing.deviceTokenReady'));
+          setTestResult('success');
+          if (transition.shouldAdvanceWizard) {
+            setStep(3);
+          }
+        } else {
+          setTestResult('none');
         }
       } catch {
         // Ignore refresh failures and keep the test result visible.
@@ -249,8 +280,9 @@ export function SetupWizard() {
     }
 
     setIsTesting(false);
-    setTestResult(success ? 'success' : 'fail');
-    setStep(3);
+    if (!success) {
+      setTestResult('fail');
+    }
   };
 
   const handleSaveAndFinish = async () => {
@@ -464,6 +496,7 @@ export function SetupWizard() {
                             setAuthModeTouched(false);
                             setPairingAttempted(false);
                             setPairingCompletionPending(false);
+                            setPairingSucceededWithoutDeviceToken(false);
                             setPairingActionHint(null);
                           }}
                           placeholder={DEFAULT_GATEWAY_URL}
@@ -516,12 +549,25 @@ export function SetupWizard() {
                                   ref={pairingBootstrapTokenInputRef}
                                   type="password"
                                   value={pairingBootstrapToken}
-                                  onChange={(e) => setPairingBootstrapToken(e.target.value)}
+                                  onChange={(e) => {
+                                    setPairingBootstrapToken(e.target.value);
+                                    setPairingSucceededWithoutDeviceToken(false);
+                                  }}
                                   placeholder={t('setup.ph.token')}
                                   className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none transition-all focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-slate-100"
                                 />
                               </div>
                               <p className="text-xs text-slate-500 dark:text-slate-400">{t('setup.auth.pairedDeviceBootstrapHint')}</p>
+                              {pairingFollowup === 'connected_without_pairing' ? (
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-left dark:border-amber-900/40 dark:bg-amber-950/30">
+                                  <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                                    {t('setup.pairing.connectedWithoutPairingTitle')}
+                                  </p>
+                                  <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">
+                                    {t('setup.pairing.connectedWithoutPairingDesc')}
+                                  </p>
+                                </div>
+                              ) : null}
                               <button
                                 onClick={handleStartPairing}
                                 disabled={!url || isTesting}
@@ -558,6 +604,7 @@ export function SetupWizard() {
                                 }
                                 setPairingAttempted(false);
                                 setPairingCompletionPending(false);
+                                setPairingSucceededWithoutDeviceToken(false);
                                 setPairingActionHint(null);
                                 setAuthMode(modeOption.id as AuthMode);
                                 setAuthModeTouched(true);
@@ -676,9 +723,37 @@ export function SetupWizard() {
                           <p className="text-sm text-slate-700 dark:text-slate-300">
                             {t('setup.auth.tokenMismatchHint')}
                           </p>
+                          {showNoPendingPairingHint ? (
+                            <p className="text-sm text-slate-700 dark:text-slate-300">
+                              {t('setup.pairing.requestNotQueuedDesc')}
+                            </p>
+                          ) : null}
                           <code className="block rounded-lg bg-slate-900 px-4 py-3 text-sm text-slate-100 font-mono overflow-x-auto">
                             openclaw config get gateway.auth.token
                           </code>
+                        </div>
+                      ) : pairingFollowup === 'token_required' || pairingFollowup === 'request_not_queued' ? (
+                        <div className="text-left bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 w-full space-y-4">
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            {t('setup.pairing.requestNotQueuedTitle')}
+                          </p>
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            {t('setup.pairing.requestNotQueuedDesc')}
+                          </p>
+                          {pairingFollowup === 'token_required' ? (
+                            <code className="block rounded-lg bg-slate-900 px-4 py-3 text-sm text-slate-100 font-mono overflow-x-auto">
+                              openclaw config get gateway.auth.token
+                            </code>
+                          ) : null}
+                        </div>
+                      ) : pairingFollowup === 'connected_without_pairing' ? (
+                        <div className="text-left bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 w-full space-y-4">
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            {t('setup.pairing.connectedWithoutPairingTitle')}
+                          </p>
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            {t('setup.pairing.connectedWithoutPairingDesc')}
+                          </p>
                         </div>
                       ) : (
                         <div className="text-left bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 w-full">

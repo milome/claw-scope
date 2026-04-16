@@ -3778,6 +3778,26 @@ const BASE_DICT: Record<string, string[]> = {
     "当前填写的 Gateway Token 与宿主机配置不一致。请先在宿主机核对 token，再回到这里重新测试连接。",
     "目前填寫的 Gateway Token 與主機設定不一致。請先在主機核對 token，再回到這裡重新測試連線。",
   ],
+  "setup.pairing.requestNotQueuedTitle": [
+    "This pairing attempt did not reach the host approval queue",
+    "这次配对尝试没有进入宿主机待批准队列",
+    "這次配對嘗試沒有進入主機待批准佇列",
+  ],
+  "setup.pairing.requestNotQueuedDesc": [
+    "If `openclaw devices approve --latest` returns `no device`, this attempt was rejected before host approval. Check the Gateway URL and Gateway Token first, then start pairing again.",
+    "如果宿主机执行 `openclaw devices approve --latest` 返回 `no device`，说明这次尝试在进入宿主机批准队列之前就被拒绝了。请先检查 Gateway URL 和 Gateway Token，再重新开始配对。",
+    "如果主機執行 `openclaw devices approve --latest` 回傳 `no device`，表示這次嘗試在進入主機批准佇列之前就被拒絕了。請先檢查 Gateway URL 和 Gateway Token，再重新開始配對。",
+  ],
+  "setup.pairing.connectedWithoutPairingTitle": [
+    "Connection succeeded, but first pairing is not complete yet",
+    "连接成功，但首次配对尚未完成",
+    "連線成功，但首次配對尚未完成",
+  ],
+  "setup.pairing.connectedWithoutPairingDesc": [
+    "This attempt established a shared-token connection, but the gateway did not return a device token. Stay on this step and do not continue yet. If the host shows `openclaw devices approve --latest` -> `no pending device`, the request never entered the approval queue.",
+    "这次尝试只建立了共享 token 连接，但网关没有返回 device token。请停留在当前步骤，不要继续下一页。如果宿主机执行 `openclaw devices approve --latest` 后显示 `no pending device`，说明这次请求根本没有进入待批准配对队列。",
+    "這次嘗試只建立了共享 token 連線，但網關沒有回傳 device token。請停留在目前步驟，不要繼續下一頁。如果主機執行 `openclaw devices approve --latest` 後顯示 `no pending device`，表示這次請求根本沒有進入待批准配對佇列。",
+  ],
   "memory.header.agents": ["Agents", "Agents", "Agents"],
   "memory.overview.pending": [
     "Overview is waiting for agent resolution and the first batch of memory data.",
