@@ -13,6 +13,7 @@ import {
   type OpenClawConfigSectionId,
 } from './openClawConfigSectionState';
 import {
+  canAdoptPairedDeviceForGatewayUrl,
   resolveOpenClawPairingFollowup,
   resolveOpenClawStartPairingTransition,
   shouldShowNoPendingPairingHint,
@@ -192,7 +193,7 @@ export function OpenClawConfigModule() {
       setPairingStatusLoading(true);
       try {
         const next = await gatewayPairingStatusLookup(targetUrl);
-        applyPairingStatus(next, true);
+        applyPairingStatus(next, canAdoptPairedDeviceForGatewayUrl(targetUrl));
 
         if (next.pairedReady && usedBootstrapToken) {
           setSaveFeedback({
@@ -245,7 +246,7 @@ export function OpenClawConfigModule() {
       setPairingStatusLoading(true);
       try {
         const next = await gatewayPairingStatusLookup(targetUrl);
-        applyPairingStatus(next, true);
+        applyPairingStatus(next, canAdoptPairedDeviceForGatewayUrl(targetUrl));
         const transition = resolveOpenClawStartPairingTransition({
           connectSucceeded: true,
           pairedReady: next.pairedReady,
