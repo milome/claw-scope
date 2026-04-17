@@ -52,6 +52,7 @@ import {
 } from "../../contexts/OpenClawContext";
 import { applyIdentityMetaToDocument } from "./profileIdentityDocument";
 import {
+  buildVisibleProfileNodeEntries,
   groupAgentsByNode,
   resolveSelectedAgentIdForNode,
   resolveSelectedProfileNodeName,
@@ -2169,6 +2170,7 @@ export function ProfileView() {
     isConnected,
     connectedOrigin,
     grantedScopes,
+    setActiveSession,
   } = useOpenClaw();
 
   const MOCK_AGENTS_BACKUP: DisplayAgent[] = [
@@ -2617,9 +2619,22 @@ export function ProfileView() {
     () => groupAgentsByNode(displayAgents),
     [displayAgents],
   );
-  const nodeEntries = useMemo(() => Object.entries(groupedAgents), [groupedAgents]);
+  const nodeEntries = useMemo(
+    () =>
+      hasRealAgents
+        ? buildVisibleProfileNodeEntries(realNodes, groupedAgents)
+        : Object.entries(groupedAgents).map(([nodeName, agents]) => ({
+            id: nodeName,
+            name: nodeName,
+            status: "online" as const,
+            sessionId: undefined,
+            isActive: undefined,
+            agentCount: agents.length,
+          })),
+    [groupedAgents, hasRealAgents, realNodes],
+  );
   const nodeNames = useMemo(
-    () => nodeEntries.map(([nodeName]) => nodeName),
+    () => nodeEntries.map((entry) => entry.name),
     [nodeEntries],
   );
   const nodeCount = nodeNames.length;
@@ -2635,14 +2650,9 @@ export function ProfileView() {
     }
   }, [nodeNames, selectedNodeName]);
 
-  useEffect(() => {
-    if (activeAgent?.node && activeAgent.node !== selectedNodeName) {
-      setSelectedNodeName(activeAgent.node);
-    }
-  }, [activeAgent?.node, selectedNodeName]);
-
   const handleNodeSelect = (nodeName: string) => {
     setSelectedNodeName(nodeName);
+    const selectedNodeEntry = nodeEntries.find((entry) => entry.name === nodeName);
     const nextSelectedAgentId = resolveSelectedAgentIdForNode(
       selectedAgentId,
       groupedAgents[nodeName] ?? [],
@@ -2650,6 +2660,14 @@ export function ProfileView() {
 
     if (nextSelectedAgentId !== selectedAgentId) {
       setSelectedAgentId(nextSelectedAgentId);
+    }
+
+    if (
+      selectedNodeEntry?.sessionId &&
+      hasRealAgents &&
+      !selectedNodeEntry.isActive
+    ) {
+      void setActiveSession(selectedNodeEntry.sessionId);
     }
   };
 
@@ -2668,9 +2686,9 @@ export function ProfileView() {
         disabled={nodeCount <= 1}
         className="w-full cursor-pointer appearance-none rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-10 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-sky-400 focus:bg-white dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-200 dark:focus:border-sky-500 dark:focus:bg-slate-900 disabled:cursor-default disabled:opacity-70"
       >
-        {nodeEntries.map(([nodeName, agents]) => (
-          <option key={nodeName} value={nodeName}>
-            {nodeName} ({agents.length})
+        {nodeEntries.map((entry) => (
+          <option key={entry.id} value={entry.name}>
+            {entry.name} ({entry.agentCount})
           </option>
         ))}
       </select>
