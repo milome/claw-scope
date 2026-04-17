@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canAdoptPairedDeviceForGatewayUrl,
   resolveOpenClawPairingFollowup,
   resolveOpenClawStartPairingTransition,
   shouldShowNoPendingPairingHint,
@@ -118,5 +119,11 @@ describe("openClawPairingState", () => {
       pairingCompletionPending: true,
       pairingSucceededWithoutDeviceToken: false,
     });
+  });
+
+  it("does not allow paired-device adoption for loopback gateway urls", () => {
+    expect(canAdoptPairedDeviceForGatewayUrl("http://127.0.0.1:18789")).toBe(false);
+    expect(canAdoptPairedDeviceForGatewayUrl("http://localhost:18789")).toBe(false);
+    expect(canAdoptPairedDeviceForGatewayUrl("http://192.168.1.112:18789")).toBe(true);
   });
 });

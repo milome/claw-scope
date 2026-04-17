@@ -1,4 +1,5 @@
 import type { GatewayErrorSummary } from "../../contexts/OpenClawContext";
+import { isLoopbackGatewayUrl } from "../../contexts/openClawConnectionPolicy";
 
 export type OpenClawPairingFollowupKind =
   | "none"
@@ -25,6 +26,10 @@ interface OpenClawStartPairingTransition {
   shouldAdvanceWizard: boolean;
   pairingCompletionPending: boolean;
   pairingSucceededWithoutDeviceToken: boolean;
+}
+
+export function canAdoptPairedDeviceForGatewayUrl(url: string) {
+  return !isLoopbackGatewayUrl(url);
 }
 
 export function resolveOpenClawPairingFollowup({

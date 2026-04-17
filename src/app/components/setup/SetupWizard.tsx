@@ -10,6 +10,7 @@ import {
   shouldAllowPairingUiForGatewayUrl,
 } from '../../contexts/openClawConnectionPolicy';
 import {
+  canAdoptPairedDeviceForGatewayUrl,
   resolveOpenClawPairingFollowup,
   resolveOpenClawStartPairingTransition,
   shouldShowNoPendingPairingHint,
@@ -235,7 +236,7 @@ export function SetupWizard() {
       setPairingStatusLoading(true);
       try {
         const next = await gatewayPairingStatusLookup(targetUrl);
-        applyPairingStatus(next, true);
+        applyPairingStatus(next, canAdoptPairedDeviceForGatewayUrl(targetUrl));
       } catch {
         // Ignore refresh failures and keep the test result visible.
       } finally {
@@ -275,7 +276,7 @@ export function SetupWizard() {
       setPairingStatusLoading(true);
       try {
         const next = await gatewayPairingStatusLookup(targetUrl);
-        applyPairingStatus(next, true);
+        applyPairingStatus(next, canAdoptPairedDeviceForGatewayUrl(targetUrl));
         const transition = resolveOpenClawStartPairingTransition({
           connectSucceeded: true,
           pairedReady: next.pairedReady,
