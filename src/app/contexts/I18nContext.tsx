@@ -3798,6 +3798,16 @@ const BASE_DICT: Record<string, string[]> = {
     "这次尝试只建立了共享 token 连接，但网关没有返回 device token。请停留在当前步骤，不要继续下一页。如果宿主机执行 `openclaw devices approve --latest` 后显示 `no pending device`，说明这次请求根本没有进入待批准配对队列。",
     "這次嘗試只建立了共享 token 連線，但網關沒有回傳 device token。請停留在目前步驟，不要繼續下一頁。如果主機執行 `openclaw devices approve --latest` 後顯示 `no pending device`，表示這次請求根本沒有進入待批准配對佇列。",
   ],
+  "setup.pairing.loopbackTitle": [
+    "Loopback pairing is unavailable here",
+    "当前不支持本机 loopback 配对",
+    "目前不支援本機 loopback 配對",
+  ],
+  "setup.pairing.loopbackDesc": [
+    "For `127.0.0.1` / `localhost`, use Gateway Token or Password for local access. If you need device pairing, switch this URL to a LAN IP first.",
+    "对于 `127.0.0.1` / `localhost`，请使用 Gateway Token 或 Password 做本地连接；如需设备配对，请先把当前地址切换为局域网 IP。",
+    "對於 `127.0.0.1` / `localhost`，請使用 Gateway Token 或 Password 做本機連線；如需裝置配對，請先把目前位址切換為區域網路 IP。",
+  ],
   "memory.header.agents": ["Agents", "Agents", "Agents"],
   "memory.overview.pending": [
     "Overview is waiting for agent resolution and the first batch of memory data.",

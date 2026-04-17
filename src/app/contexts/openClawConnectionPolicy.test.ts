@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isLoopbackGatewayUrl,
+  resolveAuthModeForGatewayUrl,
   resolvePersistedAuthModeAfterConnect,
+  shouldAllowPairingUiForGatewayUrl,
   shouldRetryWithPairedDeviceOnLocalGateway,
 } from './openClawConnectionPolicy';
 
@@ -16,6 +18,19 @@ describe('openClawConnectionPolicy', () => {
   it('rejects non-loopback gateway urls', () => {
     expect(isLoopbackGatewayUrl('http://192.168.1.23:18789')).toBe(false);
     expect(isLoopbackGatewayUrl('not-a-url')).toBe(false);
+  });
+
+  it('disables pairing ui for loopback gateway urls and keeps it for lan/remote urls', () => {
+    expect(shouldAllowPairingUiForGatewayUrl('http://127.0.0.1:18789')).toBe(false);
+    expect(shouldAllowPairingUiForGatewayUrl('http://localhost:18789')).toBe(false);
+    expect(shouldAllowPairingUiForGatewayUrl('http://[::1]:18789')).toBe(false);
+    expect(shouldAllowPairingUiForGatewayUrl('http://192.168.1.112:18789')).toBe(true);
+  });
+
+  it('coerces paired_device auth back to token on loopback urls', () => {
+    expect(resolveAuthModeForGatewayUrl('http://127.0.0.1:18789', 'paired_device')).toBe('token');
+    expect(resolveAuthModeForGatewayUrl('http://localhost:18789', 'password')).toBe('password');
+    expect(resolveAuthModeForGatewayUrl('http://192.168.1.112:18789', 'paired_device')).toBe('paired_device');
   });
 
   it('retries local token auth mismatches with paired device mode', () => {

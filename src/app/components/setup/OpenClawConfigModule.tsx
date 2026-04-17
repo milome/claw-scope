@@ -4,6 +4,10 @@ import { CheckCircle2, Server, Shield, Globe, TerminalSquare, RefreshCw, XCircle
 import { motion, AnimatePresence } from 'motion/react';
 import { useI18n } from '../../contexts/I18nContext';
 import {
+  resolveAuthModeForGatewayUrl,
+  shouldAllowPairingUiForGatewayUrl,
+} from '../../contexts/openClawConnectionPolicy';
+import {
   buildAvailableOpenClawConfigSections,
   resolveSelectedOpenClawConfigSection,
   type OpenClawConfigSectionId,
@@ -62,8 +66,9 @@ export function OpenClawConfigModule() {
   const [pairingAttempted, setPairingAttempted] = useState(false);
   const [pairingCompletionPending, setPairingCompletionPending] = useState(false);
   const [pairingSucceededWithoutDeviceToken, setPairingSucceededWithoutDeviceToken] = useState(false);
+  const pairingUiAllowed = shouldAllowPairingUiForGatewayUrl(url);
   const pairedReady = pairingStatus?.pairedReady ?? false;
-  const pairedDeviceAvailable = pairedReady;
+  const pairedDeviceAvailable = pairingUiAllowed && pairedReady;
   const pairingFollowup = resolveOpenClawPairingFollowup({
     pairedReady,
     pairingAttempted,
@@ -80,7 +85,7 @@ export function OpenClawConfigModule() {
 
   useEffect(() => {
     setUrl(gatewayUrl);
-    setAuthMode(savedAuthMode);
+    setAuthMode(resolveAuthModeForGatewayUrl(gatewayUrl, savedAuthMode));
     setAuthSecret(savedAuthSecret);
     setAuthModeTouched(false);
     setPairingBootstrapToken(savedAuthMode === 'token' ? savedAuthSecret : '');
@@ -90,7 +95,7 @@ export function OpenClawConfigModule() {
   }, [gatewayUrl, savedAuthMode, savedAuthSecret]);
 
   useEffect(() => {
-    if (!url.trim()) {
+    if (!url.trim() || !pairingUiAllowed) {
       setPairingStatus(null);
       setPairingStatusLoading(false);
       return;
@@ -121,7 +126,21 @@ export function OpenClawConfigModule() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [authModeTouched, url]);
+  }, [authModeTouched, pairingUiAllowed, url]);
+
+  useEffect(() => {
+    const nextMode = resolveAuthModeForGatewayUrl(url, authMode);
+    if (nextMode === authMode) {
+      return;
+    }
+
+    setAuthMode(nextMode);
+    setAuthModeTouched(false);
+    setPairingAttempted(false);
+    setPairingCompletionPending(false);
+    setPairingSucceededWithoutDeviceToken(false);
+    setSaveFeedback(null);
+  }, [authMode, url]);
 
   useEffect(() => {
     setAdvancedTimeoutMs(String(advancedConnectionConfig.timeoutMs));
@@ -574,7 +593,16 @@ export function OpenClawConfigModule() {
               {!url && <p className="text-xs text-red-500 mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {t('config.connection.urlRequired')}</p>}
             </div>
 
-            {url && (pairingStatusLoading || pairingStatus) ? (
+            {url && !pairingUiAllowed ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-4 dark:border-amber-900/30 dark:bg-amber-950/20 space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">
+                  {t('setup.pairing.loopbackTitle')}
+                </div>
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  {t('setup.pairing.loopbackDesc')}
+                </p>
+              </div>
+            ) : url && (pairingStatusLoading || pairingStatus) ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/40 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -697,6 +725,7 @@ export function OpenClawConfigModule() {
                   </div>
                 ) : null}
 
+                {pairingUiAllowed ? (
                 <div className="space-y-2">
                   <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
                     {t('setup.pairing.knownTitle')}
@@ -739,6 +768,7 @@ export function OpenClawConfigModule() {
                     </div>
                   )}
                 </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -810,7 +840,9 @@ export function OpenClawConfigModule() {
                   </motion.div>
                 )}
               </AnimatePresence>
-              {authMode === 'paired_device' && pairedDeviceAvailable ? (
+              {!pairingUiAllowed ? (
+                <p className="text-xs text-slate-500 mt-2">{t('setup.pairing.loopbackDesc')}</p>
+              ) : authMode === 'paired_device' && pairedDeviceAvailable ? (
                 <p className="text-xs text-slate-500 mt-2">{t('setup.auth.pairedDeviceHint')}</p>
               ) : !pairedDeviceAvailable ? (
                 <p className="text-xs text-slate-500 mt-2">{t('setup.pairing.pairedDeviceDisabled')}</p>

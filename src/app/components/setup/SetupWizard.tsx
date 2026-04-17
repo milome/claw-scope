@@ -6,6 +6,10 @@ import { useI18n, LANGUAGES } from '../../contexts/I18nContext';
 import { useTheme } from 'next-themes';
 import appLogo from '../../../assets/270226c058e3f12ad7bb9e96e3b029bc0e2c0461.png';
 import {
+  resolveAuthModeForGatewayUrl,
+  shouldAllowPairingUiForGatewayUrl,
+} from '../../contexts/openClawConnectionPolicy';
+import {
   resolveOpenClawPairingFollowup,
   resolveOpenClawStartPairingTransition,
   shouldShowNoPendingPairingHint,
@@ -54,10 +58,11 @@ export function SetupWizard() {
   const pairingBootstrapTokenInputRef = useRef<HTMLInputElement | null>(null);
 
   const shouldShowWizard = isSetupWizardOpen || (!isConfigured && !hasSkippedSetup);
+  const pairingUiAllowed = shouldAllowPairingUiForGatewayUrl(url);
   const isPairingRequired = lastError?.code === 'PAIRING_REQUIRED';
   const isTokenMismatch = lastError?.code === 'AUTH_TOKEN_MISMATCH';
   const pairedReady = pairingStatus?.pairedReady ?? false;
-  const pairedDeviceAvailable = pairedReady;
+  const pairedDeviceAvailable = pairingUiAllowed && pairedReady;
   const pairingFollowup = resolveOpenClawPairingFollowup({
     pairedReady,
     pairingAttempted,
@@ -91,7 +96,12 @@ export function SetupWizard() {
 
     setStep(1);
     setUrl(gatewayUrl || DEFAULT_GATEWAY_URL);
-    setAuthMode(savedAuthMode === 'paired_device' ? 'token' : savedAuthMode);
+    setAuthMode(
+      resolveAuthModeForGatewayUrl(
+        gatewayUrl || DEFAULT_GATEWAY_URL,
+        savedAuthMode,
+      ),
+    );
     setAuthSecret(savedAuthSecret);
     setIsTesting(false);
     setIsSaving(false);
@@ -106,7 +116,7 @@ export function SetupWizard() {
   }, [shouldShowWizard, gatewayUrl, savedAuthMode, savedAuthSecret]);
 
   useEffect(() => {
-    if (!shouldShowWizard || !url.trim()) {
+    if (!shouldShowWizard || !url.trim() || !pairingUiAllowed) {
       setPairingStatus(null);
       setPairingStatusLoading(false);
       return;
@@ -137,7 +147,21 @@ export function SetupWizard() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [authModeTouched, shouldShowWizard, url]);
+  }, [authModeTouched, pairingUiAllowed, shouldShowWizard, url]);
+
+  useEffect(() => {
+    const nextMode = resolveAuthModeForGatewayUrl(url, authMode);
+    if (nextMode === authMode) {
+      return;
+    }
+
+    setAuthMode(nextMode);
+    setAuthModeTouched(false);
+    setPairingAttempted(false);
+    setPairingCompletionPending(false);
+    setPairingSucceededWithoutDeviceToken(false);
+    setPairingActionHint(null);
+  }, [authMode, url]);
 
   const handleThemeToggle = (e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -514,7 +538,16 @@ export function SetupWizard() {
                       )}
                     </div>
 
-                    {url && (pairingStatusLoading || pairingStatus) ? (
+                    {url && !pairingUiAllowed ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-4 dark:border-amber-900/30 dark:bg-amber-950/20 space-y-2">
+                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">
+                          {t('setup.pairing.loopbackTitle')}
+                        </div>
+                        <p className="text-sm text-amber-800 dark:text-amber-200">
+                          {t('setup.pairing.loopbackDesc')}
+                        </p>
+                      </div>
+                    ) : url && (pairingStatusLoading || pairingStatus) ? (
                       <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/40 space-y-3">
                         <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
                           {t('setup.pairing.statusTitle')}
@@ -651,7 +684,9 @@ export function SetupWizard() {
                           </motion.div>
                         )}
                       </AnimatePresence>
-                      {authMode === 'paired_device' && pairedDeviceAvailable ? (
+                      {!pairingUiAllowed ? (
+                        <p className="text-xs text-slate-500 mt-2">{t('setup.pairing.loopbackDesc')}</p>
+                      ) : authMode === 'paired_device' && pairedDeviceAvailable ? (
                         <p className="text-xs text-slate-500 mt-2">{t('setup.auth.pairedDeviceHint')}</p>
                       ) : !pairedDeviceAvailable ? (
                         <p className="text-xs text-slate-500 mt-2">{t('setup.pairing.pairedDeviceDisabled')}</p>

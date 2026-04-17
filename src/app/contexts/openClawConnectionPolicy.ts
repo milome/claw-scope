@@ -33,6 +33,18 @@ export function isLoopbackGatewayUrl(url: string) {
   }
 }
 
+export function shouldAllowPairingUiForGatewayUrl(url: string) {
+  return !isLoopbackGatewayUrl(url);
+}
+
+export function resolveAuthModeForGatewayUrl(url: string, mode: AuthMode): AuthMode {
+  if (isLoopbackGatewayUrl(url) && mode === 'paired_device') {
+    return 'token';
+  }
+
+  return mode;
+}
+
 export function shouldRetryWithPairedDeviceOnLocalGateway(
   url: string,
   mode: AuthMode,
