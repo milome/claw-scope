@@ -1,6 +1,9 @@
 use std::{
     collections::{BTreeSet, HashMap},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use futures_util::stream::SplitSink;
@@ -22,9 +25,11 @@ pub type GatewaySocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 pub type GatewaySocketWriter = SplitSink<GatewaySocket, Message>;
 pub type GatewayPendingRequestResult = Result<Value, GatewayError>;
 type GatewayPendingRequests = Arc<Mutex<HashMap<String, oneshot::Sender<GatewayPendingRequestResult>>>>;
+static GATEWAY_CONNECTION_INSTANCE_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 pub struct GatewayActiveConnection {
     pub session_id: String,
+    pub instance_id: String,
     pub endpoint: GatewayEndpoint,
     pub writer: Arc<AsyncMutex<GatewaySocketWriter>>,
     pending_requests: GatewayPendingRequests,
@@ -40,6 +45,9 @@ impl GatewayActiveConnection {
     ) -> Self {
         Self {
             session_id,
+            instance_id: GATEWAY_CONNECTION_INSTANCE_COUNTER
+                .fetch_add(1, Ordering::Relaxed)
+                .to_string(),
             endpoint,
             writer,
             pending_requests: Arc::new(Mutex::new(HashMap::new())),
@@ -104,6 +112,7 @@ impl Clone for GatewayActiveConnection {
     fn clone(&self) -> Self {
         Self {
             session_id: self.session_id.clone(),
+            instance_id: self.instance_id.clone(),
             endpoint: self.endpoint.clone(),
             writer: Arc::clone(&self.writer),
             pending_requests: Arc::clone(&self.pending_requests),
@@ -273,8 +282,17 @@ impl GatewayAppState {
         self.replace_session(None).await
     }
 
-    pub async fn clear_session_for_id(&self, session_id: &str) -> bool {
-        let removed = self.inner.sessions.lock().await.remove(session_id).is_some();
+    pub async fn clear_session_for_id(&self, session_id: &str, instance_id: &str) -> bool {
+        let removed = {
+            let mut sessions = self.inner.sessions.lock().await;
+            if !should_clear_replaced_session(
+                sessions.get(session_id).map(|session| session.instance_id.as_str()),
+                instance_id,
+            ) {
+                return false;
+            }
+            sessions.remove(session_id).is_some()
+        };
         if removed {
             self.inner
                 .snapshots
@@ -443,6 +461,10 @@ impl GatewayAppState {
     }
 }
 
+fn should_clear_replaced_session(current_instance_id: Option<&str>, closing_instance_id: &str) -> bool {
+    current_instance_id == Some(closing_instance_id)
+}
+
 fn resolve_next_active_session_id<'a>(
     mut session_ids: impl Iterator<Item = &'a String>,
 ) -> Option<String> {
@@ -594,5 +616,12 @@ mod tests {
         let next = resolve_next_active_session_id(session_ids.iter());
 
         assert!(next.is_none());
+    }
+
+    #[test]
+    fn stale_reader_must_not_clear_replaced_session() {
+        assert!(!should_clear_replaced_session(Some("new-instance"), "old-instance"));
+        assert!(should_clear_replaced_session(Some("same-instance"), "same-instance"));
+        assert!(!should_clear_replaced_session(None, "same-instance"));
     }
 }

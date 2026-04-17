@@ -4692,7 +4692,10 @@ fn spawn_connection_reader(
 
         let _ = connection.writer.lock().await.close().await;
 
-        if !state.clear_session_for_id(&connection.session_id).await {
+        if !state
+            .clear_session_for_id(&connection.session_id, &connection.instance_id)
+            .await
+        {
             return;
         }
 
