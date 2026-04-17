@@ -4,6 +4,8 @@ export interface EvolutionTargetNodeEntry {
   id: string;
   name: string;
   status: Node["status"];
+  sessionId?: string;
+  isActive?: boolean;
   agents: Agent[];
 }
 
@@ -47,6 +49,8 @@ export function buildEvolutionTargetNodeEntries({
         id: node.id,
         name: node.name,
         status: node.status,
+        sessionId: node.sessionId,
+        isActive: node.isActive,
         agents: [],
       }));
     }
@@ -68,6 +72,8 @@ export function buildEvolutionTargetNodeEntries({
     id: node.id,
     name: node.name,
     status: node.status,
+    sessionId: node.sessionId,
+    isActive: node.isActive,
     agents: groupedAgents[node.id] ?? [],
   }));
 
@@ -77,6 +83,8 @@ export function buildEvolutionTargetNodeEntries({
       id: nodeId,
       name: nodeId,
       status: deriveNodeStatus(nodeAgents),
+      sessionId: undefined,
+      isActive: undefined,
       agents: nodeAgents,
     }));
 
@@ -108,4 +116,16 @@ export function resolveSelectedEvolutionAgentId(
   }
 
   return nodeEntry.agents[0]?.id ?? "";
+}
+
+export function resolveEvolutionSessionIdToActivate(
+  selectedNodeId: string,
+  nodeEntries: EvolutionTargetNodeEntry[],
+) {
+  const nodeEntry = nodeEntries.find((entry) => entry.id === selectedNodeId);
+  if (!nodeEntry?.sessionId || nodeEntry.isActive) {
+    return null;
+  }
+
+  return nodeEntry.sessionId;
 }

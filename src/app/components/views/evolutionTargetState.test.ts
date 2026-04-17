@@ -3,13 +3,26 @@ import { describe, expect, it } from "vitest";
 import type { Agent, Node } from "../../contexts/OpenClawContext";
 import {
   buildEvolutionTargetNodeEntries,
+  resolveEvolutionSessionIdToActivate,
   resolveSelectedEvolutionAgentId,
   resolveSelectedEvolutionNodeId,
 } from "./evolutionTargetState";
 
 const sampleNodes: Node[] = [
-  { id: "node-local", name: "OpenClaw Local", status: "online" },
-  { id: "node-west", name: "OpenClaw West", status: "offline" },
+  {
+    id: "node-local",
+    name: "OpenClaw Local",
+    status: "online",
+    sessionId: "ws://127.0.0.1:18789",
+    isActive: true,
+  },
+  {
+    id: "node-west",
+    name: "OpenClaw West",
+    status: "offline",
+    sessionId: "ws://192.168.1.112:18789",
+    isActive: false,
+  },
 ];
 
 const sampleAgents: Agent[] = [
@@ -29,6 +42,8 @@ describe("evolutionTargetState", () => {
     expect(entries).toHaveLength(2);
     expect(entries.map((entry) => entry.id)).toEqual(["node-local", "node-west"]);
     expect(entries[0]?.name).toBe("OpenClaw Local");
+    expect(entries[0]?.sessionId).toBe("ws://127.0.0.1:18789");
+    expect(entries[1]?.sessionId).toBe("ws://192.168.1.112:18789");
     expect(entries[0]?.agents.map((agent) => agent.id)).toEqual(["agent-alpha", "agent-beta"]);
     expect(entries[1]?.agents.map((agent) => agent.id)).toEqual(["agent-gamma"]);
   });
@@ -81,5 +96,17 @@ describe("evolutionTargetState", () => {
     expect(resolveSelectedEvolutionAgentId("agent-gamma", "node-local", entries)).toBe("agent-alpha");
     expect(resolveSelectedEvolutionAgentId("", "node-west", entries)).toBe("agent-gamma");
     expect(resolveSelectedEvolutionAgentId("agent-alpha", "missing-node", entries)).toBe("");
+  });
+
+  it("returns the target session id only when selecting a different non-active node", () => {
+    const entries = buildEvolutionTargetNodeEntries({
+      isConnected: true,
+      nodes: sampleNodes,
+      agents: sampleAgents,
+    });
+
+    expect(resolveEvolutionSessionIdToActivate("node-local", entries)).toBeNull();
+    expect(resolveEvolutionSessionIdToActivate("node-west", entries)).toBe("ws://192.168.1.112:18789");
+    expect(resolveEvolutionSessionIdToActivate("missing-node", entries)).toBeNull();
   });
 });
