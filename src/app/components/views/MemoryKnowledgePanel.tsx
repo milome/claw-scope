@@ -247,12 +247,12 @@ export function MemoryKnowledgePanel({
     }
 
     if (reindexActivity.phase === "warning") {
-      setReindexFeedback(t("memory.knowledge.reindexLive.warningFeedback"));
+      setReindexFeedback(reindexActivity.syncIssue ? null : t("memory.knowledge.reindexLive.warningFeedback"));
       return;
     }
 
     if (reindexActivity.phase === "failed") {
-      setReindexFeedback(t("memory.knowledge.reindexLive.failedFeedback"));
+      setReindexFeedback(null);
     }
   }, [reindexActivity, t]);
 
@@ -397,7 +397,7 @@ export function MemoryKnowledgePanel({
                   createReindexEntry(
                     "warn",
                     t("memory.knowledge.reindexLive.event.warning"),
-                    t("memory.knowledge.reindexLive.noRefreshPayload"),
+                    null,
                   ),
                 ]
               : current.entries;
@@ -435,7 +435,7 @@ export function MemoryKnowledgePanel({
                 createReindexEntry(
                   "warn",
                   t("memory.knowledge.reindexLive.event.refreshFailed"),
-                  message,
+                  null,
                 ),
               ]
             : current.entries;
@@ -571,7 +571,6 @@ export function MemoryKnowledgePanel({
       toast.success(t("memory.knowledge.reindexLive.commandAccepted"));
     } catch (error) {
       const failure = error as MemoryKnowledgeActionFailure;
-      setFieldError("reindex", failure.message);
       stopReindexPolling();
       setReindexActivity((current) =>
         current
@@ -579,13 +578,13 @@ export function MemoryKnowledgePanel({
               ...current,
               phase: "failed",
               finishedAtMs: Date.now(),
-              syncIssue: failure.rawMessage,
+              syncIssue: failure.message,
               entries: [
                 ...current.entries,
                 createReindexEntry(
                   "error",
                   t("memory.knowledge.reindexLive.event.failed"),
-                  failure.message,
+                  null,
                 ),
               ],
             }
@@ -666,7 +665,6 @@ export function MemoryKnowledgePanel({
       setReindexFeedback(t("memory.knowledge.reindexLive.syncingFeedback"));
     } catch (error) {
       const failure = error as MemoryKnowledgeActionFailure;
-      setFieldError("reindex", failure.message);
       stopReindexPolling();
       setReindexActivity((current) =>
         current
@@ -674,13 +672,13 @@ export function MemoryKnowledgePanel({
               ...current,
               phase: "failed",
               finishedAtMs: Date.now(),
-              syncIssue: failure.rawMessage,
+              syncIssue: failure.message,
               entries: [
                 ...current.entries,
                 createReindexEntry(
                   "error",
                   t("memory.knowledge.reindexLive.event.failed"),
-                  failure.message,
+                  null,
                 ),
               ],
             }
@@ -1244,7 +1242,7 @@ export function MemoryKnowledgePanel({
               </div>
             </div>
           ) : null}
-          {fieldErrors.reindex ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.reindex}</ArchiveNotice></div> : null}
+          {fieldErrors.reindex && !reindexActivity?.syncIssue ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.reindex}</ArchiveNotice></div> : null}
         </div>
 
         <div className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
@@ -1334,7 +1332,7 @@ export function MemoryKnowledgePanel({
         </div>
 
         {configFeedback ? <div className="mt-2"><ArchiveNotice>{configFeedback}</ArchiveNotice></div> : null}
-        {reindexFeedback ? <div className="mt-2"><ArchiveNotice>{reindexFeedback}</ArchiveNotice></div> : null}
+        {reindexFeedback && !reindexActivity?.syncIssue ? <div className="mt-2"><ArchiveNotice>{reindexFeedback}</ArchiveNotice></div> : null}
       </ArchiveSectionCard>
     </div>
   );

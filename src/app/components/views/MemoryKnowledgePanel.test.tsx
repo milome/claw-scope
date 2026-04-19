@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { cleanup } from "@testing-library/react";
+import { toast } from "sonner";
 
 vi.mock("sonner", () => ({
   toast: {
@@ -199,5 +200,24 @@ describe("MemoryKnowledgePanel", () => {
     await user.click(screen.getByText("memory.knowledge.reindexLive.openDiagnostics"));
 
     expect(baseProps.onOpenDiagnostics).toHaveBeenCalled();
+  });
+
+  it("keeps only one persistent reindex error in the panel", async () => {
+    vi.mocked(runExternalKnowledgeReindex).mockRejectedValueOnce({
+      kind: "reindex",
+      code: "unknown",
+      message: "boom",
+      rawMessage: "boom",
+    });
+
+    render(<MemoryKnowledgePanel {...baseProps} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByText("memory.knowledge.reindexNow"));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/boom/)).toHaveLength(1);
+    });
+
+    expect(vi.mocked(toast.error)).toHaveBeenCalledTimes(1);
   });
 });

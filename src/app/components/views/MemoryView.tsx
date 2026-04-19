@@ -293,6 +293,15 @@ function openTargetForResource(kind: "document" | "timeline" | "external_source"
   return "overview" as const;
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return await Promise.race<T | null>([
+    promise,
+    new Promise<null>((resolve) => {
+      window.setTimeout(() => resolve(null), timeoutMs);
+    }),
+  ]);
+}
+
 export function MemoryView() {
   const { t } = useI18n();
   const { nodes, agents, grantedScopes, isConnected, connectedOrigin, setActiveSession } = useOpenClaw();
@@ -752,21 +761,43 @@ export function MemoryView() {
     }
 
     const [memory, status, runtime] = await Promise.all([
-      gatewayAgentMemoryGet(selectedAgentId, selectedSessionId),
-      gatewayAgentMemoryStatus(selectedAgentId, selectedSessionId).catch(() => null),
+      withTimeout(
+        gatewayAgentMemoryGet(selectedAgentId, selectedSessionId),
+        5000,
+      ),
+      withTimeout(
+        gatewayAgentMemoryStatus(selectedAgentId, selectedSessionId).catch(() => null),
+        4000,
+      ),
       isLocalGatewaySession
-        ? gatewayAgentMemoryRuntimeStatus(selectedAgentId, selectedSessionId).catch(() => null)
+        ? withTimeout(
+          gatewayAgentMemoryRuntimeStatus(selectedAgentId, selectedSessionId).catch(() => null),
+          3000,
+        )
         : Promise.resolve(null),
     ]);
 
-    setMemoryResult(memory);
-    setDrafts(createMemoryDrafts(memory));
-    setMemoryStatus(status);
-    setMemoryRuntimeStatus(runtime);
+    const nextMemory = memory ?? memoryResult;
+    const nextStatus = status ?? memoryStatus;
+    const nextRuntime = runtime ?? memoryRuntimeStatus;
+
+    if (nextMemory) {
+      setMemoryResult(nextMemory);
+      if (memory) {
+        setDrafts(createMemoryDrafts(nextMemory));
+      }
+    }
+    setMemoryStatus(nextStatus);
+    setMemoryRuntimeStatus(nextRuntime);
+
+    if (!nextMemory) {
+      return null;
+    }
+
     return {
-      memoryResult: memory,
-      memoryStatus: status,
-      runtimeStatus: runtime,
+      memoryResult: nextMemory,
+      memoryStatus: nextStatus,
+      runtimeStatus: nextRuntime,
     };
   };
 
