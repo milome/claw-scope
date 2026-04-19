@@ -87,9 +87,14 @@ async function runConfigAction(
   key: string,
   value: string,
   t: (key: string, ...args: (string | number)[]) => string,
+  sessionId?: string,
 ): Promise<MemoryKnowledgeActionSuccess> {
   try {
-    const result: GatewayConfigSetResult = await gatewayConfigSetLocal(key, value);
+    const result: GatewayConfigSetResult = await gatewayConfigSetLocal(
+      key,
+      value,
+      sessionId,
+    );
     return {
       kind,
       stdout: result.stdout,
@@ -109,48 +114,56 @@ async function runConfigAction(
 export async function setExternalKnowledgePaths(
   paths: string[],
   t: (key: string, ...args: (string | number)[]) => string,
+  sessionId?: string,
 ) {
   return runConfigAction(
     "set_extra_paths",
     "agents.defaults.memorySearch.extraPaths",
     JSON.stringify(paths),
     t,
+    sessionId,
   );
 }
 
 export async function setSessionMemoryEnabled(
   enabled: boolean,
   t: (key: string, ...args: (string | number)[]) => string,
+  sessionId?: string,
 ) {
   return runConfigAction(
     "set_session_memory",
     "agents.defaults.memorySearch.experimental.sessionMemory",
     enabled ? "true" : "false",
     t,
+    sessionId,
   );
 }
 
 export async function setExternalKnowledgeSources(
   sources: string[],
   t: (key: string, ...args: (string | number)[]) => string,
+  sessionId?: string,
 ) {
   return runConfigAction(
     "set_sources",
     "agents.defaults.memorySearch.sources",
     JSON.stringify(sources),
     t,
+    sessionId,
   );
 }
 
 export async function runExternalKnowledgeReindex(
   agentId: string,
-  strategy: MemoryIndexStrategy,
+  _strategy: MemoryIndexStrategy,
   t: (key: string, ...args: (string | number)[]) => string,
+  sessionId?: string,
 ): Promise<MemoryKnowledgeActionSuccess> {
   try {
     const result: GatewayAgentMemoryIndexResult = await gatewayAgentMemoryIndex(
       agentId,
-      strategy === "full",
+      false,
+      sessionId,
     );
     return {
       kind: "reindex",
@@ -166,4 +179,3 @@ export async function runExternalKnowledgeReindex(
     } satisfies MemoryKnowledgeActionFailure;
   }
 }
-

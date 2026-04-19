@@ -1323,21 +1323,14 @@ fn is_config_schema_path_not_found(error: &GatewayError) -> bool {
 
 pub async fn config_set_local(
     state: GatewayAppState,
+    session_selector: Option<&str>,
     key: &str,
     value: &str,
 ) -> Result<GatewayConfigSetResult, GatewayError> {
-    let endpoint = state
-        .session()
-        .await
-        .map(|session| session.endpoint.transport)
-        .ok_or_else(|| GatewayError::Transport {
-            message: "gateway not connected".to_string(),
-        })?;
-    if endpoint != GatewayTransportKind::LocalLoopback {
-        return Err(GatewayError::NotImplemented {
-            feature: "local-only config.set bridge for remote gateway sessions".to_string(),
-        });
-    }
+    ensure_local_only_transport(
+        state.session_for_selector(session_selector).await.map(|session| session.endpoint.transport),
+        "local-only config.set bridge for remote gateway sessions",
+    )?;
 
     let trimmed_key = key.trim();
     if trimmed_key.is_empty() {
@@ -1373,6 +1366,22 @@ pub async fn config_set_local(
         value: value.to_string(),
         stdout: stdout.trim().to_string(),
     })
+}
+
+fn ensure_local_only_transport(
+    transport: Option<GatewayTransportKind>,
+    feature: &str,
+) -> Result<(), GatewayError> {
+    let transport = transport.ok_or_else(|| GatewayError::Transport {
+        message: "gateway not connected".to_string(),
+    })?;
+    if transport != GatewayTransportKind::LocalLoopback {
+        return Err(GatewayError::NotImplemented {
+            feature: feature.to_string(),
+        });
+    }
+
+    Ok(())
 }
 
 pub async fn agent_workspace_identity_set(
@@ -4861,6 +4870,7 @@ mod tests {
         config_schema_lookup_with,
         config_schema_lookup_candidate_paths,
         is_config_schema_path_not_found,
+        ensure_local_only_transport,
         normalize_memory_root_document_name, normalize_memory_timeline_entry_name,
         order_daily_memory_entries, order_memory_root_documents, parse_gateway_config,
         parse_json_patch_surface, parse_memory_search_update_input,
@@ -4873,6 +4883,7 @@ mod tests {
         scan_local_memory_timeline_entries,
     };
     use crate::gateway::errors::{GatewayError, GatewayErrorSummary};
+    use crate::gateway::endpoint::GatewayTransportKind;
     use crate::gateway::types::{
         GatewayAgentFileEntry, GatewayAgentMemorySearchSourceKind,
         GatewayAgentSettingsFieldSourceKind, GatewayAgentSettingsWriteAction,
@@ -5262,6 +5273,29 @@ mod tests {
         assert!(!is_config_schema_path_not_found(&GatewayError::Transport {
             message: "gateway request timeout".to_string(),
         }));
+    }
+
+    #[test]
+    fn ensure_local_only_transport_accepts_loopback_and_rejects_remote() {
+        assert!(ensure_local_only_transport(
+            Some(GatewayTransportKind::LocalLoopback),
+            "local-only config.set bridge for remote gateway sessions",
+        )
+        .is_ok());
+
+        let error = ensure_local_only_transport(
+            Some(GatewayTransportKind::Direct),
+            "local-only config.set bridge for remote gateway sessions",
+        )
+        .expect_err("remote transport should be rejected");
+        assert!(matches!(error, GatewayError::NotImplemented { .. }));
+
+        let error = ensure_local_only_transport(
+            None,
+            "local-only config.set bridge for remote gateway sessions",
+        )
+        .expect_err("missing transport should fail");
+        assert!(matches!(error, GatewayError::Transport { .. }));
     }
 
     #[tokio::test]

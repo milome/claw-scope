@@ -59,6 +59,8 @@ const baseProps = {
   externalSources: [{ id: "extra:D:/shared/notes", kind: "extra_path" as const, value: "D:/shared/notes" }],
   isLocalGatewaySession: true,
   selectedAgentId: "agent-main",
+  selectedNodeName: "OpenClaw Local",
+  selectedSessionId: "session-local",
   model: {
     entries: [],
     concepts: [],
@@ -104,8 +106,8 @@ describe("MemoryKnowledgePanel", () => {
     await user.click(toggles[0]!);
 
     await waitFor(() => {
-      expect(setSessionMemoryEnabled).toHaveBeenCalledWith(true, t);
-      expect(setExternalKnowledgeSources).toHaveBeenCalledWith(["memory", "sessions"], t);
+      expect(setSessionMemoryEnabled).toHaveBeenCalledWith(true, t, "session-local");
+      expect(setExternalKnowledgeSources).toHaveBeenCalledWith(["memory", "sessions"], t, "session-local");
     });
   });
 
@@ -118,7 +120,7 @@ describe("MemoryKnowledgePanel", () => {
 
     expect(globalThis.confirm).toHaveBeenCalled();
     await waitFor(() => {
-      expect(setExternalKnowledgePaths).toHaveBeenCalledWith([], t);
+      expect(setExternalKnowledgePaths).toHaveBeenCalledWith([], t, "session-local");
     });
   });
 });

@@ -1241,8 +1241,13 @@ export async function gatewayAgentMemoryIndex(
   });
 }
 
-export async function gatewayConfigSetLocal(key: string, value: string) {
+export async function gatewayConfigSetLocal(
+  key: string,
+  value: string,
+  sessionId?: string,
+) {
   return invokeGateway<GatewayConfigSetResult>('gateway_config_set_local', {
+    sessionId,
     key,
     value,
   });

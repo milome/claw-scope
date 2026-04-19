@@ -463,10 +463,11 @@ pub async fn gateway_config_schema_lookup(
 #[tauri::command]
 pub async fn gateway_config_set_local(
     state: State<'_, GatewayAppState>,
+    session_id: Option<String>,
     key: String,
     value: String,
 ) -> Result<GatewayConfigSetResult, GatewayErrorSummary> {
-    connector::config_set_local(state.inner().clone(), &key, &value)
+    connector::config_set_local(state.inner().clone(), session_id.as_deref(), &key, &value)
         .await
         .map_err(|error| GatewayErrorSummary::from_error(&error))
 }

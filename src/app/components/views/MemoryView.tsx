@@ -46,13 +46,19 @@ import {
   resolveMemoryDocumentContent,
   resolveMemoryRootDocument,
   resolveInitialSearchMatchIndex,
-  resolveSelectedMemoryAgentId,
   resolveSelectedMemoryDocumentName,
   resolveSelectedTimelineEntryName,
   resolveTimelineProbeRangePreset,
   summarizeMemoryFootprintGroups,
   type MemoryTimelineFocusFilter,
 } from "./memoryState";
+import {
+  buildMemoryNodeEntries,
+  isLocalNodeOrigin,
+  resolveMemorySessionIdToActivate,
+  resolveSelectedMemoryAgentIdForNode,
+  resolveSelectedMemoryNodeId,
+} from "./memoryNodeState";
 import {
   canRunSemanticMemorySearch,
   resolveSemanticMemorySearchGroup,
@@ -288,9 +294,23 @@ function openTargetForResource(kind: "document" | "timeline" | "external_source"
 
 export function MemoryView() {
   const { t } = useI18n();
-  const { agents, grantedScopes, isConnected, connectedOrigin } = useOpenClaw();
+  const { nodes, agents, grantedScopes, isConnected, connectedOrigin, setActiveSession } = useOpenClaw();
   const [activeSection, setActiveSection] = useState<MemorySection>("overview");
-  const [selectedAgentId, setSelectedAgentId] = useState(agents[0]?.id ?? "");
+  const memoryNodeEntries = useMemo(
+    () =>
+      buildMemoryNodeEntries({
+        isConnected,
+        nodes,
+        agents,
+      }),
+    [agents, isConnected, nodes],
+  );
+  const [selectedNodeId, setSelectedNodeId] = useState(
+    resolveSelectedMemoryNodeId("", memoryNodeEntries),
+  );
+  const [selectedAgentId, setSelectedAgentId] = useState(
+    resolveSelectedMemoryAgentIdForNode("", resolveSelectedMemoryNodeId("", memoryNodeEntries), memoryNodeEntries),
+  );
   const [memoryResult, setMemoryResult] = useState<GatewayAgentMemoryResult | null>(null);
   const [_memoryLoading, setMemoryLoading] = useState(false);
   const [_memoryError, setMemoryError] = useState<string | null>(null);
@@ -348,25 +368,35 @@ export function MemoryView() {
   const [_timelineEntryLoading, setTimelineEntryLoading] = useState(false);
   const [_timelineEntryError, setTimelineEntryError] = useState<string | null>(null);
 
-  const isLocalGatewaySession = useMemo(() => {
-    if (!connectedOrigin) {
-      return false;
-    }
-
-    return /^(ws|http):\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(
-      connectedOrigin,
-    );
-  }, [connectedOrigin]);
+  const selectedNodeEntry = useMemo(
+    () => memoryNodeEntries.find((entry) => entry.id === selectedNodeId) ?? null,
+    [memoryNodeEntries, selectedNodeId],
+  );
+  const selectedNodeAgents = selectedNodeEntry?.agents ?? [];
+  const selectedSessionId = selectedNodeEntry?.sessionId;
+  const selectedNodeOrigin = selectedNodeEntry?.origin ?? connectedOrigin;
+  const isLocalGatewaySession = useMemo(
+    () => isLocalNodeOrigin(selectedNodeOrigin),
+    [selectedNodeOrigin],
+  );
 
   useEffect(() => {
-    const nextAgentId = resolveSelectedMemoryAgentId(
+    const nextNodeId = resolveSelectedMemoryNodeId(selectedNodeId, memoryNodeEntries);
+    if (nextNodeId !== selectedNodeId) {
+      setSelectedNodeId(nextNodeId);
+    }
+  }, [memoryNodeEntries, selectedNodeId]);
+
+  useEffect(() => {
+    const nextAgentId = resolveSelectedMemoryAgentIdForNode(
       selectedAgentId,
-      agents.map((agent) => agent.id),
+      selectedNodeId,
+      memoryNodeEntries,
     );
     if (nextAgentId !== selectedAgentId) {
       setSelectedAgentId(nextAgentId);
     }
-  }, [agents, selectedAgentId]);
+  }, [memoryNodeEntries, selectedAgentId, selectedNodeId]);
 
   useEffect(() => {
     if (!selectedAgentId || !isConnected) {
@@ -382,7 +412,7 @@ export function MemoryView() {
       setMemoryLoading(true);
       setMemoryError(null);
       try {
-        const result = await gatewayAgentMemoryGet(selectedAgentId);
+        const result = await gatewayAgentMemoryGet(selectedAgentId, selectedSessionId);
         if (cancelled) {
           return;
         }
@@ -406,14 +436,14 @@ export function MemoryView() {
       setTimelineLoading(true);
       setTimelineError(null);
       try {
-        const access = await gatewayAgentMemoryTimelineAccessResolve(selectedAgentId);
+        const access = await gatewayAgentMemoryTimelineAccessResolve(selectedAgentId, selectedSessionId);
         if (cancelled) {
           return;
         }
         setTimelineAccess(access);
         const result = canLoadLocalTimeline(access)
-          ? await gatewayAgentMemoryTimelineLocalScan(selectedAgentId)
-          : await gatewayAgentMemoryTimelineGet(selectedAgentId);
+          ? await gatewayAgentMemoryTimelineLocalScan(selectedAgentId, selectedSessionId)
+          : await gatewayAgentMemoryTimelineGet(selectedAgentId, selectedSessionId);
         if (cancelled) {
           return;
         }
@@ -434,7 +464,7 @@ export function MemoryView() {
 
     const loadStatus = async () => {
       try {
-        const result = await gatewayAgentMemoryStatus(selectedAgentId);
+        const result = await gatewayAgentMemoryStatus(selectedAgentId, selectedSessionId);
         if (cancelled) {
           return;
         }
@@ -459,7 +489,7 @@ export function MemoryView() {
       }
 
       try {
-        const result = await gatewayAgentMemoryRuntimeStatus(selectedAgentId);
+        const result = await gatewayAgentMemoryRuntimeStatus(selectedAgentId, selectedSessionId);
         if (cancelled) {
           return;
         }
@@ -479,7 +509,7 @@ export function MemoryView() {
     return () => {
       cancelled = true;
     };
-  }, [selectedAgentId, isConnected, isLocalGatewaySession]);
+  }, [selectedAgentId, selectedSessionId, isConnected, isLocalGatewaySession]);
 
   useEffect(() => {
     if (!selectedAgentId || !selectedTimelineEntryName) {
@@ -497,6 +527,7 @@ export function MemoryView() {
         const result = await gatewayAgentMemoryTimelineEntryRead(
           selectedAgentId,
           selectedTimelineEntryName,
+          selectedSessionId,
         );
         if (!cancelled) {
           setTimelineEntryContent(result.file.content ?? "");
@@ -518,7 +549,7 @@ export function MemoryView() {
     return () => {
       cancelled = true;
     };
-  }, [selectedAgentId, selectedTimelineEntryName]);
+  }, [selectedAgentId, selectedSessionId, selectedTimelineEntryName]);
 
   const selectedDocument = useMemo(
     () => resolveMemoryRootDocument(memoryResult?.documents ?? [], selectedDocumentName),
@@ -615,7 +646,10 @@ export function MemoryView() {
     () => hasSharedWorkspaceMemory(memoryResult?.sharedAgents ?? []),
     [memoryResult?.sharedAgents],
   );
-  const canEdit = canEditMemory(grantedScopes);
+  const selectedNodeGrantedScopes =
+    selectedNodeEntry?.grantedScopes ??
+    (selectedNodeEntry?.isActive ? grantedScopes : []);
+  const canEdit = canEditMemory(selectedNodeGrantedScopes);
   const searchGroups = useMemo(() => {
     const counts: Record<SemanticMemorySearchGroup, number> = {
       all: searchResult?.results.length ?? 0,
@@ -717,10 +751,10 @@ export function MemoryView() {
     }
 
     const [memory, status, runtime] = await Promise.all([
-      gatewayAgentMemoryGet(selectedAgentId),
-      gatewayAgentMemoryStatus(selectedAgentId).catch(() => null),
+      gatewayAgentMemoryGet(selectedAgentId, selectedSessionId),
+      gatewayAgentMemoryStatus(selectedAgentId, selectedSessionId).catch(() => null),
       isLocalGatewaySession
-        ? gatewayAgentMemoryRuntimeStatus(selectedAgentId).catch(() => null)
+        ? gatewayAgentMemoryRuntimeStatus(selectedAgentId, selectedSessionId).catch(() => null)
         : Promise.resolve(null),
     ]);
 
@@ -728,6 +762,24 @@ export function MemoryView() {
     setDrafts(createMemoryDrafts(memory));
     setMemoryStatus(status);
     setMemoryRuntimeStatus(runtime);
+  };
+
+  const handleNodeSelect = (nodeId: string) => {
+    setSelectedNodeId(nodeId);
+
+    const nextAgentId = resolveSelectedMemoryAgentIdForNode(
+      selectedAgentId,
+      nodeId,
+      memoryNodeEntries,
+    );
+    if (nextAgentId !== selectedAgentId) {
+      setSelectedAgentId(nextAgentId);
+    }
+
+    const nextSessionId = resolveMemorySessionIdToActivate(nodeId, memoryNodeEntries);
+    if (nextSessionId) {
+      void setActiveSession(nextSessionId);
+    }
   };
 
   useEffect(() => {
@@ -822,13 +874,10 @@ export function MemoryView() {
     runtimeStatusSummary,
     memoryResult,
   });
-  const shouldForceReindex = (runtimeStatusSummary?.indexedFiles ?? 0) === 0;
-  const resolvedIndexStrategy: MemoryIndexStrategy = shouldForceReindex ? "full" : "incremental";
+  const resolvedIndexStrategy: MemoryIndexStrategy = "incremental";
   const resolvedAgentIdForGuide = selectedAgentId || "<agent-id>";
   const commandGuide = useMemo(() => {
-    const indexCommand = resolvedIndexStrategy === "full"
-      ? `openclaw memory index --agent ${resolvedAgentIdForGuide} --force`
-      : `openclaw memory index --agent ${resolvedAgentIdForGuide}`;
+    const indexCommand = `openclaw memory index --agent ${resolvedAgentIdForGuide}`;
     const statusCommand = `openclaw memory status --agent ${resolvedAgentIdForGuide} --deep --index`;
 
     if (isOllamaProvider) {
@@ -858,9 +907,7 @@ export function MemoryView() {
       return t("memory.documents.index.remote");
     }
 
-    return resolvedIndexStrategy === "full"
-      ? t("memory.documents.index.full")
-      : t("memory.documents.index.incremental");
+    return t("memory.documents.index.incremental");
   }, [documentIndexRefreshState, isLocalGatewaySession, resolvedIndexStrategy, t]);
   const memoryConfigStatus = buildMemoryConfigStatusSummary({
     selectedAgentId,
@@ -895,7 +942,13 @@ export function MemoryView() {
     setSearchRunning(true);
     setMemoryLoading(true);
     try {
-      const result = await gatewayAgentMemorySearch(selectedAgentId, searchQuery, 20, "all");
+      const result = await gatewayAgentMemorySearch(
+        selectedAgentId,
+        searchQuery,
+        20,
+        "all",
+        selectedSessionId,
+      );
       setSearchResult(result);
       setSearchError(null);
       setActiveSection("search");
@@ -983,12 +1036,13 @@ export function MemoryView() {
     });
     try {
       const result = missingDates.length > 0
-        ? await gatewayAgentMemoryTimelineRemoteProbeDates(selectedAgentId, missingDates)
+        ? await gatewayAgentMemoryTimelineRemoteProbeDates(selectedAgentId, missingDates, selectedSessionId)
         : await gatewayAgentMemoryTimelineRemoteProbe(
-            selectedAgentId,
-            timelineProbeRange.startDate,
-            timelineProbeRange.endDate,
-          );
+          selectedAgentId,
+          timelineProbeRange.startDate,
+          timelineProbeRange.endDate,
+          selectedSessionId,
+        );
       const merged = mergeTimelineProbeResults({
         current: timelineResult,
         retryResult: result,
@@ -1055,7 +1109,7 @@ export function MemoryView() {
     }));
 
     try {
-      const result = await gatewayAgentMemoryTimelineRemoteProbeDates(selectedAgentId, [date]);
+      const result = await gatewayAgentMemoryTimelineRemoteProbeDates(selectedAgentId, [date], selectedSessionId);
       const merged = mergeTimelineProbeResults({
         current: timelineResult,
         retryResult: result,
@@ -1135,7 +1189,7 @@ export function MemoryView() {
     }
 
     try {
-      const result = await gatewayAgentMemoryGet(selectedAgentId);
+      const result = await gatewayAgentMemoryGet(selectedAgentId, selectedSessionId);
       setMemoryResult(result);
       setDrafts(createMemoryDrafts(result));
       setSelectedDocumentName((current) =>
@@ -1161,14 +1215,20 @@ export function MemoryView() {
     setDocumentIndexRefreshState("idle");
 
     try {
-      await gatewayAgentMemorySet(selectedAgentId, selectedDocument.name, selectedDocumentContent);
+      await gatewayAgentMemorySet(
+        selectedAgentId,
+        selectedDocument.name,
+        selectedDocumentContent,
+        selectedSessionId,
+      );
       if (isLocalGatewaySession) {
         await gatewayAgentMemoryIndex(
           selectedAgentId,
-          resolvedIndexStrategy === "full",
+          false,
+          selectedSessionId,
         );
       }
-      const result = await gatewayAgentMemoryGet(selectedAgentId);
+      const result = await gatewayAgentMemoryGet(selectedAgentId, selectedSessionId);
       setMemoryResult(result);
       setDrafts(createMemoryDrafts(result));
       setSelectedDocumentName((current) =>
@@ -1241,7 +1301,7 @@ export function MemoryView() {
       const normalizedName = entry.path.includes("/sessions/")
         ? entry.path.split("/sessions/")[1]
         : entry.path.split("/").slice(-2).join("/");
-      const result = await gatewayAgentFileRead(selectedAgentId, normalizedName);
+      const result = await gatewayAgentFileRead(selectedAgentId, normalizedName, selectedSessionId);
       setSearchDetail({
         title: entry.path.split("/").pop() ?? entry.path,
         path: entry.path,
@@ -1442,6 +1502,8 @@ export function MemoryView() {
           externalSources={externalSources}
           isLocalGatewaySession={isLocalGatewaySession}
           selectedAgentId={selectedAgentId}
+          selectedNodeName={selectedNodeEntry?.name ?? ""}
+          selectedSessionId={selectedSessionId ?? null}
           model={semanticMindMapModel}
           t={t}
           showDebug={mindMapDebugVisible}
@@ -1461,22 +1523,50 @@ export function MemoryView() {
         description={t("memory.desc")}
         leadingIcon={<LibraryBig className="h-5 w-5 text-sky-500" />}
         actions={(
-          <div className="inline-flex items-center gap-2 rounded-[22px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] px-2 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:border-slate-800/80 dark:bg-[linear-gradient(135deg,rgba(15,23,42,0.92),rgba(2,6,23,0.82))] dark:shadow-none">
+          <div className="inline-flex flex-wrap items-center gap-2 rounded-[22px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] px-2 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:border-slate-800/80 dark:bg-[linear-gradient(135deg,rgba(15,23,42,0.92),rgba(2,6,23,0.82))] dark:shadow-none">
             <div className="flex min-w-[112px] flex-col rounded-[16px] bg-[linear-gradient(135deg,rgba(14,165,233,0.14),rgba(56,189,248,0.06))] px-3 py-2 text-slate-700 dark:bg-[linear-gradient(135deg,rgba(14,165,233,0.18),rgba(2,6,23,0.18))] dark:text-slate-200">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-700/80 dark:text-sky-300/80">{t("memory.header.agents")}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-700/80 dark:text-sky-300/80">{t("memory.header.nodes")}</span>
               <span className="mt-1 text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-                {agents.length} {t("common.available")}
+                {memoryNodeEntries.length} {t("common.available")}
+              </span>
+            </div>
+            <div className="relative inline-flex items-center">
+              <select
+                value={selectedNodeId}
+                onChange={(event) => handleNodeSelect(event.target.value)}
+                disabled={memoryNodeEntries.length <= 1}
+                className="min-w-[220px] appearance-none rounded-[16px] border border-slate-300 bg-white/95 py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 shadow-sm transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+              >
+                {memoryNodeEntries.map((node) => (
+                  <option key={node.id} value={node.id}>
+                    {node.name} ({node.status})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 pointer-events-none" />
+            </div>
+            <div className="flex min-w-[112px] flex-col rounded-[16px] bg-[linear-gradient(135deg,rgba(99,102,241,0.12),rgba(129,140,248,0.04))] px-3 py-2 text-slate-700 dark:bg-[linear-gradient(135deg,rgba(129,140,248,0.18),rgba(15,23,42,0.18))] dark:text-slate-200">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-700/80 dark:text-violet-300/80">{t("memory.header.agents")}</span>
+              <span className="mt-1 text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                {selectedNodeAgents.length} {t("common.available")}
               </span>
             </div>
             <div className="relative inline-flex items-center">
               <select
                 value={selectedAgentId}
-                onChange={(e) => setSelectedAgentId(e.target.value)}
-                className="min-w-[220px] appearance-none rounded-[16px] border border-slate-300 bg-white/95 py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 shadow-sm transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                onChange={(event) => setSelectedAgentId(event.target.value)}
+                disabled={selectedNodeAgents.length <= 1}
+                className="min-w-[220px] appearance-none rounded-[16px] border border-slate-300 bg-white/95 py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 shadow-sm transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-70 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
               >
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name} ({a.id.split('-')[0]}-{a.id.split('-')[2]})</option>
-                ))}
+                {selectedNodeAgents.length > 0 ? (
+                  selectedNodeAgents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name} ({agent.id.split("-")[0]}-{agent.id.split("-")[2]})
+                    </option>
+                  ))
+                ) : (
+                  <option value="">{t("memory.header.noAgents")}</option>
+                )}
               </select>
               <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 pointer-events-none" />
             </div>
@@ -1544,7 +1634,13 @@ export function MemoryView() {
             onClose={() => setDiagnosticsDrawer((current) => ({ ...current, open: false }))}
           />
 
-          {activeSection === "overview" && selectedAgentId && isConnected && !memoryResult && !timelineResult ? (
+          {!selectedAgentId && selectedNodeEntry ? (
+            <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
+              <ArchiveNotice tone="warn">
+                {t("memory.node.empty", selectedNodeEntry.name)}
+              </ArchiveNotice>
+            </ArchivePane>
+          ) : activeSection === "overview" && selectedAgentId && isConnected && !memoryResult && !timelineResult ? (
             <ArchivePane className={`${ARCHIVE_SURFACE.tabPane} ${ARCHIVE_SPACING.page}`}>
               <ArchiveNotice>{t("memory.overview.pending")}</ArchiveNotice>
             </ArchivePane>

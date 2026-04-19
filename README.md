@@ -62,6 +62,7 @@ npm run visual:ci
 
 - PRD: `_bmad-output/planning-artifacts/main/prd.md`
 - 项目设置: `_bmad-output/planning-artifacts/main/PROJECT_SETUP.md`
+- 帮助文档: [`docs/help/choose-extra-paths-or-knowledge-injection.md`](docs/help/choose-extra-paths-or-knowledge-injection.md)
 
 ## 环境要求
 

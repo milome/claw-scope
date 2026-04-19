@@ -1,4 +1,4 @@
-import { Copy, FolderTree, Link2, Plus, RefreshCw, ShieldCheck, Trash2, Activity } from "lucide-react";
+import { Activity, CheckCircle2, Copy, FolderTree, Info, Link2, ListChecks, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { startTransition, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type {
@@ -37,6 +37,8 @@ type MemoryKnowledgePanelProps = {
   externalSources: MemoryExternalSourceItem[];
   isLocalGatewaySession: boolean;
   selectedAgentId: string;
+  selectedNodeName: string;
+  selectedSessionId?: string | null;
   model: SemanticMindMapModel;
   t: (key: string, ...args: (string | number)[]) => string;
   showDebug: boolean;
@@ -61,6 +63,8 @@ export function MemoryKnowledgePanel({
   externalSources,
   isLocalGatewaySession,
   selectedAgentId,
+  selectedNodeName,
+  selectedSessionId,
   model,
   t,
   showDebug,
@@ -97,6 +101,39 @@ export function MemoryKnowledgePanel({
   });
   const autoReindexEnabled = statusSummary.reindexMode === "auto";
   const externalEntryCount = knowledgeModel.sections.reduce((count, section) => count + section.entries.length, 0);
+  const readableSources = knowledgeModel.sources.map((source) =>
+    source === "memory"
+      ? t("memory.knowledge.sourceMemoryLabel")
+      : source === "sessions"
+        ? t("memory.knowledge.sourceSessionsLabel")
+        : source,
+  );
+
+  const describeKnowledgeEntry = (label: string) => {
+    switch (label) {
+      case "session_memory_enabled":
+        return t("memory.knowledge.sessionMemoryEnabled");
+      case "session_memory_disabled":
+        return t("memory.knowledge.sessionMemoryDisabled");
+      default:
+        return label;
+    }
+  };
+
+  const describeKnowledgeNote = (note?: string | null) => {
+    switch (note) {
+      case "qmd_active":
+        return t("memory.knowledge.qmdActive");
+      case "qmd_inactive":
+        return t("memory.knowledge.qmdInactive");
+      case "sessions_source_enabled":
+        return t("memory.knowledge.sessionsSourceEnabled");
+      case "sessions_source_missing":
+        return t("memory.knowledge.sessionsSourceMissing");
+      default:
+        return note;
+    }
+  };
 
   useEffect(() => {
     if (!knowledgeModel.localWritable) {
@@ -157,6 +194,7 @@ export function MemoryKnowledgePanel({
         selectedAgentId,
         statusSummary.reindexStrategy,
         t,
+        selectedSessionId ?? undefined,
       );
       await onRefreshKnowledge();
       setReindexFeedback(result.stdout || t("memory.knowledge.reindexDone"));
@@ -184,6 +222,7 @@ export function MemoryKnowledgePanel({
         selectedAgentId,
         statusSummary.reindexStrategy,
         t,
+        selectedSessionId ?? undefined,
       );
       await onRefreshKnowledge();
       setReindexFeedback(result.stdout || t("memory.knowledge.reindexDone"));
@@ -214,7 +253,7 @@ export function MemoryKnowledgePanel({
     const result = await runAction(
       "set_extra_paths",
       "extraPath",
-      () => setExternalKnowledgePaths(nextPaths, t),
+      () => setExternalKnowledgePaths(nextPaths, t, selectedSessionId ?? undefined),
     );
     if (result) {
       startTransition(() => setNewExtraPath(""));
@@ -232,7 +271,7 @@ export function MemoryKnowledgePanel({
     const result = await runAction(
       "set_extra_paths",
       "extraPath",
-      () => setExternalKnowledgePaths(nextPaths, t),
+      () => setExternalKnowledgePaths(nextPaths, t, selectedSessionId ?? undefined),
     );
     if (result) {
       toast.success(t("memory.knowledge.pathRemoved"));
@@ -250,9 +289,17 @@ export function MemoryKnowledgePanel({
       "set_session_memory",
       "sessionMemory",
       async () => {
-        const sessionResult = await setSessionMemoryEnabled(enabled, t);
+        const sessionResult = await setSessionMemoryEnabled(
+          enabled,
+          t,
+          selectedSessionId ?? undefined,
+        );
         if (enabled && !knowledgeModel.sources.includes("sessions")) {
-          await setExternalKnowledgeSources(nextSources, t);
+          await setExternalKnowledgeSources(
+            nextSources,
+            t,
+            selectedSessionId ?? undefined,
+          );
         }
         return {
           ...sessionResult,
@@ -290,7 +337,7 @@ export function MemoryKnowledgePanel({
     const result = await runAction(
       "set_sources",
       "sources",
-      () => setExternalKnowledgeSources(nextSources, t),
+      () => setExternalKnowledgeSources(nextSources, t, selectedSessionId ?? undefined),
     );
     if (result) {
       toast.success(t("memory.knowledge.sourcesUpdated"));
@@ -345,6 +392,11 @@ export function MemoryKnowledgePanel({
             value={knowledgeModel.localWritable ? t("memory.knowledge.localWritable") : t("memory.knowledge.remoteReadonly")}
             meta={t(memoryConfigBridgeMessageKey(knowledgeModel.localWritable))}
           />
+          <ArchiveStatCard
+            label={t("memory.knowledge.nodeScope")}
+            value={selectedNodeName || t("memory.knowledge.nodeScopeFallback")}
+            meta={selectedSessionId ?? t("memory.knowledge.sessionScopeFallback")}
+          />
         </div>
 
         <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -359,7 +411,7 @@ export function MemoryKnowledgePanel({
           />
           <ArchiveStatCard
             label={t("memory.knowledge.sources")}
-            value={knowledgeModel.sources.length > 0 ? knowledgeModel.sources.join(", ") : t("memory.knowledge.sourcesEmpty")}
+            value={readableSources.length > 0 ? readableSources.join(", ") : t("memory.knowledge.sourcesEmpty")}
           />
           <ArchiveStatCard
             label={t("memory.knowledge.store")}
@@ -403,7 +455,7 @@ export function MemoryKnowledgePanel({
               {t("memory.knowledge.sources")}
             </div>
             <div className="mt-2 text-sm text-slate-700 dark:text-slate-200">
-              {memoryResult?.diagnostics?.sources.join(", ") || t("memory.knowledge.sourcesEmpty")}
+              {readableSources.join(", ") || t("memory.knowledge.sourcesEmpty")}
             </div>
           </div>
           <div className={`rounded-2xl border px-4 py-3 ${toneClasses.soft}`}>
@@ -413,6 +465,100 @@ export function MemoryKnowledgePanel({
             </div>
             <div className="mt-2 text-sm text-slate-700 dark:text-slate-200">{t("memory.knowledge.guardrailDesc")}</div>
           </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+              <Info className={`h-4 w-4 ${toneClasses.icon}`} />
+              {t("memory.knowledge.extraPathsGuideTitle")}
+            </div>
+            <div className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+              {t("memory.knowledge.extraPathsGuideDesc")}
+            </div>
+            <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-900 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-100">
+              <div className="font-semibold">{t("memory.knowledge.incrementalOnlyTitle")}</div>
+              <div className="mt-1">{t("memory.knowledge.incrementalOnlyDesc")}</div>
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-100">
+                <div className="font-semibold">{t("memory.knowledge.extraPathsDoTitle")}</div>
+                <div className="mt-1 break-all">{t("memory.knowledge.extraPathsDoExample")}</div>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+                <div className="font-semibold">{t("memory.knowledge.extraPathsDontTitle")}</div>
+                <div className="mt-1 break-all">{t("memory.knowledge.extraPathsDontExample")}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+              <ListChecks className={`h-4 w-4 ${toneClasses.icon}`} />
+              {t("memory.knowledge.howToTitle")}
+            </div>
+            <div className="mt-3 space-y-3">
+              {[
+                t("memory.knowledge.howToStep1"),
+                t("memory.knowledge.howToStep2"),
+                t("memory.knowledge.howToStep3"),
+                t("memory.knowledge.howToStep4"),
+              ].map((step, index) => (
+                <div key={step} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-200">
+                  <div className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-semibold text-white dark:bg-slate-200 dark:text-slate-900">
+                    {index + 1}
+                  </div>
+                  <div className="leading-6">{step}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-3">
+          {knowledgeModel.sections.map((section) => (
+            <div key={section.id} className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                {t(section.titleKey)}
+              </div>
+              <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                {t(section.descriptionKey)}
+              </div>
+              {section.entries.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {section.entries.map((entry) => (
+                    <div key={entry.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                            {describeKnowledgeEntry(entry.label)}
+                          </div>
+                          {entry.path && describeKnowledgeEntry(entry.label) !== entry.path ? (
+                            <div className="mt-1 break-all text-xs leading-5 text-slate-500 dark:text-slate-400">
+                              {entry.path}
+                            </div>
+                          ) : null}
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${entry.status === "indexed" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" : entry.status === "stale" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>
+                          {t(`memory.knowledge.status.${entry.status}`)}
+                        </span>
+                      </div>
+                      {entry.note ? (
+                        <div className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs leading-5 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+                          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                          <div>{describeKnowledgeNote(entry.note)}</div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 rounded-xl border border-dashed border-slate-200 px-3 py-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  {t("memory.knowledge.sectionEmpty")}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
         <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <ShieldCheck className={`h-4 w-4 ${toneClasses.icon}`} />
@@ -458,12 +604,16 @@ export function MemoryKnowledgePanel({
               <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">{statusSummary.commandGuide}</pre>
             </>
           ) : null}
+          <div className="mt-3">
+            <ArchiveNotice tone="info">{t("memory.knowledge.incrementalOnlyInline")}</ArchiveNotice>
+          </div>
           {fieldErrors.reindex ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.reindex}</ArchiveNotice></div> : null}
         </div>
 
         <div className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{t("memory.knowledge.externalPaths")}</div>
+            <div className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{t("memory.knowledge.externalPathsDesc")}</div>
             <div className="mt-3 flex gap-2">
               <input
                 value={newExtraPath}
@@ -481,6 +631,9 @@ export function MemoryKnowledgePanel({
                 <Plus className="mr-1 inline h-3.5 w-3.5" />
                 {t("memory.knowledge.addPath")}
               </ArchiveActionButton>
+            </div>
+            <div className="mt-3 rounded-xl border border-dashed border-slate-200 px-3 py-3 text-xs leading-5 text-slate-500 dark:border-slate-700 dark:text-slate-400">
+              {t("memory.knowledge.pathInputHint")}
             </div>
             {knowledgeModel.extraPaths.length > 0 ? (
               <div className="mt-3 space-y-2">
@@ -523,7 +676,9 @@ export function MemoryKnowledgePanel({
               {(["memory", "sessions"] as const).map((source) => (
                 <label key={source} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/40">
                   <div>
-                    <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{source}</div>
+                    <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                      {source === "memory" ? t("memory.knowledge.sourceMemoryLabel") : t("memory.knowledge.sourceSessionsLabel")}
+                    </div>
                     <div className="text-xs text-slate-500 dark:text-slate-400">{t(source === "memory" ? "memory.knowledge.sourceMemoryDesc" : "memory.knowledge.sourceSessionsDesc")}</div>
                   </div>
                   <input
