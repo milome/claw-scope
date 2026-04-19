@@ -24,6 +24,7 @@ vi.mock("./memoryKnowledgeActions", () => ({
 
 import { MemoryKnowledgePanel } from "./MemoryKnowledgePanel";
 import {
+  runExternalKnowledgeReindex,
   setExternalKnowledgePaths,
   setExternalKnowledgeSources,
   setSessionMemoryEnabled,
@@ -73,7 +74,31 @@ const baseProps = {
   onToggleDebug: vi.fn(),
   onOpenEvidence: vi.fn(),
   openHint: null,
-  onRefreshKnowledge: vi.fn().mockResolvedValue(undefined),
+  onRefreshKnowledge: vi.fn().mockResolvedValue({
+    memoryResult: {
+      agentId: "agent-main",
+      workspace: "workspace",
+      documents: [],
+      sharedAgents: [],
+      diagnostics: {
+        memorySearchEnabled: true,
+        backend: "builtin",
+        provider: "openai",
+        embeddingModel: "text-embedding-3-large",
+        builtinStorePath: "~/.openclaw/memory/main.sqlite",
+        sources: ["memory"],
+        extraPaths: ["D:/shared/notes"],
+        sessionMemoryEnabled: false,
+        qmdActive: false,
+        qmdHome: null,
+        qmdPaths: [],
+        qmdSessionsEnabled: false,
+      },
+    },
+    memoryStatus: null,
+    runtimeStatus: null,
+  }),
+  onOpenDiagnostics: vi.fn(),
 };
 
 describe("MemoryKnowledgePanel", () => {
@@ -99,6 +124,7 @@ describe("MemoryKnowledgePanel", () => {
   it("enables session memory and auto-adds sessions source", async () => {
     vi.mocked(setSessionMemoryEnabled).mockResolvedValue({ kind: "set_session_memory", stdout: "ok" });
     vi.mocked(setExternalKnowledgeSources).mockResolvedValue({ kind: "set_sources", stdout: "ok" });
+    vi.mocked(runExternalKnowledgeReindex).mockResolvedValue({ kind: "reindex", stdout: "reindexed" });
 
     render(<MemoryKnowledgePanel {...baseProps} />);
     const user = userEvent.setup();
@@ -113,6 +139,7 @@ describe("MemoryKnowledgePanel", () => {
 
   it("asks for confirmation before removing extra path", async () => {
     vi.mocked(setExternalKnowledgePaths).mockResolvedValue({ kind: "set_extra_paths", stdout: "ok" });
+    vi.mocked(runExternalKnowledgeReindex).mockResolvedValue({ kind: "reindex", stdout: "reindexed" });
     const user = userEvent.setup();
 
     render(<MemoryKnowledgePanel {...baseProps} />);
@@ -122,5 +149,55 @@ describe("MemoryKnowledgePanel", () => {
     await waitFor(() => {
       expect(setExternalKnowledgePaths).toHaveBeenCalledWith([], t, "session-local");
     });
+  });
+
+  it("shows reindex activity while the command is running", async () => {
+    let resolveReindex: ((value: { kind: "reindex"; stdout: string }) => void) | undefined;
+    vi.mocked(runExternalKnowledgeReindex).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveReindex = resolve as typeof resolveReindex;
+        }),
+    );
+
+    render(<MemoryKnowledgePanel {...baseProps} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByText("memory.knowledge.reindexNow"));
+
+    expect(screen.getByText("memory.knowledge.reindexLive.title")).toBeTruthy();
+    expect(screen.getByText("memory.knowledge.reindexLive.event.submitted")).toBeTruthy();
+
+    resolveReindex?.({ kind: "reindex", stdout: "ok" });
+
+    await waitFor(() => {
+      expect(runExternalKnowledgeReindex).toHaveBeenCalledWith(
+        "agent-main",
+        "incremental",
+        t,
+        "session-local",
+      );
+    });
+  });
+
+  it("shows retry and diagnostics actions after a reindex failure", async () => {
+    vi.mocked(runExternalKnowledgeReindex).mockRejectedValueOnce({
+      kind: "reindex",
+      code: "unknown",
+      message: "memory.knowledge.error.reindexFailed",
+      rawMessage: "boom",
+    });
+
+    render(<MemoryKnowledgePanel {...baseProps} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByText("memory.knowledge.reindexNow"));
+
+    await waitFor(() => {
+      expect(screen.getByText("memory.knowledge.reindexLive.retry")).toBeTruthy();
+      expect(screen.getByText("memory.knowledge.reindexLive.openDiagnostics")).toBeTruthy();
+    });
+
+    await user.click(screen.getByText("memory.knowledge.reindexLive.openDiagnostics"));
+
+    expect(baseProps.onOpenDiagnostics).toHaveBeenCalled();
   });
 });

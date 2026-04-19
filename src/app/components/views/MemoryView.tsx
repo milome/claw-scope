@@ -59,6 +59,7 @@ import {
   resolveSelectedMemoryAgentIdForNode,
   resolveSelectedMemoryNodeId,
 } from "./memoryNodeState";
+import type { MemoryKnowledgeRefreshResult } from "./memoryKnowledgeReindexState";
 import {
   canRunSemanticMemorySearch,
   resolveSemanticMemorySearchGroup,
@@ -745,9 +746,9 @@ export function MemoryView() {
     }
   };
 
-  const handleRefreshKnowledge = async () => {
+  const handleRefreshKnowledge = async (): Promise<MemoryKnowledgeRefreshResult | null> => {
     if (!selectedAgentId || !isConnected) {
-      return;
+      return null;
     }
 
     const [memory, status, runtime] = await Promise.all([
@@ -762,6 +763,11 @@ export function MemoryView() {
     setDrafts(createMemoryDrafts(memory));
     setMemoryStatus(status);
     setMemoryRuntimeStatus(runtime);
+    return {
+      memoryResult: memory,
+      memoryStatus: status,
+      runtimeStatus: runtime,
+    };
   };
 
   const handleNodeSelect = (nodeId: string) => {
@@ -1511,6 +1517,7 @@ export function MemoryView() {
           onOpenEvidence={openMindMapEvidence}
           openHint={mindMapOpenHint}
           onRefreshKnowledge={handleRefreshKnowledge}
+          onOpenDiagnostics={() => setDiagnosticsDrawer({ open: true, source: "knowledge" })}
         />
       </ArchivePane>
     ),

@@ -1,5 +1,5 @@
-import { Activity, CheckCircle2, Copy, FolderTree, Info, Link2, ListChecks, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
-import { startTransition, useEffect, useState } from "react";
+import { Activity, CheckCircle2, ChevronDown, ChevronUp, Copy, FolderTree, Info, Link2, ListChecks, Loader2, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type {
   GatewayAgentMemoryResult,
@@ -18,6 +18,15 @@ import {
   type MemoryKnowledgeActionFailure,
   type MemoryKnowledgeActionKind,
 } from "./memoryKnowledgeActions";
+import {
+  captureMemoryKnowledgeReindexSnapshot,
+  describeMemoryKnowledgeReindexDelta,
+  hasMemoryKnowledgeReindexProgress,
+  isMemoryKnowledgeReindexSettled,
+  type MemoryKnowledgeRefreshResult,
+  type MemoryKnowledgeReindexPhase,
+  type MemoryKnowledgeReindexSnapshot,
+} from "./memoryKnowledgeReindexState";
 import { MemoryMindMapPanel } from "./MemoryMindMapPanel";
 import { ArchiveActionButton, ArchiveNotice, ArchiveSectionCard, ArchiveStatCard, type ArchiveTone } from "./memoryArchiveUi";
 import { resolveInputTone, resolveViewToneClasses } from "./viewTone";
@@ -27,6 +36,29 @@ type FieldErrorState = {
   sessionMemory?: string | null;
   sources?: string | null;
   reindex?: string | null;
+};
+
+type ReindexTimelineEntry = {
+  id: string;
+  tone: "info" | "warn" | "error";
+  title: string;
+  detail?: string | null;
+  atMs: number;
+};
+
+type ReindexActivityState = {
+  phase: MemoryKnowledgeReindexPhase;
+  startedAtMs: number;
+  finishedAtMs: number | null;
+  polls: number;
+  afterCommandPolls: number;
+  lastPolledAtMs: number | null;
+  before: MemoryKnowledgeReindexSnapshot;
+  latest: MemoryKnowledgeReindexSnapshot;
+  commandStdout: string | null;
+  syncIssue: string | null;
+  progressObserved: boolean;
+  entries: ReindexTimelineEntry[];
 };
 
 type MemoryKnowledgePanelProps = {
@@ -52,7 +84,8 @@ type MemoryKnowledgePanelProps = {
     matchedTerms: string[];
   }) => void;
   openHint: string | null;
-  onRefreshKnowledge: () => Promise<void>;
+  onRefreshKnowledge: () => Promise<MemoryKnowledgeRefreshResult | null>;
+  onOpenDiagnostics: () => void;
 };
 
 export function MemoryKnowledgePanel({
@@ -72,6 +105,7 @@ export function MemoryKnowledgePanel({
   onOpenEvidence,
   openHint,
   onRefreshKnowledge,
+  onOpenDiagnostics,
 }: MemoryKnowledgePanelProps) {
   const tonePalette = resolveViewToneClasses(tone);
   const toneClasses = {
@@ -92,6 +126,13 @@ export function MemoryKnowledgePanel({
   const [savingAction, setSavingAction] = useState<MemoryKnowledgeActionKind | null>(null);
   const [configFeedback, setConfigFeedback] = useState<string | null>(null);
   const [reindexFeedback, setReindexFeedback] = useState<string | null>(null);
+  const [reindexActivity, setReindexActivity] = useState<ReindexActivityState | null>(null);
+  const [reindexDetailsExpanded, setReindexDetailsExpanded] = useState(true);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const activeReindexTokenRef = useRef(0);
+  const pollTimerRef = useRef<number | null>(null);
+  const pollInFlightRef = useRef(false);
+  const commandCompletedRef = useRef(false);
   const statusSummary = buildMemoryConfigStatusSummary({
     selectedAgentId,
     isLocalGatewaySession,
@@ -99,6 +140,14 @@ export function MemoryKnowledgePanel({
     memoryStatus,
     runtimeStatus,
   });
+  const currentReindexSnapshot = useMemo(
+    () =>
+      captureMemoryKnowledgeReindexSnapshot({
+        statusSummary,
+        runtimeStatus,
+      }),
+    [statusSummary, runtimeStatus],
+  );
   const autoReindexEnabled = statusSummary.reindexMode === "auto";
   const externalEntryCount = knowledgeModel.sections.reduce((count, section) => count + section.entries.length, 0);
   const readableSources = knowledgeModel.sources.map((source) =>
@@ -135,11 +184,77 @@ export function MemoryKnowledgePanel({
     }
   };
 
+  const stopReindexPolling = () => {
+    if (pollTimerRef.current !== null) {
+      window.clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    pollInFlightRef.current = false;
+  };
+
+  const isReindexBusy = savingAction === "reindex" || (reindexActivity !== null && reindexActivity.finishedAtMs === null);
+  const controlsDisabled = savingAction !== null || isReindexBusy;
+  const showReindexRecoveryActions =
+    reindexActivity?.phase === "warning" || reindexActivity?.phase === "failed";
+  const reindexTaskbarSummary = reindexActivity
+    ? reindexActivity.commandStdout ??
+      describeMemoryKnowledgeReindexDelta(reindexActivity.before, reindexActivity.latest) ??
+      t("memory.knowledge.reindexLive.noDelta")
+    : null;
+
+  const formatElapsedSeconds = (sinceMs: number, untilMs?: number | null) => {
+    const deltaMs = Math.max(0, (untilMs ?? nowMs) - sinceMs);
+    return Math.round(deltaMs / 1000);
+  };
+
+  const createReindexEntry = (
+    tone: ReindexTimelineEntry["tone"],
+    title: string,
+    detail?: string | null,
+  ): ReindexTimelineEntry => ({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    tone,
+    title,
+    detail,
+    atMs: Date.now(),
+  });
+
   useEffect(() => {
     if (!knowledgeModel.localWritable) {
       setFieldErrors({});
     }
   }, [knowledgeModel.localWritable]);
+
+  useEffect(() => {
+    if (!reindexActivity || reindexActivity.finishedAtMs !== null) {
+      return;
+    }
+
+    const timerId = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timerId);
+  }, [reindexActivity]);
+
+  useEffect(() => stopReindexPolling, []);
+
+  useEffect(() => {
+    if (!reindexActivity || reindexActivity.finishedAtMs === null) {
+      return;
+    }
+
+    if (reindexActivity.phase === "settled") {
+      setReindexFeedback(t("memory.knowledge.reindexLive.settledFeedback"));
+      return;
+    }
+
+    if (reindexActivity.phase === "warning") {
+      setReindexFeedback(t("memory.knowledge.reindexLive.warningFeedback"));
+      return;
+    }
+
+    if (reindexActivity.phase === "failed") {
+      setReindexFeedback(t("memory.knowledge.reindexLive.failedFeedback"));
+    }
+  }, [reindexActivity, t]);
 
   const setFieldError = (field: keyof FieldErrorState, message: string | null) => {
     setFieldErrors((current) => ({ ...current, [field]: message }));
@@ -147,6 +262,212 @@ export function MemoryKnowledgePanel({
 
   const clearFieldError = (field: keyof FieldErrorState) => {
     setFieldErrors((current) => ({ ...current, [field]: null }));
+  };
+
+  const applyRefreshedKnowledge = (
+    result: MemoryKnowledgeRefreshResult,
+    options: {
+      token: number;
+      afterCommand: boolean;
+      addIssueEntry?: boolean;
+    },
+  ) => {
+    if (activeReindexTokenRef.current !== options.token) {
+      return;
+    }
+
+    const nextStatusSummary = buildMemoryConfigStatusSummary({
+      selectedAgentId,
+      isLocalGatewaySession,
+      memoryResult: result.memoryResult,
+      memoryStatus: result.memoryStatus,
+      runtimeStatus: result.runtimeStatus,
+    });
+    const nextSnapshot = captureMemoryKnowledgeReindexSnapshot({
+      statusSummary: nextStatusSummary,
+      runtimeStatus: result.runtimeStatus,
+    });
+
+    let shouldStopPolling = false;
+
+    setReindexActivity((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const afterCommandPolls = current.afterCommandPolls + (options.afterCommand ? 1 : 0);
+      const observedProgress = hasMemoryKnowledgeReindexProgress(current.latest, nextSnapshot);
+      const nextEntries = [...current.entries];
+      let nextPhase: ReindexActivityState["phase"] = options.afterCommand ? "syncing" : "running";
+      let finishedAtMs = current.finishedAtMs;
+
+      if (observedProgress && !current.progressObserved) {
+        nextEntries.push(
+          createReindexEntry(
+            "info",
+            t("memory.knowledge.reindexLive.event.progress"),
+            describeMemoryKnowledgeReindexDelta(current.before, nextSnapshot),
+          ),
+        );
+      }
+
+      if (options.addIssueEntry && current.syncIssue) {
+        nextEntries.push(
+          createReindexEntry(
+            "warn",
+            t("memory.knowledge.reindexLive.event.refreshFailed"),
+            current.syncIssue,
+          ),
+        );
+      }
+
+      if (options.afterCommand && isMemoryKnowledgeReindexSettled(nextSnapshot)) {
+        nextPhase = "settled";
+        finishedAtMs = Date.now();
+        nextEntries.push(
+          createReindexEntry(
+            "info",
+            t("memory.knowledge.reindexLive.event.settled"),
+            describeMemoryKnowledgeReindexDelta(current.before, nextSnapshot),
+          ),
+        );
+        shouldStopPolling = true;
+      } else if (options.afterCommand && afterCommandPolls >= 6) {
+        nextPhase = "warning";
+        finishedAtMs = Date.now();
+        nextEntries.push(
+          createReindexEntry(
+            "warn",
+            t("memory.knowledge.reindexLive.event.warning"),
+            describeMemoryKnowledgeReindexDelta(current.before, nextSnapshot) || t("memory.knowledge.reindexLive.noDelta"),
+          ),
+        );
+        shouldStopPolling = true;
+      }
+
+      return {
+        ...current,
+        phase: nextPhase,
+        finishedAtMs,
+        polls: current.polls + 1,
+        afterCommandPolls,
+        lastPolledAtMs: Date.now(),
+        latest: nextSnapshot,
+        syncIssue: null,
+        progressObserved: current.progressObserved || observedProgress,
+        entries: nextEntries,
+      };
+    });
+
+    if (shouldStopPolling) {
+      stopReindexPolling();
+      setSavingAction(null);
+    }
+  };
+
+  const refreshReindexProgress = async (
+    token: number,
+    options: {
+      afterCommand: boolean;
+      addIssueEntry?: boolean;
+    },
+  ) => {
+    if (pollInFlightRef.current || activeReindexTokenRef.current !== token) {
+      return;
+    }
+
+    pollInFlightRef.current = true;
+    try {
+      const result = await onRefreshKnowledge();
+      if (result) {
+        applyRefreshedKnowledge(result, { ...options, token });
+      } else {
+        let shouldStopPolling = false;
+        setReindexActivity((current) => {
+          if (!current) {
+            return current;
+          }
+          const afterCommandPolls = current.afterCommandPolls + (options.afterCommand ? 1 : 0);
+          const finishedAtMs =
+            options.afterCommand && afterCommandPolls >= 6 ? Date.now() : current.finishedAtMs;
+          const nextEntries =
+            options.afterCommand && afterCommandPolls >= 6
+              ? [
+                  ...current.entries,
+                  createReindexEntry(
+                    "warn",
+                    t("memory.knowledge.reindexLive.event.warning"),
+                    t("memory.knowledge.reindexLive.noRefreshPayload"),
+                  ),
+                ]
+              : current.entries;
+          shouldStopPolling = finishedAtMs !== null;
+          return {
+            ...current,
+            phase: finishedAtMs !== null ? "warning" : current.phase,
+            polls: current.polls + 1,
+            afterCommandPolls,
+            lastPolledAtMs: Date.now(),
+            finishedAtMs,
+            syncIssue: t("memory.knowledge.reindexLive.noRefreshPayload"),
+            entries: nextEntries,
+          };
+        });
+        if (shouldStopPolling) {
+          stopReindexPolling();
+          setSavingAction(null);
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      let shouldStopPolling = false;
+      setReindexActivity((current) => {
+        if (!current) {
+          return current;
+        }
+        const afterCommandPolls = current.afterCommandPolls + (options.afterCommand ? 1 : 0);
+        const finishedAtMs =
+          options.afterCommand && afterCommandPolls >= 6 ? Date.now() : current.finishedAtMs;
+        const nextEntries =
+          options.afterCommand && afterCommandPolls >= 6
+            ? [
+                ...current.entries,
+                createReindexEntry(
+                  "warn",
+                  t("memory.knowledge.reindexLive.event.refreshFailed"),
+                  message,
+                ),
+              ]
+            : current.entries;
+        shouldStopPolling = finishedAtMs !== null;
+        return {
+          ...current,
+          phase: finishedAtMs !== null ? "warning" : current.phase,
+          polls: current.polls + 1,
+          afterCommandPolls,
+          lastPolledAtMs: Date.now(),
+          finishedAtMs,
+          syncIssue: message,
+          entries: nextEntries,
+        };
+      });
+      if (shouldStopPolling) {
+        stopReindexPolling();
+        setSavingAction(null);
+      }
+    } finally {
+      pollInFlightRef.current = false;
+    }
+  };
+
+  const startReindexPolling = (token: number) => {
+    stopReindexPolling();
+    pollTimerRef.current = window.setInterval(() => {
+      void refreshReindexProgress(token, {
+        afterCommand: commandCompletedRef.current,
+        addIssueEntry: commandCompletedRef.current,
+      });
+    }, 1500);
   };
 
   const runAction = async (
@@ -187,8 +508,36 @@ export function MemoryKnowledgePanel({
       return;
     }
 
+    const token = Date.now();
+    activeReindexTokenRef.current = token;
+    commandCompletedRef.current = false;
+    setReindexDetailsExpanded(true);
     setSavingAction("reindex");
     clearFieldError("reindex");
+    setConfigFeedback(null);
+    setReindexFeedback(null);
+    setReindexActivity({
+      phase: "starting",
+      startedAtMs: Date.now(),
+      finishedAtMs: null,
+      polls: 0,
+      afterCommandPolls: 0,
+      lastPolledAtMs: null,
+      before: currentReindexSnapshot,
+      latest: currentReindexSnapshot,
+      commandStdout: null,
+      syncIssue: null,
+      progressObserved: false,
+      entries: [
+        createReindexEntry(
+          "info",
+          t("memory.knowledge.reindexLive.event.submitted"),
+          t("memory.knowledge.reindexLive.event.submittedDetail"),
+        ),
+      ],
+    });
+    startReindexPolling(token);
+    void refreshReindexProgress(token, { afterCommand: false });
     try {
       const result = await runExternalKnowledgeReindex(
         selectedAgentId,
@@ -196,15 +545,57 @@ export function MemoryKnowledgePanel({
         t,
         selectedSessionId ?? undefined,
       );
-      await onRefreshKnowledge();
-      setReindexFeedback(result.stdout || t("memory.knowledge.reindexDone"));
-      setConfigFeedback(null);
-      toast.success(t("memory.knowledge.reindexDone"));
+      if (activeReindexTokenRef.current !== token) {
+        return;
+      }
+      commandCompletedRef.current = true;
+      setReindexActivity((current) =>
+        current
+          ? {
+              ...current,
+              phase: "syncing",
+              commandStdout: result.stdout || t("memory.knowledge.reindexDone"),
+              entries: [
+                ...current.entries,
+                createReindexEntry(
+                  "info",
+                  t("memory.knowledge.reindexLive.event.commandDone"),
+                  result.stdout || t("memory.knowledge.reindexDone"),
+                ),
+              ],
+            }
+          : current,
+      );
+      await refreshReindexProgress(token, { afterCommand: true });
+      setReindexFeedback(t("memory.knowledge.reindexLive.syncingFeedback"));
+      toast.success(t("memory.knowledge.reindexLive.commandAccepted"));
     } catch (error) {
       const failure = error as MemoryKnowledgeActionFailure;
       setFieldError("reindex", failure.message);
+      stopReindexPolling();
+      setReindexActivity((current) =>
+        current
+          ? {
+              ...current,
+              phase: "failed",
+              finishedAtMs: Date.now(),
+              syncIssue: failure.rawMessage,
+              entries: [
+                ...current.entries,
+                createReindexEntry(
+                  "error",
+                  t("memory.knowledge.reindexLive.event.failed"),
+                  failure.message,
+                ),
+              ],
+            }
+          : current,
+      );
       toast.error(failure.message);
     } finally {
+      if (commandCompletedRef.current || activeReindexTokenRef.current !== token) {
+        return;
+      }
       setSavingAction(null);
     }
   };
@@ -214,9 +605,35 @@ export function MemoryKnowledgePanel({
       return;
     }
 
+    const token = Date.now();
+    activeReindexTokenRef.current = token;
+    commandCompletedRef.current = false;
+    setReindexDetailsExpanded(true);
     setSavingAction("reindex");
     clearFieldError("reindex");
     setReindexFeedback(t("memory.knowledge.reindexAutoRunning"));
+    setReindexActivity({
+      phase: "starting",
+      startedAtMs: Date.now(),
+      finishedAtMs: null,
+      polls: 0,
+      afterCommandPolls: 0,
+      lastPolledAtMs: null,
+      before: currentReindexSnapshot,
+      latest: currentReindexSnapshot,
+      commandStdout: null,
+      syncIssue: null,
+      progressObserved: false,
+      entries: [
+        createReindexEntry(
+          "info",
+          t("memory.knowledge.reindexLive.event.autoSubmitted"),
+          t("memory.knowledge.reindexLive.event.submittedDetail"),
+        ),
+      ],
+    });
+    startReindexPolling(token);
+    void refreshReindexProgress(token, { afterCommand: false });
     try {
       const result = await runExternalKnowledgeReindex(
         selectedAgentId,
@@ -224,12 +641,57 @@ export function MemoryKnowledgePanel({
         t,
         selectedSessionId ?? undefined,
       );
-      await onRefreshKnowledge();
-      setReindexFeedback(result.stdout || t("memory.knowledge.reindexDone"));
+      if (activeReindexTokenRef.current !== token) {
+        return;
+      }
+      commandCompletedRef.current = true;
+      setReindexActivity((current) =>
+        current
+          ? {
+              ...current,
+              phase: "syncing",
+              commandStdout: result.stdout || t("memory.knowledge.reindexDone"),
+              entries: [
+                ...current.entries,
+                createReindexEntry(
+                  "info",
+                  t("memory.knowledge.reindexLive.event.commandDone"),
+                  result.stdout || t("memory.knowledge.reindexDone"),
+                ),
+              ],
+            }
+          : current,
+      );
+      await refreshReindexProgress(token, { afterCommand: true });
+      setReindexFeedback(t("memory.knowledge.reindexLive.syncingFeedback"));
     } catch (error) {
       const failure = error as MemoryKnowledgeActionFailure;
       setFieldError("reindex", failure.message);
+      stopReindexPolling();
+      setReindexActivity((current) =>
+        current
+          ? {
+              ...current,
+              phase: "failed",
+              finishedAtMs: Date.now(),
+              syncIssue: failure.rawMessage,
+              entries: [
+                ...current.entries,
+                createReindexEntry(
+                  "error",
+                  t("memory.knowledge.reindexLive.event.failed"),
+                  failure.message,
+                ),
+              ],
+            }
+          : current,
+      );
+      toast.error(failure.message);
+      setSavingAction(null);
     } finally {
+      if (commandCompletedRef.current || activeReindexTokenRef.current !== token) {
+        return;
+      }
       setSavingAction(null);
     }
   };
@@ -573,6 +1035,74 @@ export function MemoryKnowledgePanel({
           </div>
         ) : null}
 
+        {reindexActivity ? (
+          <div className="sticky top-3 z-10 mt-3 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-[0_12px_28px_rgba(15,23,42,0.08)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 dark:shadow-none">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {reindexActivity.finishedAtMs === null ? (
+                    <Loader2 className={`h-4 w-4 animate-spin ${toneClasses.icon}`} />
+                  ) : (
+                    <Activity className={`h-4 w-4 ${toneClasses.icon}`} />
+                  )}
+                  {t("memory.knowledge.reindexLive.taskbarTitle")}
+                  <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${
+                    reindexActivity.phase === "failed"
+                      ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                      : reindexActivity.phase === "warning"
+                        ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                        : reindexActivity.phase === "settled"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          : "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+                  }`}>
+                    {t(`memory.knowledge.reindexLive.phase.${reindexActivity.phase}`)}
+                  </span>
+                </div>
+                <div className="mt-1 truncate text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  {reindexTaskbarSummary}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  <span>{t("memory.knowledge.reindexLive.elapsedValue", formatElapsedSeconds(reindexActivity.startedAtMs, reindexActivity.finishedAtMs))}</span>
+                  <span>{t(`memory.knowledge.runtimeMatch.${reindexActivity.latest.runtimeMatchState}`)}</span>
+                  <span>{t("memory.knowledge.reindexLive.snapshotFiles", reindexActivity.latest.files ?? 0)}</span>
+                  <span>{t("memory.knowledge.reindexLive.snapshotChunks", reindexActivity.latest.chunks ?? 0)}</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {showReindexRecoveryActions && statusSummary.localWritable ? (
+                  <ArchiveActionButton tone={tone} onClick={() => void handleRunReindex()} disabled={controlsDisabled} variant="primary">
+                    <RefreshCw className="mr-1 inline h-3.5 w-3.5" />
+                    {t("memory.knowledge.reindexLive.retry")}
+                  </ArchiveActionButton>
+                ) : null}
+                {showReindexRecoveryActions ? (
+                  <ArchiveActionButton tone={tone} onClick={onOpenDiagnostics} disabled={false}>
+                    <Info className="mr-1 inline h-3.5 w-3.5" />
+                    {t("memory.knowledge.reindexLive.openDiagnostics")}
+                  </ArchiveActionButton>
+                ) : null}
+                <ArchiveActionButton
+                  tone={tone}
+                  onClick={() => setReindexDetailsExpanded((current) => !current)}
+                  disabled={false}
+                >
+                  {reindexDetailsExpanded ? (
+                    <>
+                      <ChevronUp className="mr-1 inline h-3.5 w-3.5" />
+                      {t("memory.knowledge.reindexLive.collapse")}
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="mr-1 inline h-3.5 w-3.5" />
+                      {t("memory.knowledge.reindexLive.expand")}
+                    </>
+                  )}
+                </ArchiveActionButton>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
@@ -585,14 +1115,14 @@ export function MemoryKnowledgePanel({
               <ArchiveActionButton
                 tone={tone}
                 onClick={() => void handleRunReindex()}
-                disabled={savingAction !== null}
+                disabled={controlsDisabled}
                 variant="primary"
               >
                 <RefreshCw className="mr-1 inline h-3.5 w-3.5" />
                 {t("memory.knowledge.reindexNow")}
               </ArchiveActionButton>
             ) : (
-              <ArchiveActionButton tone={tone} onClick={() => void handleCopyRemoteGuide()} disabled={savingAction !== null}>
+              <ArchiveActionButton tone={tone} onClick={() => void handleCopyRemoteGuide()} disabled={controlsDisabled}>
                 <Copy className="mr-1 inline h-3.5 w-3.5" />
                 {t("memory.knowledge.copyRemoteGuide")}
               </ArchiveActionButton>
@@ -607,6 +1137,113 @@ export function MemoryKnowledgePanel({
           <div className="mt-3">
             <ArchiveNotice tone="info">{t("memory.knowledge.incrementalOnlyInline")}</ArchiveNotice>
           </div>
+          {reindexActivity && reindexDetailsExpanded ? (
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/40">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {reindexActivity.finishedAtMs === null ? (
+                      <Loader2 className={`h-4 w-4 animate-spin ${toneClasses.icon}`} />
+                    ) : (
+                      <Activity className={`h-4 w-4 ${toneClasses.icon}`} />
+                    )}
+                    {t("memory.knowledge.reindexLive.title")}
+                  </div>
+                  <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                    {t("memory.knowledge.reindexLive.desc")}
+                  </div>
+                </div>
+                <div className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold ${
+                  reindexActivity.phase === "failed"
+                    ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                    : reindexActivity.phase === "warning"
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                      : reindexActivity.phase === "settled"
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        : "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+                }`}>
+                  {t(`memory.knowledge.reindexLive.phase.${reindexActivity.phase}`)}
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <ArchiveStatCard
+                  label={t("memory.knowledge.reindexLive.elapsedLabel")}
+                  value={t("memory.knowledge.reindexLive.elapsedValue", formatElapsedSeconds(reindexActivity.startedAtMs, reindexActivity.finishedAtMs))}
+                />
+                <ArchiveStatCard
+                  label={t("memory.knowledge.reindexLive.pollsLabel")}
+                  value={reindexActivity.polls}
+                  meta={t("memory.knowledge.reindexLive.afterCommandPolls", reindexActivity.afterCommandPolls)}
+                />
+                <ArchiveStatCard
+                  label={t("memory.knowledge.reindexLive.lastCheckedLabel")}
+                  value={reindexActivity.lastPolledAtMs ? t("memory.knowledge.reindexLive.lastCheckedValue", formatElapsedSeconds(reindexActivity.lastPolledAtMs)) : t("memory.knowledge.reindexLive.pendingCheck")}
+                />
+                <ArchiveStatCard
+                  label={t("memory.knowledge.reindexLive.commandLabel")}
+                  value={reindexActivity.commandStdout ? t("memory.knowledge.reindexLive.commandFinished") : t("memory.knowledge.reindexLive.commandRunning")}
+                  meta={reindexActivity.commandStdout ?? t("memory.knowledge.reindexLive.commandPending")}
+                />
+              </div>
+
+              <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                    {t("memory.knowledge.reindexLive.beforeLabel")}
+                  </div>
+                  <div className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">
+                    <div>{t("memory.knowledge.reindexLive.snapshotFiles", reindexActivity.before.files ?? 0)}</div>
+                    <div>{t("memory.knowledge.reindexLive.snapshotChunks", reindexActivity.before.chunks ?? 0)}</div>
+                    <div>{t("memory.knowledge.reindexLive.snapshotDirty", reindexActivity.before.dirty === null ? t("memory.diag.unavailableShort") : reindexActivity.before.dirty ? t("memory.knowledge.reindexNeeded") : t("memory.knowledge.reindexClean"))}</div>
+                    <div>{t(`memory.knowledge.runtimeMatch.${reindexActivity.before.runtimeMatchState}`)}</div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-900">
+                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                    {t("memory.knowledge.reindexLive.latestLabel")}
+                  </div>
+                  <div className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-300">
+                    <div>{t("memory.knowledge.reindexLive.snapshotFiles", reindexActivity.latest.files ?? 0)}</div>
+                    <div>{t("memory.knowledge.reindexLive.snapshotChunks", reindexActivity.latest.chunks ?? 0)}</div>
+                    <div>{t("memory.knowledge.reindexLive.snapshotDirty", reindexActivity.latest.dirty === null ? t("memory.diag.unavailableShort") : reindexActivity.latest.dirty ? t("memory.knowledge.reindexNeeded") : t("memory.knowledge.reindexClean"))}</div>
+                    <div>{t(`memory.knowledge.runtimeMatch.${reindexActivity.latest.runtimeMatchState}`)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {reindexActivity.syncIssue ? (
+                <div className="mt-3">
+                  <ArchiveNotice tone="warn">
+                    {`${t("memory.knowledge.reindexLive.syncIssue")} ${reindexActivity.syncIssue}`}
+                  </ArchiveNotice>
+                </div>
+              ) : null}
+
+              <div className="mt-3 space-y-2">
+                {reindexActivity.entries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className={`rounded-xl border px-3 py-3 text-xs leading-5 ${
+                      entry.tone === "error"
+                        ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300"
+                        : entry.tone === "warn"
+                          ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
+                          : "border-slate-200 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="font-medium">{entry.title}</div>
+                      <div className="shrink-0 text-[11px] opacity-70">
+                        {t("memory.knowledge.reindexLive.atSeconds", formatElapsedSeconds(reindexActivity.startedAtMs, entry.atMs))}
+                      </div>
+                    </div>
+                    {entry.detail ? <div className="mt-1 opacity-80">{entry.detail}</div> : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {fieldErrors.reindex ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.reindex}</ArchiveNotice></div> : null}
         </div>
 
@@ -618,14 +1255,14 @@ export function MemoryKnowledgePanel({
               <input
                 value={newExtraPath}
                 onChange={(event) => setNewExtraPath(event.target.value)}
-                disabled={!knowledgeModel.localWritable || savingAction !== null}
+                disabled={!knowledgeModel.localWritable || controlsDisabled}
                 placeholder={t("memory.knowledge.pathPlaceholder")}
                 className={`min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 ${toneClasses.input}`}
               />
               <ArchiveActionButton
                 tone={tone}
                 onClick={() => void handleAddExtraPath()}
-                disabled={!knowledgeModel.localWritable || savingAction !== null}
+                disabled={!knowledgeModel.localWritable || controlsDisabled}
                 variant="primary"
               >
                 <Plus className="mr-1 inline h-3.5 w-3.5" />
@@ -643,7 +1280,7 @@ export function MemoryKnowledgePanel({
                     <ArchiveActionButton
                       tone={tone}
                       onClick={() => void handleRemoveExtraPath(path)}
-                      disabled={!knowledgeModel.localWritable || savingAction !== null}
+                      disabled={!knowledgeModel.localWritable || controlsDisabled}
                     >
                       <Trash2 className="mr-1 inline h-3.5 w-3.5" />
                       {t("memory.knowledge.removePath")}
@@ -668,7 +1305,7 @@ export function MemoryKnowledgePanel({
                   type="checkbox"
                   checked={knowledgeModel.sessionMemoryEnabled}
                   onChange={(event) => void handleToggleSessionMemory(event.target.checked)}
-                  disabled={!knowledgeModel.localWritable || savingAction !== null}
+                  disabled={!knowledgeModel.localWritable || controlsDisabled}
                   className={`h-4 w-4 rounded border-slate-300 ${toneClasses.checkbox}`}
                 />
               </label>
@@ -685,7 +1322,7 @@ export function MemoryKnowledgePanel({
                     type="checkbox"
                     checked={knowledgeModel.sources.includes(source)}
                     onChange={() => void handleToggleSource(source)}
-                    disabled={!knowledgeModel.localWritable || savingAction !== null}
+                    disabled={!knowledgeModel.localWritable || controlsDisabled}
                     className={`h-4 w-4 rounded border-slate-300 ${toneClasses.checkbox}`}
                   />
                 </label>
