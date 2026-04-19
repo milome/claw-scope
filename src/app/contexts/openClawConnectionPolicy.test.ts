@@ -65,7 +65,7 @@ describe('openClawConnectionPolicy', () => {
     ).toBe(false);
   });
 
-  it('persists loopback token success as paired device when device auth is available', () => {
+  it('keeps explicit loopback token auth even when session reports paired', () => {
     expect(
       resolvePersistedAuthModeAfterConnect(
         'http://127.0.0.1:18789',
@@ -74,8 +74,8 @@ describe('openClawConnectionPolicy', () => {
         { isPaired: true },
       ),
     ).toEqual({
-      mode: 'paired_device',
-      secret: '',
+      mode: 'token',
+      secret: 'shared-token',
     });
   });
 
@@ -104,6 +104,20 @@ describe('openClawConnectionPolicy', () => {
     ).toEqual({
       mode: 'paired_device',
       secret: 'shared-token',
+    });
+  });
+
+  it('clears paired_device bootstrap secret after pairing is completed', () => {
+    expect(
+      resolvePersistedAuthModeAfterConnect(
+        'http://127.0.0.1:18789',
+        'paired_device',
+        'shared-token',
+        { isPaired: true },
+      ),
+    ).toEqual({
+      mode: 'paired_device',
+      secret: '',
     });
   });
 

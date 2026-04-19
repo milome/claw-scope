@@ -62,12 +62,12 @@ export function shouldRetryWithPairedDeviceOnLocalGateway(
 }
 
 export function resolvePersistedAuthModeAfterConnect(
-  url: string,
+  _url: string,
   requestedMode: AuthMode,
   requestedSecret: string,
   snapshot?: GatewayConnectionSnapshotLike | null,
 ) {
-  if (isLoopbackGatewayUrl(url) && snapshot?.isPaired) {
+  if (requestedMode === 'paired_device' && snapshot?.isPaired) {
     return {
       mode: 'paired_device' as const,
       secret: '',
