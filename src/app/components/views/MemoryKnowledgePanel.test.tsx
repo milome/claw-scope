@@ -17,7 +17,6 @@ vi.mock("./MemoryMindMapPanel", () => ({
 }));
 
 vi.mock("./memoryKnowledgeActions", () => ({
-  runExternalKnowledgeReindex: vi.fn(),
   setExternalKnowledgePaths: vi.fn(),
   setExternalKnowledgeSources: vi.fn(),
   setSessionMemoryEnabled: vi.fn(),
@@ -25,7 +24,6 @@ vi.mock("./memoryKnowledgeActions", () => ({
 
 import { MemoryKnowledgePanel } from "./MemoryKnowledgePanel";
 import {
-  runExternalKnowledgeReindex,
   setExternalKnowledgePaths,
   setExternalKnowledgeSources,
   setSessionMemoryEnabled,
@@ -100,6 +98,13 @@ const baseProps = {
     runtimeStatus: null,
   }),
   onOpenDiagnostics: vi.fn(),
+  reindexActivity: null,
+  reindexDetailsExpanded: true,
+  reindexFeedback: null,
+  isReindexBusy: false,
+  onToggleReindexDetails: vi.fn(),
+  onRunReindex: vi.fn().mockResolvedValue(undefined),
+  onRunAutoReindex: vi.fn().mockResolvedValue(undefined),
 };
 
 describe("MemoryKnowledgePanel", () => {
@@ -125,7 +130,6 @@ describe("MemoryKnowledgePanel", () => {
   it("enables session memory and auto-adds sessions source", async () => {
     vi.mocked(setSessionMemoryEnabled).mockResolvedValue({ kind: "set_session_memory", stdout: "ok" });
     vi.mocked(setExternalKnowledgeSources).mockResolvedValue({ kind: "set_sources", stdout: "ok" });
-    vi.mocked(runExternalKnowledgeReindex).mockResolvedValue({ kind: "reindex", stdout: "reindexed" });
 
     render(<MemoryKnowledgePanel {...baseProps} />);
     const user = userEvent.setup();
@@ -135,12 +139,12 @@ describe("MemoryKnowledgePanel", () => {
     await waitFor(() => {
       expect(setSessionMemoryEnabled).toHaveBeenCalledWith(true, t, "session-local");
       expect(setExternalKnowledgeSources).toHaveBeenCalledWith(["memory", "sessions"], t, "session-local");
+      expect(baseProps.onRunAutoReindex).toHaveBeenCalled();
     });
   });
 
   it("asks for confirmation before removing extra path", async () => {
     vi.mocked(setExternalKnowledgePaths).mockResolvedValue({ kind: "set_extra_paths", stdout: "ok" });
-    vi.mocked(runExternalKnowledgeReindex).mockResolvedValue({ kind: "reindex", stdout: "reindexed" });
     const user = userEvent.setup();
 
     render(<MemoryKnowledgePanel {...baseProps} />);
@@ -149,53 +153,88 @@ describe("MemoryKnowledgePanel", () => {
     expect(globalThis.confirm).toHaveBeenCalled();
     await waitFor(() => {
       expect(setExternalKnowledgePaths).toHaveBeenCalledWith([], t, "session-local");
+      expect(baseProps.onRunAutoReindex).toHaveBeenCalled();
     });
   });
 
-  it("shows reindex activity while the command is running", async () => {
-    let resolveReindex: ((value: { kind: "reindex"; stdout: string }) => void) | undefined;
-    vi.mocked(runExternalKnowledgeReindex).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveReindex = resolve as typeof resolveReindex;
-        }),
+  it("renders lifted reindex activity state from parent props", () => {
+    render(
+      <MemoryKnowledgePanel
+        {...baseProps}
+        reindexActivity={{
+          phase: "running",
+          startedAtMs: Date.now() - 5000,
+          finishedAtMs: null,
+          polls: 2,
+          afterCommandPolls: 0,
+          lastPolledAtMs: Date.now() - 1000,
+          before: {
+            runtimeAvailable: true,
+            files: 0,
+            chunks: 0,
+            dirty: true,
+            runtimeMatchState: "missing",
+            statusKey: "configured_only",
+          },
+          latest: {
+            runtimeAvailable: true,
+            files: 2,
+            chunks: 8,
+            dirty: true,
+            runtimeMatchState: "partial",
+            statusKey: "configured_stale",
+          },
+          commandStdout: null,
+          syncIssue: null,
+          progressObserved: true,
+          entries: [],
+        }}
+        isReindexBusy
+      />,
     );
 
-    render(<MemoryKnowledgePanel {...baseProps} />);
-    const user = userEvent.setup();
-    await user.click(screen.getByText("memory.knowledge.reindexNow"));
-
     expect(screen.getByText("memory.knowledge.reindexLive.title")).toBeTruthy();
-    expect(screen.getByText("memory.knowledge.reindexLive.event.submitted")).toBeTruthy();
-
-    resolveReindex?.({ kind: "reindex", stdout: "ok" });
-
-    await waitFor(() => {
-      expect(runExternalKnowledgeReindex).toHaveBeenCalledWith(
-        "agent-main",
-        "incremental",
-        t,
-        "session-local",
-      );
-    });
+    expect(screen.getByText("memory.knowledge.reindexLive.taskbarTitle")).toBeTruthy();
   });
 
   it("shows retry and diagnostics actions after a reindex failure", async () => {
-    vi.mocked(runExternalKnowledgeReindex).mockRejectedValueOnce({
-      kind: "reindex",
-      code: "unknown",
-      message: "memory.knowledge.error.reindexFailed",
-      rawMessage: "boom",
-    });
-
-    render(<MemoryKnowledgePanel {...baseProps} />);
+    render(
+      <MemoryKnowledgePanel
+        {...baseProps}
+        reindexActivity={{
+          phase: "failed",
+          startedAtMs: Date.now() - 5000,
+          finishedAtMs: Date.now(),
+          polls: 3,
+          afterCommandPolls: 1,
+          lastPolledAtMs: Date.now(),
+          before: {
+            runtimeAvailable: true,
+            files: 0,
+            chunks: 0,
+            dirty: true,
+            runtimeMatchState: "missing",
+            statusKey: "configured_only",
+          },
+          latest: {
+            runtimeAvailable: true,
+            files: 0,
+            chunks: 0,
+            dirty: true,
+            runtimeMatchState: "missing",
+            statusKey: "configured_only",
+          },
+          commandStdout: null,
+          syncIssue: "boom",
+          progressObserved: false,
+          entries: [],
+        }}
+      />,
+    );
     const user = userEvent.setup();
-    await user.click(screen.getByText("memory.knowledge.reindexNow"));
 
-    await waitFor(() => {
-      expect(screen.getByText("memory.knowledge.reindexLive.retry")).toBeTruthy();
-      expect(screen.getByText("memory.knowledge.reindexLive.openDiagnostics")).toBeTruthy();
-    });
+    expect(screen.getByText("memory.knowledge.reindexLive.retry")).toBeTruthy();
+    expect(screen.getByText("memory.knowledge.reindexLive.openDiagnostics")).toBeTruthy();
 
     await user.click(screen.getByText("memory.knowledge.reindexLive.openDiagnostics"));
 
@@ -203,21 +242,41 @@ describe("MemoryKnowledgePanel", () => {
   });
 
   it("keeps only one persistent reindex error in the panel", async () => {
-    vi.mocked(runExternalKnowledgeReindex).mockRejectedValueOnce({
-      kind: "reindex",
-      code: "unknown",
-      message: "boom",
-      rawMessage: "boom",
-    });
+    render(
+      <MemoryKnowledgePanel
+        {...baseProps}
+        reindexActivity={{
+          phase: "failed",
+          startedAtMs: Date.now() - 5000,
+          finishedAtMs: Date.now(),
+          polls: 3,
+          afterCommandPolls: 1,
+          lastPolledAtMs: Date.now(),
+          before: {
+            runtimeAvailable: true,
+            files: 0,
+            chunks: 0,
+            dirty: true,
+            runtimeMatchState: "missing",
+            statusKey: "configured_only",
+          },
+          latest: {
+            runtimeAvailable: true,
+            files: 0,
+            chunks: 0,
+            dirty: true,
+            runtimeMatchState: "missing",
+            statusKey: "configured_only",
+          },
+          commandStdout: null,
+          syncIssue: "boom",
+          progressObserved: false,
+          entries: [],
+        }}
+      />,
+    );
 
-    render(<MemoryKnowledgePanel {...baseProps} />);
-    const user = userEvent.setup();
-    await user.click(screen.getByText("memory.knowledge.reindexNow"));
-
-    await waitFor(() => {
-      expect(screen.getAllByText(/boom/)).toHaveLength(1);
-    });
-
-    expect(vi.mocked(toast.error)).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText(/boom/)).toHaveLength(1);
+    expect(vi.mocked(toast.error)).toHaveBeenCalledTimes(0);
   });
 });

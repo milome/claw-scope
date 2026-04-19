@@ -28,6 +28,29 @@ export type MemoryKnowledgeReindexPhase =
   | "warning"
   | "failed";
 
+export type ReindexTimelineEntry = {
+  id: string;
+  tone: "info" | "warn" | "error";
+  title: string;
+  detail?: string | null;
+  atMs: number;
+};
+
+export type MemoryKnowledgeReindexActivityState = {
+  phase: MemoryKnowledgeReindexPhase;
+  startedAtMs: number;
+  finishedAtMs: number | null;
+  polls: number;
+  afterCommandPolls: number;
+  lastPolledAtMs: number | null;
+  before: MemoryKnowledgeReindexSnapshot;
+  latest: MemoryKnowledgeReindexSnapshot;
+  commandStdout: string | null;
+  syncIssue: string | null;
+  progressObserved: boolean;
+  entries: ReindexTimelineEntry[];
+};
+
 export function captureMemoryKnowledgeReindexSnapshot({
   statusSummary,
   runtimeStatus,

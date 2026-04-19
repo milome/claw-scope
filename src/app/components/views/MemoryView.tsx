@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Calendar, Network, Cpu, BrainCircuit, ChevronDown, BookOpen, FileText, Info, LibraryBig } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -59,7 +59,19 @@ import {
   resolveSelectedMemoryAgentIdForNode,
   resolveSelectedMemoryNodeId,
 } from "./memoryNodeState";
-import type { MemoryKnowledgeRefreshResult } from "./memoryKnowledgeReindexState";
+import {
+  captureMemoryKnowledgeReindexSnapshot,
+  describeMemoryKnowledgeReindexDelta,
+  hasMemoryKnowledgeReindexProgress,
+  isMemoryKnowledgeReindexSettled,
+  type MemoryKnowledgeRefreshResult,
+  type MemoryKnowledgeReindexActivityState,
+  type ReindexTimelineEntry,
+} from "./memoryKnowledgeReindexState";
+import {
+  runExternalKnowledgeReindex,
+  type MemoryKnowledgeActionFailure,
+} from "./memoryKnowledgeActions";
 import {
   canRunSemanticMemorySearch,
   resolveSemanticMemorySearchGroup,
@@ -377,6 +389,14 @@ export function MemoryView() {
   const [_timelineEntryContent, setTimelineEntryContent] = useState("");
   const [_timelineEntryLoading, setTimelineEntryLoading] = useState(false);
   const [_timelineEntryError, setTimelineEntryError] = useState<string | null>(null);
+  const [knowledgeReindexActivity, setKnowledgeReindexActivity] =
+    useState<MemoryKnowledgeReindexActivityState | null>(null);
+  const [knowledgeReindexFeedback, setKnowledgeReindexFeedback] = useState<string | null>(null);
+  const [knowledgeReindexDetailsExpanded, setKnowledgeReindexDetailsExpanded] = useState(true);
+  const knowledgeReindexTokenRef = useRef(0);
+  const knowledgeReindexPollTimerRef = useRef<number | null>(null);
+  const knowledgeReindexPollInFlightRef = useRef(false);
+  const knowledgeReindexCommandCompletedRef = useRef(false);
 
   const selectedNodeEntry = useMemo(
     () => memoryNodeEntries.find((entry) => entry.id === selectedNodeId) ?? null,
@@ -959,6 +979,360 @@ export function MemoryView() {
     ? memoryConfigStatus.providerAvailabilityReasonKey
     : memoryConfigStatus.searchAvailabilityReasonKey;
   const searchPrimaryReason = searchPrimaryReasonKey ? t(searchPrimaryReasonKey) : null;
+  const currentKnowledgeReindexSnapshot = useMemo(
+    () =>
+      captureMemoryKnowledgeReindexSnapshot({
+        statusSummary: memoryConfigStatus,
+        runtimeStatus: memoryRuntimeStatus,
+      }),
+    [memoryConfigStatus, memoryRuntimeStatus],
+  );
+
+  const createKnowledgeReindexEntry = (
+    tone: ReindexTimelineEntry["tone"],
+    title: string,
+    detail?: string | null,
+  ): ReindexTimelineEntry => ({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    tone,
+    title,
+    detail,
+    atMs: Date.now(),
+  });
+
+  const stopKnowledgeReindexPolling = () => {
+    if (knowledgeReindexPollTimerRef.current !== null) {
+      window.clearInterval(knowledgeReindexPollTimerRef.current);
+      knowledgeReindexPollTimerRef.current = null;
+    }
+    knowledgeReindexPollInFlightRef.current = false;
+  };
+
+  const applyKnowledgeReindexRefresh = (
+    result: MemoryKnowledgeRefreshResult,
+    options: {
+      token: number;
+      afterCommand: boolean;
+      addIssueEntry?: boolean;
+    },
+  ) => {
+    if (knowledgeReindexTokenRef.current !== options.token) {
+      return;
+    }
+
+    const nextStatusSummary = buildMemoryConfigStatusSummary({
+      selectedAgentId,
+      isLocalGatewaySession,
+      memoryResult: result.memoryResult,
+      memoryStatus: result.memoryStatus,
+      runtimeStatus: result.runtimeStatus,
+    });
+    const nextSnapshot = captureMemoryKnowledgeReindexSnapshot({
+      statusSummary: nextStatusSummary,
+      runtimeStatus: result.runtimeStatus,
+    });
+
+    let shouldStopPolling = false;
+
+    setKnowledgeReindexActivity((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const afterCommandPolls = current.afterCommandPolls + (options.afterCommand ? 1 : 0);
+      const observedProgress = hasMemoryKnowledgeReindexProgress(current.latest, nextSnapshot);
+      const nextEntries = [...current.entries];
+      let nextPhase: MemoryKnowledgeReindexActivityState["phase"] = options.afterCommand ? "syncing" : "running";
+      let finishedAtMs = current.finishedAtMs;
+
+      if (observedProgress && !current.progressObserved) {
+        nextEntries.push(
+          createKnowledgeReindexEntry(
+            "info",
+            t("memory.knowledge.reindexLive.event.progress"),
+            describeMemoryKnowledgeReindexDelta(current.before, nextSnapshot),
+          ),
+        );
+      }
+
+      if (options.addIssueEntry && current.syncIssue) {
+        nextEntries.push(
+          createKnowledgeReindexEntry(
+            "warn",
+            t("memory.knowledge.reindexLive.event.refreshFailed"),
+            current.syncIssue,
+          ),
+        );
+      }
+
+      if (options.afterCommand && isMemoryKnowledgeReindexSettled(nextSnapshot)) {
+        nextPhase = "settled";
+        finishedAtMs = Date.now();
+        nextEntries.push(
+          createKnowledgeReindexEntry(
+            "info",
+            t("memory.knowledge.reindexLive.event.settled"),
+            describeMemoryKnowledgeReindexDelta(current.before, nextSnapshot),
+          ),
+        );
+        shouldStopPolling = true;
+      } else if (options.afterCommand && afterCommandPolls >= 6) {
+        nextPhase = "warning";
+        finishedAtMs = Date.now();
+        nextEntries.push(
+          createKnowledgeReindexEntry(
+            "warn",
+            t("memory.knowledge.reindexLive.event.warning"),
+            describeMemoryKnowledgeReindexDelta(current.before, nextSnapshot) || t("memory.knowledge.reindexLive.noDelta"),
+          ),
+        );
+        shouldStopPolling = true;
+      }
+
+      return {
+        ...current,
+        phase: nextPhase,
+        finishedAtMs,
+        polls: current.polls + 1,
+        afterCommandPolls,
+        lastPolledAtMs: Date.now(),
+        latest: nextSnapshot,
+        syncIssue: null,
+        progressObserved: current.progressObserved || observedProgress,
+        entries: nextEntries,
+      };
+    });
+
+    if (shouldStopPolling) {
+      stopKnowledgeReindexPolling();
+    }
+  };
+
+  const refreshKnowledgeReindexProgress = async (
+    token: number,
+    options: {
+      afterCommand: boolean;
+      addIssueEntry?: boolean;
+    },
+  ) => {
+    if (knowledgeReindexPollInFlightRef.current || knowledgeReindexTokenRef.current !== token) {
+      return;
+    }
+
+    knowledgeReindexPollInFlightRef.current = true;
+    try {
+      const result = await handleRefreshKnowledge();
+      if (result) {
+        applyKnowledgeReindexRefresh(result, { ...options, token });
+      } else {
+        let shouldStopPolling = false;
+        setKnowledgeReindexActivity((current) => {
+          if (!current) {
+            return current;
+          }
+          const afterCommandPolls = current.afterCommandPolls + (options.afterCommand ? 1 : 0);
+          const finishedAtMs =
+            options.afterCommand && afterCommandPolls >= 6 ? Date.now() : current.finishedAtMs;
+          const nextEntries =
+            options.afterCommand && afterCommandPolls >= 6
+              ? [
+                  ...current.entries,
+                  createKnowledgeReindexEntry(
+                    "warn",
+                    t("memory.knowledge.reindexLive.event.warning"),
+                    null,
+                  ),
+                ]
+              : current.entries;
+          shouldStopPolling = finishedAtMs !== null;
+          return {
+            ...current,
+            phase: finishedAtMs !== null ? "warning" : current.phase,
+            polls: current.polls + 1,
+            afterCommandPolls,
+            lastPolledAtMs: Date.now(),
+            finishedAtMs,
+            syncIssue: t("memory.knowledge.reindexLive.noRefreshPayload"),
+            entries: nextEntries,
+          };
+        });
+        if (shouldStopPolling) {
+          stopKnowledgeReindexPolling();
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      let shouldStopPolling = false;
+      setKnowledgeReindexActivity((current) => {
+        if (!current) {
+          return current;
+        }
+        const afterCommandPolls = current.afterCommandPolls + (options.afterCommand ? 1 : 0);
+        const finishedAtMs =
+          options.afterCommand && afterCommandPolls >= 6 ? Date.now() : current.finishedAtMs;
+        const nextEntries =
+          options.afterCommand && afterCommandPolls >= 6
+            ? [
+                ...current.entries,
+                createKnowledgeReindexEntry(
+                  "warn",
+                  t("memory.knowledge.reindexLive.event.refreshFailed"),
+                  null,
+                ),
+              ]
+            : current.entries;
+        shouldStopPolling = finishedAtMs !== null;
+        return {
+          ...current,
+          phase: finishedAtMs !== null ? "warning" : current.phase,
+          polls: current.polls + 1,
+          afterCommandPolls,
+          lastPolledAtMs: Date.now(),
+          finishedAtMs,
+          syncIssue: message,
+          entries: nextEntries,
+        };
+      });
+      if (shouldStopPolling) {
+        stopKnowledgeReindexPolling();
+      }
+    } finally {
+      knowledgeReindexPollInFlightRef.current = false;
+    }
+  };
+
+  const startKnowledgeReindexPolling = (token: number) => {
+    stopKnowledgeReindexPolling();
+    knowledgeReindexPollTimerRef.current = window.setInterval(() => {
+      void refreshKnowledgeReindexProgress(token, {
+        afterCommand: knowledgeReindexCommandCompletedRef.current,
+        addIssueEntry: knowledgeReindexCommandCompletedRef.current,
+      });
+    }, 1500);
+  };
+
+  useEffect(() => stopKnowledgeReindexPolling, []);
+
+  useEffect(() => {
+    if (!knowledgeReindexActivity || knowledgeReindexActivity.finishedAtMs === null) {
+      return;
+    }
+
+    if (knowledgeReindexActivity.phase === "settled") {
+      setKnowledgeReindexFeedback(t("memory.knowledge.reindexLive.settledFeedback"));
+      return;
+    }
+
+    if (knowledgeReindexActivity.phase === "warning") {
+      setKnowledgeReindexFeedback(
+        knowledgeReindexActivity.syncIssue
+          ? null
+          : t("memory.knowledge.reindexLive.warningFeedback"),
+      );
+      return;
+    }
+
+    if (knowledgeReindexActivity.phase === "failed") {
+      setKnowledgeReindexFeedback(null);
+    }
+  }, [knowledgeReindexActivity, t]);
+
+  const runKnowledgeReindex = async ({ auto }: { auto: boolean }) => {
+    if (!memoryConfigStatus.localWritable || !selectedAgentId) {
+      return;
+    }
+
+    const token = Date.now();
+    knowledgeReindexTokenRef.current = token;
+    knowledgeReindexCommandCompletedRef.current = false;
+    setKnowledgeReindexDetailsExpanded(true);
+    setKnowledgeReindexFeedback(auto ? t("memory.knowledge.reindexAutoRunning") : null);
+    setKnowledgeReindexActivity({
+      phase: "starting",
+      startedAtMs: Date.now(),
+      finishedAtMs: null,
+      polls: 0,
+      afterCommandPolls: 0,
+      lastPolledAtMs: null,
+      before: currentKnowledgeReindexSnapshot,
+      latest: currentKnowledgeReindexSnapshot,
+      commandStdout: null,
+      syncIssue: null,
+      progressObserved: false,
+      entries: [
+        createKnowledgeReindexEntry(
+          "info",
+          auto
+            ? t("memory.knowledge.reindexLive.event.autoSubmitted")
+            : t("memory.knowledge.reindexLive.event.submitted"),
+          t("memory.knowledge.reindexLive.event.submittedDetail"),
+        ),
+      ],
+    });
+    startKnowledgeReindexPolling(token);
+    void refreshKnowledgeReindexProgress(token, { afterCommand: false });
+
+    try {
+      const result = await runExternalKnowledgeReindex(
+        selectedAgentId,
+        memoryConfigStatus.reindexStrategy,
+        t,
+        selectedSessionId ?? undefined,
+      );
+      if (knowledgeReindexTokenRef.current !== token) {
+        return;
+      }
+
+      knowledgeReindexCommandCompletedRef.current = true;
+      setKnowledgeReindexActivity((current) =>
+        current
+          ? {
+              ...current,
+              phase: "syncing",
+              commandStdout: result.stdout || t("memory.knowledge.reindexDone"),
+              entries: [
+                ...current.entries,
+                createKnowledgeReindexEntry(
+                  "info",
+                  t("memory.knowledge.reindexLive.event.commandDone"),
+                  result.stdout || t("memory.knowledge.reindexDone"),
+                ),
+              ],
+            }
+          : current,
+      );
+      await refreshKnowledgeReindexProgress(token, { afterCommand: true });
+      setKnowledgeReindexFeedback(t("memory.knowledge.reindexLive.syncingFeedback"));
+      if (!auto) {
+        toast.success(t("memory.knowledge.reindexLive.commandAccepted"));
+      }
+    } catch (error) {
+      const failure = error as MemoryKnowledgeActionFailure;
+      stopKnowledgeReindexPolling();
+      setKnowledgeReindexActivity((current) =>
+        current
+          ? {
+              ...current,
+              phase: "failed",
+              finishedAtMs: Date.now(),
+              syncIssue: failure.message,
+              entries: [
+                ...current.entries,
+                createKnowledgeReindexEntry(
+                  "error",
+                  t("memory.knowledge.reindexLive.event.failed"),
+                  null,
+                ),
+              ],
+            }
+          : current,
+      );
+      toast.error(failure.message);
+    }
+  };
+
+  const isKnowledgeReindexBusy =
+    knowledgeReindexActivity !== null && knowledgeReindexActivity.finishedAtMs === null;
 
   const getAgentBadge = (agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
@@ -1549,6 +1923,13 @@ export function MemoryView() {
           openHint={mindMapOpenHint}
           onRefreshKnowledge={handleRefreshKnowledge}
           onOpenDiagnostics={() => setDiagnosticsDrawer({ open: true, source: "knowledge" })}
+          reindexActivity={knowledgeReindexActivity}
+          reindexDetailsExpanded={knowledgeReindexDetailsExpanded}
+          reindexFeedback={knowledgeReindexFeedback}
+          isReindexBusy={isKnowledgeReindexBusy}
+          onToggleReindexDetails={() => setKnowledgeReindexDetailsExpanded((current) => !current)}
+          onRunReindex={() => runKnowledgeReindex({ auto: false })}
+          onRunAutoReindex={() => runKnowledgeReindex({ auto: true })}
         />
       </ArchivePane>
     ),

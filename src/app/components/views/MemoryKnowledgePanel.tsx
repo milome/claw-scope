@@ -1,5 +1,5 @@
 import { Activity, CheckCircle2, ChevronDown, ChevronUp, Copy, FolderTree, Info, Link2, ListChecks, Loader2, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type {
   GatewayAgentMemoryResult,
@@ -11,7 +11,6 @@ import type { MemoryExternalSourceItem } from "./memoryState";
 import { buildExternalKnowledgeViewModel, isBlockedExternalKnowledgePath } from "./memoryKnowledgeState";
 import { buildMemoryConfigStatusSummary, memoryConfigBridgeMessageKey, memoryConfigStatusMessageKey, memoryReindexModeMessageKey } from "./memoryConfigStatus";
 import {
-  runExternalKnowledgeReindex,
   setExternalKnowledgePaths,
   setExternalKnowledgeSources,
   setSessionMemoryEnabled,
@@ -19,13 +18,9 @@ import {
   type MemoryKnowledgeActionKind,
 } from "./memoryKnowledgeActions";
 import {
-  captureMemoryKnowledgeReindexSnapshot,
   describeMemoryKnowledgeReindexDelta,
-  hasMemoryKnowledgeReindexProgress,
-  isMemoryKnowledgeReindexSettled,
   type MemoryKnowledgeRefreshResult,
-  type MemoryKnowledgeReindexPhase,
-  type MemoryKnowledgeReindexSnapshot,
+  type MemoryKnowledgeReindexActivityState,
 } from "./memoryKnowledgeReindexState";
 import { MemoryMindMapPanel } from "./MemoryMindMapPanel";
 import { ArchiveActionButton, ArchiveNotice, ArchiveSectionCard, ArchiveStatCard, type ArchiveTone } from "./memoryArchiveUi";
@@ -35,30 +30,6 @@ type FieldErrorState = {
   extraPath?: string | null;
   sessionMemory?: string | null;
   sources?: string | null;
-  reindex?: string | null;
-};
-
-type ReindexTimelineEntry = {
-  id: string;
-  tone: "info" | "warn" | "error";
-  title: string;
-  detail?: string | null;
-  atMs: number;
-};
-
-type ReindexActivityState = {
-  phase: MemoryKnowledgeReindexPhase;
-  startedAtMs: number;
-  finishedAtMs: number | null;
-  polls: number;
-  afterCommandPolls: number;
-  lastPolledAtMs: number | null;
-  before: MemoryKnowledgeReindexSnapshot;
-  latest: MemoryKnowledgeReindexSnapshot;
-  commandStdout: string | null;
-  syncIssue: string | null;
-  progressObserved: boolean;
-  entries: ReindexTimelineEntry[];
 };
 
 type MemoryKnowledgePanelProps = {
@@ -86,6 +57,13 @@ type MemoryKnowledgePanelProps = {
   openHint: string | null;
   onRefreshKnowledge: () => Promise<MemoryKnowledgeRefreshResult | null>;
   onOpenDiagnostics: () => void;
+  reindexActivity: MemoryKnowledgeReindexActivityState | null;
+  reindexDetailsExpanded: boolean;
+  reindexFeedback: string | null;
+  isReindexBusy: boolean;
+  onToggleReindexDetails: () => void;
+  onRunReindex: () => Promise<void>;
+  onRunAutoReindex: () => Promise<void>;
 };
 
 export function MemoryKnowledgePanel({
@@ -106,6 +84,13 @@ export function MemoryKnowledgePanel({
   openHint,
   onRefreshKnowledge,
   onOpenDiagnostics,
+  reindexActivity,
+  reindexDetailsExpanded,
+  reindexFeedback,
+  isReindexBusy,
+  onToggleReindexDetails,
+  onRunReindex,
+  onRunAutoReindex,
 }: MemoryKnowledgePanelProps) {
   const tonePalette = resolveViewToneClasses(tone);
   const toneClasses = {
@@ -125,14 +110,7 @@ export function MemoryKnowledgePanel({
   const [fieldErrors, setFieldErrors] = useState<FieldErrorState>({});
   const [savingAction, setSavingAction] = useState<MemoryKnowledgeActionKind | null>(null);
   const [configFeedback, setConfigFeedback] = useState<string | null>(null);
-  const [reindexFeedback, setReindexFeedback] = useState<string | null>(null);
-  const [reindexActivity, setReindexActivity] = useState<ReindexActivityState | null>(null);
-  const [reindexDetailsExpanded, setReindexDetailsExpanded] = useState(true);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const activeReindexTokenRef = useRef(0);
-  const pollTimerRef = useRef<number | null>(null);
-  const pollInFlightRef = useRef(false);
-  const commandCompletedRef = useRef(false);
   const statusSummary = buildMemoryConfigStatusSummary({
     selectedAgentId,
     isLocalGatewaySession,
@@ -140,14 +118,6 @@ export function MemoryKnowledgePanel({
     memoryStatus,
     runtimeStatus,
   });
-  const currentReindexSnapshot = useMemo(
-    () =>
-      captureMemoryKnowledgeReindexSnapshot({
-        statusSummary,
-        runtimeStatus,
-      }),
-    [statusSummary, runtimeStatus],
-  );
   const autoReindexEnabled = statusSummary.reindexMode === "auto";
   const externalEntryCount = knowledgeModel.sections.reduce((count, section) => count + section.entries.length, 0);
   const readableSources = knowledgeModel.sources.map((source) =>
@@ -184,15 +154,6 @@ export function MemoryKnowledgePanel({
     }
   };
 
-  const stopReindexPolling = () => {
-    if (pollTimerRef.current !== null) {
-      window.clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-    pollInFlightRef.current = false;
-  };
-
-  const isReindexBusy = savingAction === "reindex" || (reindexActivity !== null && reindexActivity.finishedAtMs === null);
   const controlsDisabled = savingAction !== null || isReindexBusy;
   const showReindexRecoveryActions =
     reindexActivity?.phase === "warning" || reindexActivity?.phase === "failed";
@@ -206,18 +167,6 @@ export function MemoryKnowledgePanel({
     const deltaMs = Math.max(0, (untilMs ?? nowMs) - sinceMs);
     return Math.round(deltaMs / 1000);
   };
-
-  const createReindexEntry = (
-    tone: ReindexTimelineEntry["tone"],
-    title: string,
-    detail?: string | null,
-  ): ReindexTimelineEntry => ({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    tone,
-    title,
-    detail,
-    atMs: Date.now(),
-  });
 
   useEffect(() => {
     if (!knowledgeModel.localWritable) {
@@ -234,240 +183,12 @@ export function MemoryKnowledgePanel({
     return () => window.clearInterval(timerId);
   }, [reindexActivity]);
 
-  useEffect(() => stopReindexPolling, []);
-
-  useEffect(() => {
-    if (!reindexActivity || reindexActivity.finishedAtMs === null) {
-      return;
-    }
-
-    if (reindexActivity.phase === "settled") {
-      setReindexFeedback(t("memory.knowledge.reindexLive.settledFeedback"));
-      return;
-    }
-
-    if (reindexActivity.phase === "warning") {
-      setReindexFeedback(reindexActivity.syncIssue ? null : t("memory.knowledge.reindexLive.warningFeedback"));
-      return;
-    }
-
-    if (reindexActivity.phase === "failed") {
-      setReindexFeedback(null);
-    }
-  }, [reindexActivity, t]);
-
   const setFieldError = (field: keyof FieldErrorState, message: string | null) => {
     setFieldErrors((current) => ({ ...current, [field]: message }));
   };
 
   const clearFieldError = (field: keyof FieldErrorState) => {
     setFieldErrors((current) => ({ ...current, [field]: null }));
-  };
-
-  const applyRefreshedKnowledge = (
-    result: MemoryKnowledgeRefreshResult,
-    options: {
-      token: number;
-      afterCommand: boolean;
-      addIssueEntry?: boolean;
-    },
-  ) => {
-    if (activeReindexTokenRef.current !== options.token) {
-      return;
-    }
-
-    const nextStatusSummary = buildMemoryConfigStatusSummary({
-      selectedAgentId,
-      isLocalGatewaySession,
-      memoryResult: result.memoryResult,
-      memoryStatus: result.memoryStatus,
-      runtimeStatus: result.runtimeStatus,
-    });
-    const nextSnapshot = captureMemoryKnowledgeReindexSnapshot({
-      statusSummary: nextStatusSummary,
-      runtimeStatus: result.runtimeStatus,
-    });
-
-    let shouldStopPolling = false;
-
-    setReindexActivity((current) => {
-      if (!current) {
-        return current;
-      }
-
-      const afterCommandPolls = current.afterCommandPolls + (options.afterCommand ? 1 : 0);
-      const observedProgress = hasMemoryKnowledgeReindexProgress(current.latest, nextSnapshot);
-      const nextEntries = [...current.entries];
-      let nextPhase: ReindexActivityState["phase"] = options.afterCommand ? "syncing" : "running";
-      let finishedAtMs = current.finishedAtMs;
-
-      if (observedProgress && !current.progressObserved) {
-        nextEntries.push(
-          createReindexEntry(
-            "info",
-            t("memory.knowledge.reindexLive.event.progress"),
-            describeMemoryKnowledgeReindexDelta(current.before, nextSnapshot),
-          ),
-        );
-      }
-
-      if (options.addIssueEntry && current.syncIssue) {
-        nextEntries.push(
-          createReindexEntry(
-            "warn",
-            t("memory.knowledge.reindexLive.event.refreshFailed"),
-            current.syncIssue,
-          ),
-        );
-      }
-
-      if (options.afterCommand && isMemoryKnowledgeReindexSettled(nextSnapshot)) {
-        nextPhase = "settled";
-        finishedAtMs = Date.now();
-        nextEntries.push(
-          createReindexEntry(
-            "info",
-            t("memory.knowledge.reindexLive.event.settled"),
-            describeMemoryKnowledgeReindexDelta(current.before, nextSnapshot),
-          ),
-        );
-        shouldStopPolling = true;
-      } else if (options.afterCommand && afterCommandPolls >= 6) {
-        nextPhase = "warning";
-        finishedAtMs = Date.now();
-        nextEntries.push(
-          createReindexEntry(
-            "warn",
-            t("memory.knowledge.reindexLive.event.warning"),
-            describeMemoryKnowledgeReindexDelta(current.before, nextSnapshot) || t("memory.knowledge.reindexLive.noDelta"),
-          ),
-        );
-        shouldStopPolling = true;
-      }
-
-      return {
-        ...current,
-        phase: nextPhase,
-        finishedAtMs,
-        polls: current.polls + 1,
-        afterCommandPolls,
-        lastPolledAtMs: Date.now(),
-        latest: nextSnapshot,
-        syncIssue: null,
-        progressObserved: current.progressObserved || observedProgress,
-        entries: nextEntries,
-      };
-    });
-
-    if (shouldStopPolling) {
-      stopReindexPolling();
-      setSavingAction(null);
-    }
-  };
-
-  const refreshReindexProgress = async (
-    token: number,
-    options: {
-      afterCommand: boolean;
-      addIssueEntry?: boolean;
-    },
-  ) => {
-    if (pollInFlightRef.current || activeReindexTokenRef.current !== token) {
-      return;
-    }
-
-    pollInFlightRef.current = true;
-    try {
-      const result = await onRefreshKnowledge();
-      if (result) {
-        applyRefreshedKnowledge(result, { ...options, token });
-      } else {
-        let shouldStopPolling = false;
-        setReindexActivity((current) => {
-          if (!current) {
-            return current;
-          }
-          const afterCommandPolls = current.afterCommandPolls + (options.afterCommand ? 1 : 0);
-          const finishedAtMs =
-            options.afterCommand && afterCommandPolls >= 6 ? Date.now() : current.finishedAtMs;
-          const nextEntries =
-            options.afterCommand && afterCommandPolls >= 6
-              ? [
-                  ...current.entries,
-                  createReindexEntry(
-                    "warn",
-                    t("memory.knowledge.reindexLive.event.warning"),
-                    null,
-                  ),
-                ]
-              : current.entries;
-          shouldStopPolling = finishedAtMs !== null;
-          return {
-            ...current,
-            phase: finishedAtMs !== null ? "warning" : current.phase,
-            polls: current.polls + 1,
-            afterCommandPolls,
-            lastPolledAtMs: Date.now(),
-            finishedAtMs,
-            syncIssue: t("memory.knowledge.reindexLive.noRefreshPayload"),
-            entries: nextEntries,
-          };
-        });
-        if (shouldStopPolling) {
-          stopReindexPolling();
-          setSavingAction(null);
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      let shouldStopPolling = false;
-      setReindexActivity((current) => {
-        if (!current) {
-          return current;
-        }
-        const afterCommandPolls = current.afterCommandPolls + (options.afterCommand ? 1 : 0);
-        const finishedAtMs =
-          options.afterCommand && afterCommandPolls >= 6 ? Date.now() : current.finishedAtMs;
-        const nextEntries =
-          options.afterCommand && afterCommandPolls >= 6
-            ? [
-                ...current.entries,
-                createReindexEntry(
-                  "warn",
-                  t("memory.knowledge.reindexLive.event.refreshFailed"),
-                  null,
-                ),
-              ]
-            : current.entries;
-        shouldStopPolling = finishedAtMs !== null;
-        return {
-          ...current,
-          phase: finishedAtMs !== null ? "warning" : current.phase,
-          polls: current.polls + 1,
-          afterCommandPolls,
-          lastPolledAtMs: Date.now(),
-          finishedAtMs,
-          syncIssue: message,
-          entries: nextEntries,
-        };
-      });
-      if (shouldStopPolling) {
-        stopReindexPolling();
-        setSavingAction(null);
-      }
-    } finally {
-      pollInFlightRef.current = false;
-    }
-  };
-
-  const startReindexPolling = (token: number) => {
-    stopReindexPolling();
-    pollTimerRef.current = window.setInterval(() => {
-      void refreshReindexProgress(token, {
-        afterCommand: commandCompletedRef.current,
-        addIssueEntry: commandCompletedRef.current,
-      });
-    }, 1500);
   };
 
   const runAction = async (
@@ -481,7 +202,6 @@ export function MemoryKnowledgePanel({
       const result = await runner();
       await onRefreshKnowledge();
       setConfigFeedback(result.stdout || t("memory.knowledge.configUpdated"));
-      setReindexFeedback(null);
       return result;
     } catch (error) {
       const failure = error as MemoryKnowledgeActionFailure;
@@ -500,197 +220,6 @@ export function MemoryKnowledgePanel({
       toast.success(t("memory.search.commands.copySuccess"));
     } catch {
       toast.error(t("memory.search.commands.copyFailed"));
-    }
-  };
-
-  const handleRunReindex = async () => {
-    if (!statusSummary.localWritable || !selectedAgentId) {
-      return;
-    }
-
-    const token = Date.now();
-    activeReindexTokenRef.current = token;
-    commandCompletedRef.current = false;
-    setReindexDetailsExpanded(true);
-    setSavingAction("reindex");
-    clearFieldError("reindex");
-    setConfigFeedback(null);
-    setReindexFeedback(null);
-    setReindexActivity({
-      phase: "starting",
-      startedAtMs: Date.now(),
-      finishedAtMs: null,
-      polls: 0,
-      afterCommandPolls: 0,
-      lastPolledAtMs: null,
-      before: currentReindexSnapshot,
-      latest: currentReindexSnapshot,
-      commandStdout: null,
-      syncIssue: null,
-      progressObserved: false,
-      entries: [
-        createReindexEntry(
-          "info",
-          t("memory.knowledge.reindexLive.event.submitted"),
-          t("memory.knowledge.reindexLive.event.submittedDetail"),
-        ),
-      ],
-    });
-    startReindexPolling(token);
-    void refreshReindexProgress(token, { afterCommand: false });
-    try {
-      const result = await runExternalKnowledgeReindex(
-        selectedAgentId,
-        statusSummary.reindexStrategy,
-        t,
-        selectedSessionId ?? undefined,
-      );
-      if (activeReindexTokenRef.current !== token) {
-        return;
-      }
-      commandCompletedRef.current = true;
-      setReindexActivity((current) =>
-        current
-          ? {
-              ...current,
-              phase: "syncing",
-              commandStdout: result.stdout || t("memory.knowledge.reindexDone"),
-              entries: [
-                ...current.entries,
-                createReindexEntry(
-                  "info",
-                  t("memory.knowledge.reindexLive.event.commandDone"),
-                  result.stdout || t("memory.knowledge.reindexDone"),
-                ),
-              ],
-            }
-          : current,
-      );
-      await refreshReindexProgress(token, { afterCommand: true });
-      setReindexFeedback(t("memory.knowledge.reindexLive.syncingFeedback"));
-      toast.success(t("memory.knowledge.reindexLive.commandAccepted"));
-    } catch (error) {
-      const failure = error as MemoryKnowledgeActionFailure;
-      stopReindexPolling();
-      setReindexActivity((current) =>
-        current
-          ? {
-              ...current,
-              phase: "failed",
-              finishedAtMs: Date.now(),
-              syncIssue: failure.message,
-              entries: [
-                ...current.entries,
-                createReindexEntry(
-                  "error",
-                  t("memory.knowledge.reindexLive.event.failed"),
-                  null,
-                ),
-              ],
-            }
-          : current,
-      );
-      toast.error(failure.message);
-    } finally {
-      if (commandCompletedRef.current || activeReindexTokenRef.current !== token) {
-        return;
-      }
-      setSavingAction(null);
-    }
-  };
-
-  const runPostConfigReindex = async () => {
-    if (!autoReindexEnabled || !statusSummary.localWritable || !selectedAgentId) {
-      return;
-    }
-
-    const token = Date.now();
-    activeReindexTokenRef.current = token;
-    commandCompletedRef.current = false;
-    setReindexDetailsExpanded(true);
-    setSavingAction("reindex");
-    clearFieldError("reindex");
-    setReindexFeedback(t("memory.knowledge.reindexAutoRunning"));
-    setReindexActivity({
-      phase: "starting",
-      startedAtMs: Date.now(),
-      finishedAtMs: null,
-      polls: 0,
-      afterCommandPolls: 0,
-      lastPolledAtMs: null,
-      before: currentReindexSnapshot,
-      latest: currentReindexSnapshot,
-      commandStdout: null,
-      syncIssue: null,
-      progressObserved: false,
-      entries: [
-        createReindexEntry(
-          "info",
-          t("memory.knowledge.reindexLive.event.autoSubmitted"),
-          t("memory.knowledge.reindexLive.event.submittedDetail"),
-        ),
-      ],
-    });
-    startReindexPolling(token);
-    void refreshReindexProgress(token, { afterCommand: false });
-    try {
-      const result = await runExternalKnowledgeReindex(
-        selectedAgentId,
-        statusSummary.reindexStrategy,
-        t,
-        selectedSessionId ?? undefined,
-      );
-      if (activeReindexTokenRef.current !== token) {
-        return;
-      }
-      commandCompletedRef.current = true;
-      setReindexActivity((current) =>
-        current
-          ? {
-              ...current,
-              phase: "syncing",
-              commandStdout: result.stdout || t("memory.knowledge.reindexDone"),
-              entries: [
-                ...current.entries,
-                createReindexEntry(
-                  "info",
-                  t("memory.knowledge.reindexLive.event.commandDone"),
-                  result.stdout || t("memory.knowledge.reindexDone"),
-                ),
-              ],
-            }
-          : current,
-      );
-      await refreshReindexProgress(token, { afterCommand: true });
-      setReindexFeedback(t("memory.knowledge.reindexLive.syncingFeedback"));
-    } catch (error) {
-      const failure = error as MemoryKnowledgeActionFailure;
-      stopReindexPolling();
-      setReindexActivity((current) =>
-        current
-          ? {
-              ...current,
-              phase: "failed",
-              finishedAtMs: Date.now(),
-              syncIssue: failure.message,
-              entries: [
-                ...current.entries,
-                createReindexEntry(
-                  "error",
-                  t("memory.knowledge.reindexLive.event.failed"),
-                  null,
-                ),
-              ],
-            }
-          : current,
-      );
-      toast.error(failure.message);
-      setSavingAction(null);
-    } finally {
-      if (commandCompletedRef.current || activeReindexTokenRef.current !== token) {
-        return;
-      }
-      setSavingAction(null);
     }
   };
 
@@ -718,7 +247,7 @@ export function MemoryKnowledgePanel({
     if (result) {
       startTransition(() => setNewExtraPath(""));
       toast.success(t("memory.knowledge.pathAdded"));
-      await runPostConfigReindex();
+      await onRunAutoReindex();
     }
   };
 
@@ -735,7 +264,7 @@ export function MemoryKnowledgePanel({
     );
     if (result) {
       toast.success(t("memory.knowledge.pathRemoved"));
-      await runPostConfigReindex();
+      await onRunAutoReindex();
     }
   };
 
@@ -771,7 +300,7 @@ export function MemoryKnowledgePanel({
     );
     if (result) {
       toast.success(t(enabled ? "memory.knowledge.sessionToggleOn" : "memory.knowledge.sessionToggleOff"));
-      await runPostConfigReindex();
+      await onRunAutoReindex();
     }
   };
 
@@ -801,7 +330,7 @@ export function MemoryKnowledgePanel({
     );
     if (result) {
       toast.success(t("memory.knowledge.sourcesUpdated"));
-      await runPostConfigReindex();
+      await onRunAutoReindex();
     }
   };
 
@@ -1068,7 +597,7 @@ export function MemoryKnowledgePanel({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {showReindexRecoveryActions && statusSummary.localWritable ? (
-                  <ArchiveActionButton tone={tone} onClick={() => void handleRunReindex()} disabled={controlsDisabled} variant="primary">
+                  <ArchiveActionButton tone={tone} onClick={() => void onRunReindex()} disabled={controlsDisabled} variant="primary">
                     <RefreshCw className="mr-1 inline h-3.5 w-3.5" />
                     {t("memory.knowledge.reindexLive.retry")}
                   </ArchiveActionButton>
@@ -1081,7 +610,7 @@ export function MemoryKnowledgePanel({
                 ) : null}
                 <ArchiveActionButton
                   tone={tone}
-                  onClick={() => setReindexDetailsExpanded((current) => !current)}
+                  onClick={onToggleReindexDetails}
                   disabled={false}
                 >
                   {reindexDetailsExpanded ? (
@@ -1112,7 +641,7 @@ export function MemoryKnowledgePanel({
             {statusSummary.localWritable ? (
               <ArchiveActionButton
                 tone={tone}
-                onClick={() => void handleRunReindex()}
+                onClick={() => void onRunReindex()}
                 disabled={controlsDisabled}
                 variant="primary"
               >
@@ -1242,7 +771,6 @@ export function MemoryKnowledgePanel({
               </div>
             </div>
           ) : null}
-          {fieldErrors.reindex && !reindexActivity?.syncIssue ? <div className="mt-3"><ArchiveNotice tone="error">{fieldErrors.reindex}</ArchiveNotice></div> : null}
         </div>
 
         <div className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
