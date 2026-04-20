@@ -63,6 +63,43 @@ pub struct GatewaySavedEndpoint {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum GatewayPairingStatusKind {
+    PairedReady,
+    BootstrapRequired,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayPairedEndpoint {
+    pub origin_key: String,
+    pub label: String,
+    pub ws_url: String,
+    pub http_url: Option<String>,
+    pub role: String,
+    pub scopes: Vec<String>,
+    pub updated_at_ms: i64,
+    pub was_user_selected: bool,
+    pub last_success_at_ms: Option<i64>,
+    pub exact_match: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GatewayPairingStatusResult {
+    pub origin_key: String,
+    pub label: String,
+    pub ws_url: String,
+    pub http_url: Option<String>,
+    pub status: GatewayPairingStatusKind,
+    pub paired_ready: bool,
+    pub bootstrap_required: bool,
+    pub saved_endpoint: Option<GatewaySavedEndpoint>,
+    pub matched_endpoint: Option<GatewayPairedEndpoint>,
+    pub known_paired_endpoints: Vec<GatewayPairedEndpoint>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum GatewayAuthMode {
     #[serde(alias = "none")]
     PairedDevice,
@@ -884,4 +921,3 @@ mod tests {
         );
     }
 }
-

@@ -25,7 +25,6 @@ export type MemoryConfigStatusSummary = {
   commandDescriptionKey:
     | "memory.search.commands.ollama"
     | "memory.search.commands.localIncremental"
-    | "memory.search.commands.localForce"
     | "memory.search.commands.openai"
     | "memory.search.commands.generic";
   searchAvailabilityReasonKey:
@@ -109,9 +108,9 @@ export function buildMemoryConfigStatusSummary({
 
   const isOllama = detectOllama(hints);
   const isHosted = detectHosted(hints);
-  const indexedFiles = runtimeStatus?.status.files ?? 0;
   const runtimeAvailable = runtimeStatus !== null;
-  const reindexStrategy: MemoryIndexStrategy = indexedFiles === 0 ? "full" : "incremental";
+  const indexedFiles = runtimeStatus?.status.files ?? 0;
+  const reindexStrategy: MemoryIndexStrategy = "incremental";
   const reindexMode: MemoryReindexMode = isLocalGatewaySession ? "auto" : "manual";
   const reindexRequired = Boolean(runtimeStatus?.status.dirty);
   const hasExternalKnowledge = Boolean(
@@ -138,9 +137,7 @@ export function buildMemoryConfigStatusSummary({
         : "matched";
 
   const indexCommand =
-    reindexStrategy === "full"
-      ? `openclaw memory index --agent ${selectedAgentId || "<agent-id>"} --force`
-      : `openclaw memory index --agent ${selectedAgentId || "<agent-id>"}`;
+    `openclaw memory index --agent ${selectedAgentId || "<agent-id>"}`;
   const statusCommand = `openclaw memory status --agent ${selectedAgentId || "<agent-id>"} --deep --index`;
 
   const commandGuide = isOllama
@@ -159,9 +156,7 @@ export function buildMemoryConfigStatusSummary({
   const commandDescriptionKey = isOllama
     ? "memory.search.commands.ollama"
     : isLocalGatewaySession
-      ? reindexStrategy === "full"
-        ? "memory.search.commands.localForce"
-        : "memory.search.commands.localIncremental"
+      ? "memory.search.commands.localIncremental"
       : isHosted
         ? "memory.search.commands.openai"
         : "memory.search.commands.generic";

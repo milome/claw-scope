@@ -22,6 +22,7 @@ pub fn run() {
             gateway::commands::gateway_discover,
             gateway::commands::gateway_disconnect,
             gateway::commands::gateway_saved_endpoints,
+            gateway::commands::gateway_pairing_status_lookup,
             gateway::commands::gateway_select_endpoint,
             gateway::commands::gateway_remove_saved_endpoint,
             gateway::commands::gateway_agents_list,

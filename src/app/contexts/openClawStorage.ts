@@ -25,18 +25,14 @@ export function readStoredAuthMode(storage: StorageReader): AuthMode {
 
 export function readStoredAuthSecret(storage: StorageReader): string {
   const mode = storage.getItem(OPENCLAW_STORAGE_KEYS.authMode);
-  if (mode === 'token' || mode === 'password') {
+  if (mode === 'token' || mode === 'password' || mode === 'paired_device') {
     return storage.getItem(OPENCLAW_STORAGE_KEYS.authSecret) || '';
   }
 
   return '';
 }
 
-export function normalizeAuthSecret(mode: AuthMode, secret: string): string | null {
-  if (mode === 'paired_device') {
-    return null;
-  }
-
+export function normalizeAuthSecret(_mode: AuthMode, secret: string): string | null {
   const trimmedSecret = secret.trim();
   return trimmedSecret.length > 0 ? trimmedSecret : null;
 }

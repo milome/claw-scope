@@ -331,7 +331,7 @@ pub async fn evolution_history_list(
     let mut history =
         load_history(&store_paths).map_err(|error| GatewayErrorSummary::from_error(&error))?;
     history.retain(|entry| entry.agent_id == agent_id);
-    history.sort_by(|left, right| right.created_at_ms.cmp(&left.created_at_ms));
+    history.sort_by_key(|entry| std::cmp::Reverse(entry.created_at_ms));
     Ok(history)
 }
 
@@ -343,7 +343,7 @@ pub async fn evolution_audit_summary(
     let mut audit =
         load_audit(&store_paths).map_err(|error| GatewayErrorSummary::from_error(&error))?;
     audit.retain(|entry| entry.agent_id == agent_id);
-    audit.sort_by(|left, right| right.ended_at_ms.cmp(&left.ended_at_ms));
+    audit.sort_by_key(|entry| std::cmp::Reverse(entry.ended_at_ms));
     Ok(summarize_audit_entries(agent_id, audit))
 }
 
@@ -2161,11 +2161,7 @@ fn summarize_audit_entries(
         last_7d_operations,
         last_7d_failures,
         last_7d_overrides,
-        average_duration_ms: if duration_count > 0 {
-            Some(duration_total / duration_count)
-        } else {
-            None
-        },
+        average_duration_ms: duration_total.checked_div(duration_count),
         status_breakdown: status_breakdown
             .into_iter()
             .map(|(key, count)| EvolutionMetricBucket { key, count })

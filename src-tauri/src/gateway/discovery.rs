@@ -126,7 +126,7 @@ fn merge_ipv4_candidates(seed_ip: Option<Ipv4Addr>, interface_ips: Vec<Ipv4Addr>
     let mut seen_subnets = BTreeSet::new();
     let mut merged = Vec::new();
 
-    for ipv4 in seed_ip.into_iter().chain(interface_ips.into_iter()) {
+    for ipv4 in seed_ip.into_iter().chain(interface_ips) {
         if !ipv4.is_private() || ipv4.is_loopback() {
             continue;
         }

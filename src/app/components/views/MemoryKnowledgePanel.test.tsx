@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { cleanup } from "@testing-library/react";
+import { toast } from "sonner";
 
 vi.mock("sonner", () => ({
   toast: {
@@ -16,7 +17,6 @@ vi.mock("./MemoryMindMapPanel", () => ({
 }));
 
 vi.mock("./memoryKnowledgeActions", () => ({
-  runExternalKnowledgeReindex: vi.fn(),
   setExternalKnowledgePaths: vi.fn(),
   setExternalKnowledgeSources: vi.fn(),
   setSessionMemoryEnabled: vi.fn(),
@@ -59,6 +59,8 @@ const baseProps = {
   externalSources: [{ id: "extra:D:/shared/notes", kind: "extra_path" as const, value: "D:/shared/notes" }],
   isLocalGatewaySession: true,
   selectedAgentId: "agent-main",
+  selectedNodeName: "OpenClaw Local",
+  selectedSessionId: "session-local",
   model: {
     entries: [],
     concepts: [],
@@ -71,7 +73,38 @@ const baseProps = {
   onToggleDebug: vi.fn(),
   onOpenEvidence: vi.fn(),
   openHint: null,
-  onRefreshKnowledge: vi.fn().mockResolvedValue(undefined),
+  onRefreshKnowledge: vi.fn().mockResolvedValue({
+    memoryResult: {
+      agentId: "agent-main",
+      workspace: "workspace",
+      documents: [],
+      sharedAgents: [],
+      diagnostics: {
+        memorySearchEnabled: true,
+        backend: "builtin",
+        provider: "openai",
+        embeddingModel: "text-embedding-3-large",
+        builtinStorePath: "~/.openclaw/memory/main.sqlite",
+        sources: ["memory"],
+        extraPaths: ["D:/shared/notes"],
+        sessionMemoryEnabled: false,
+        qmdActive: false,
+        qmdHome: null,
+        qmdPaths: [],
+        qmdSessionsEnabled: false,
+      },
+    },
+    memoryStatus: null,
+    runtimeStatus: null,
+  }),
+  onOpenDiagnostics: vi.fn(),
+  reindexActivity: null,
+  reindexDetailsExpanded: true,
+  reindexFeedback: null,
+  isReindexBusy: false,
+  onToggleReindexDetails: vi.fn(),
+  onRunReindex: vi.fn().mockResolvedValue(undefined),
+  onRunAutoReindex: vi.fn().mockResolvedValue(undefined),
 };
 
 describe("MemoryKnowledgePanel", () => {
@@ -104,8 +137,9 @@ describe("MemoryKnowledgePanel", () => {
     await user.click(toggles[0]!);
 
     await waitFor(() => {
-      expect(setSessionMemoryEnabled).toHaveBeenCalledWith(true, t);
-      expect(setExternalKnowledgeSources).toHaveBeenCalledWith(["memory", "sessions"], t);
+      expect(setSessionMemoryEnabled).toHaveBeenCalledWith(true, t, "session-local");
+      expect(setExternalKnowledgeSources).toHaveBeenCalledWith(["memory", "sessions"], t, "session-local");
+      expect(baseProps.onRunAutoReindex).toHaveBeenCalled();
     });
   });
 
@@ -118,7 +152,131 @@ describe("MemoryKnowledgePanel", () => {
 
     expect(globalThis.confirm).toHaveBeenCalled();
     await waitFor(() => {
-      expect(setExternalKnowledgePaths).toHaveBeenCalledWith([], t);
+      expect(setExternalKnowledgePaths).toHaveBeenCalledWith([], t, "session-local");
+      expect(baseProps.onRunAutoReindex).toHaveBeenCalled();
     });
+  });
+
+  it("renders lifted reindex activity state from parent props", () => {
+    render(
+      <MemoryKnowledgePanel
+        {...baseProps}
+        reindexActivity={{
+          phase: "running",
+          startedAtMs: Date.now() - 5000,
+          finishedAtMs: null,
+          polls: 2,
+          afterCommandPolls: 0,
+          lastPolledAtMs: Date.now() - 1000,
+          before: {
+            runtimeAvailable: true,
+            files: 0,
+            chunks: 0,
+            dirty: true,
+            runtimeMatchState: "missing",
+            statusKey: "configured_only",
+          },
+          latest: {
+            runtimeAvailable: true,
+            files: 2,
+            chunks: 8,
+            dirty: true,
+            runtimeMatchState: "partial",
+            statusKey: "configured_stale",
+          },
+          commandStdout: null,
+          syncIssue: null,
+          progressObserved: true,
+          entries: [],
+        }}
+        isReindexBusy
+      />,
+    );
+
+    expect(screen.getByText("memory.knowledge.reindexLive.title")).toBeTruthy();
+    expect(screen.getByText("memory.knowledge.reindexLive.taskbarTitle")).toBeTruthy();
+  });
+
+  it("shows retry and diagnostics actions after a reindex failure", async () => {
+    render(
+      <MemoryKnowledgePanel
+        {...baseProps}
+        reindexActivity={{
+          phase: "failed",
+          startedAtMs: Date.now() - 5000,
+          finishedAtMs: Date.now(),
+          polls: 3,
+          afterCommandPolls: 1,
+          lastPolledAtMs: Date.now(),
+          before: {
+            runtimeAvailable: true,
+            files: 0,
+            chunks: 0,
+            dirty: true,
+            runtimeMatchState: "missing",
+            statusKey: "configured_only",
+          },
+          latest: {
+            runtimeAvailable: true,
+            files: 0,
+            chunks: 0,
+            dirty: true,
+            runtimeMatchState: "missing",
+            statusKey: "configured_only",
+          },
+          commandStdout: null,
+          syncIssue: "boom",
+          progressObserved: false,
+          entries: [],
+        }}
+      />,
+    );
+    const user = userEvent.setup();
+
+    expect(screen.getByText("memory.knowledge.reindexLive.retry")).toBeTruthy();
+    expect(screen.getByText("memory.knowledge.reindexLive.openDiagnostics")).toBeTruthy();
+
+    await user.click(screen.getByText("memory.knowledge.reindexLive.openDiagnostics"));
+
+    expect(baseProps.onOpenDiagnostics).toHaveBeenCalled();
+  });
+
+  it("keeps only one persistent reindex error in the panel", async () => {
+    render(
+      <MemoryKnowledgePanel
+        {...baseProps}
+        reindexActivity={{
+          phase: "failed",
+          startedAtMs: Date.now() - 5000,
+          finishedAtMs: Date.now(),
+          polls: 3,
+          afterCommandPolls: 1,
+          lastPolledAtMs: Date.now(),
+          before: {
+            runtimeAvailable: true,
+            files: 0,
+            chunks: 0,
+            dirty: true,
+            runtimeMatchState: "missing",
+            statusKey: "configured_only",
+          },
+          latest: {
+            runtimeAvailable: true,
+            files: 0,
+            chunks: 0,
+            dirty: true,
+            runtimeMatchState: "missing",
+            statusKey: "configured_only",
+          },
+          commandStdout: null,
+          syncIssue: "boom",
+          progressObserved: false,
+          entries: [],
+        }}
+      />,
+    );
+
+    expect(screen.getAllByText(/boom/)).toHaveLength(1);
+    expect(vi.mocked(toast.error)).toHaveBeenCalledTimes(0);
   });
 });

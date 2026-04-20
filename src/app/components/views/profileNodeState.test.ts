@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildVisibleProfileNodeEntries,
   groupAgentsByNode,
   resolveSelectedAgentIdForNode,
   resolveSelectedProfileNodeName,
@@ -51,5 +52,34 @@ describe("profileNodeState", () => {
     ).toBe("agent-a");
 
     expect(resolveSelectedAgentIdForNode("agent-a", [])).toBe("");
+  });
+
+  it("keeps real nodes visible even when no agents are currently loaded for that session", () => {
+    const visibleNodes = buildVisibleProfileNodeEntries([
+      {
+        id: "gateway:ws://127.0.0.1:18789",
+        name: "OpenClaw Local",
+        status: "online" as const,
+        sessionId: "ws://127.0.0.1:18789",
+        isActive: true,
+      },
+      {
+        id: "gateway:ws://192.168.1.112:18789",
+        name: "OpenClaw 192.168.1.112:18789",
+        status: "online" as const,
+        sessionId: "ws://192.168.1.112:18789",
+        isActive: false,
+      },
+    ], groupAgentsByNode([
+      { id: "agent-a", node: "OpenClaw Local" },
+    ]));
+
+    expect(visibleNodes.map((entry) => entry.name)).toEqual([
+      "OpenClaw Local",
+      "OpenClaw 192.168.1.112:18789",
+    ]);
+    expect(visibleNodes[0]?.agentCount).toBe(1);
+    expect(visibleNodes[1]?.agentCount).toBe(0);
+    expect(visibleNodes[1]?.sessionId).toBe("ws://192.168.1.112:18789");
   });
 });

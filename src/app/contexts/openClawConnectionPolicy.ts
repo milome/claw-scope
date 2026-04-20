@@ -33,6 +33,18 @@ export function isLoopbackGatewayUrl(url: string) {
   }
 }
 
+export function shouldAllowPairingUiForGatewayUrl(url: string) {
+  return !isLoopbackGatewayUrl(url);
+}
+
+export function resolveAuthModeForGatewayUrl(url: string, mode: AuthMode): AuthMode {
+  if (isLoopbackGatewayUrl(url) && mode === 'paired_device') {
+    return 'token';
+  }
+
+  return mode;
+}
+
 export function shouldRetryWithPairedDeviceOnLocalGateway(
   url: string,
   mode: AuthMode,
@@ -50,12 +62,12 @@ export function shouldRetryWithPairedDeviceOnLocalGateway(
 }
 
 export function resolvePersistedAuthModeAfterConnect(
-  url: string,
+  _url: string,
   requestedMode: AuthMode,
   requestedSecret: string,
   snapshot?: GatewayConnectionSnapshotLike | null,
 ) {
-  if (isLoopbackGatewayUrl(url) && requestedMode !== 'paired_device' && snapshot?.isPaired) {
+  if (requestedMode === 'paired_device' && snapshot?.isPaired) {
     return {
       mode: 'paired_device' as const,
       secret: '',
@@ -64,6 +76,6 @@ export function resolvePersistedAuthModeAfterConnect(
 
   return {
     mode: requestedMode,
-    secret: requestedMode === 'paired_device' ? '' : requestedSecret,
+    secret: requestedSecret,
   };
 }

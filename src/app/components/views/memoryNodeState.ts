@@ -1,40 +1,21 @@
 import type { Agent, Node } from "../../contexts/OpenClawContext";
 
-export interface EvolutionTargetNodeEntry {
+export interface MemoryNodeEntry {
   id: string;
   name: string;
   status: Node["status"];
   sessionId?: string;
+  origin?: string | null;
+  grantedScopes?: string[];
   isActive?: boolean;
   agents: Agent[];
 }
-
-const FALLBACK_NODES: EvolutionTargetNodeEntry[] = [
-  {
-    id: "node-local",
-    name: "OpenClaw-Local",
-    status: "online",
-    agents: [],
-  },
-  {
-    id: "node-east",
-    name: "OpenClaw-East",
-    status: "online",
-    agents: [],
-  },
-  {
-    id: "node-west",
-    name: "OpenClaw-West",
-    status: "offline",
-    agents: [],
-  },
-];
 
 function deriveNodeStatus(agents: Agent[]): Node["status"] {
   return agents.some((agent) => agent.status !== "sleeping") ? "online" : "offline";
 }
 
-export function buildEvolutionTargetNodeEntries({
+export function buildMemoryNodeEntries({
   isConnected,
   nodes,
   agents,
@@ -42,21 +23,7 @@ export function buildEvolutionTargetNodeEntries({
   isConnected: boolean;
   nodes: Node[];
   agents: Agent[];
-}): EvolutionTargetNodeEntry[] {
-  if (!isConnected || agents.length === 0) {
-    if (nodes.length > 0) {
-      return nodes.map((node) => ({
-        id: node.id,
-        name: node.name,
-        status: node.status,
-        sessionId: node.sessionId,
-        isActive: node.isActive,
-        agents: [],
-      }));
-    }
-    return FALLBACK_NODES;
-  }
-
+}) {
   const groupedAgents = agents.reduce(
     (acc, agent) => {
       if (!acc[agent.nodeId]) {
@@ -68,22 +35,30 @@ export function buildEvolutionTargetNodeEntries({
     {} as Record<string, Agent[]>,
   );
 
-  const nodeEntries = nodes.map((node) => ({
+  if (!isConnected && nodes.length === 0 && agents.length === 0) {
+    return [] as MemoryNodeEntry[];
+  }
+
+  const nodeEntries = nodes.map<MemoryNodeEntry>((node) => ({
     id: node.id,
     name: node.name,
     status: node.status,
     sessionId: node.sessionId,
+    origin: node.origin,
+    grantedScopes: node.grantedScopes ?? [],
     isActive: node.isActive,
     agents: groupedAgents[node.id] ?? [],
   }));
 
   const derivedNodeEntries = Object.entries(groupedAgents)
     .filter(([nodeId]) => !nodes.some((node) => node.id === nodeId))
-    .map(([nodeId, nodeAgents]) => ({
+    .map<MemoryNodeEntry>(([nodeId, nodeAgents]) => ({
       id: nodeId,
       name: nodeId,
       status: deriveNodeStatus(nodeAgents),
       sessionId: undefined,
+      origin: null,
+      grantedScopes: [],
       isActive: undefined,
       agents: nodeAgents,
     }));
@@ -91,20 +66,21 @@ export function buildEvolutionTargetNodeEntries({
   return [...nodeEntries, ...derivedNodeEntries];
 }
 
-export function resolveSelectedEvolutionNodeId(
+export function resolveSelectedMemoryNodeId(
   selectedNodeId: string,
-  nodeEntries: EvolutionTargetNodeEntry[],
+  nodeEntries: MemoryNodeEntry[],
 ) {
   if (nodeEntries.some((entry) => entry.id === selectedNodeId)) {
     return selectedNodeId;
   }
+
   return nodeEntries.find((entry) => entry.agents.length > 0)?.id ?? nodeEntries[0]?.id ?? "";
 }
 
-export function resolveSelectedEvolutionAgentId(
+export function resolveSelectedMemoryAgentIdForNode(
   selectedAgentId: string,
   selectedNodeId: string,
-  nodeEntries: EvolutionTargetNodeEntry[],
+  nodeEntries: MemoryNodeEntry[],
 ) {
   const nodeEntry = nodeEntries.find((entry) => entry.id === selectedNodeId);
   if (!nodeEntry || nodeEntry.agents.length === 0) {
@@ -118,9 +94,9 @@ export function resolveSelectedEvolutionAgentId(
   return nodeEntry.agents[0]?.id ?? "";
 }
 
-export function resolveEvolutionSessionIdToActivate(
+export function resolveMemorySessionIdToActivate(
   selectedNodeId: string,
-  nodeEntries: EvolutionTargetNodeEntry[],
+  nodeEntries: MemoryNodeEntry[],
 ) {
   const nodeEntry = nodeEntries.find((entry) => entry.id === selectedNodeId);
   if (!nodeEntry?.sessionId || nodeEntry.isActive) {
@@ -128,4 +104,12 @@ export function resolveEvolutionSessionIdToActivate(
   }
 
   return nodeEntry.sessionId;
+}
+
+export function isLocalNodeOrigin(origin?: string | null) {
+  if (!origin) {
+    return false;
+  }
+
+  return /^(ws|http):\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(origin);
 }

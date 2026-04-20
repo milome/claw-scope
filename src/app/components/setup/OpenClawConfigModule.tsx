@@ -1,13 +1,23 @@
-import { useEffect, useState } from 'react';
-import { useOpenClaw, type AuthMode, type GatewayAdvancedConnectionConfig } from '../../contexts/OpenClawContext';
+import { useEffect, useRef, useState } from 'react';
+import { gatewayPairingStatusLookup, useOpenClaw, type AuthMode, type GatewayAdvancedConnectionConfig, type GatewayPairingStatusResult, type GatewayPairedEndpoint } from '../../contexts/OpenClawContext';
 import { CheckCircle2, Server, Shield, Globe, TerminalSquare, RefreshCw, XCircle, AlertCircle, RotateCcw, Trash2, Wifi } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useI18n } from '../../contexts/I18nContext';
+import {
+  resolveAuthModeForGatewayUrl,
+  shouldAllowPairingUiForGatewayUrl,
+} from '../../contexts/openClawConnectionPolicy';
 import {
   buildAvailableOpenClawConfigSections,
   resolveSelectedOpenClawConfigSection,
   type OpenClawConfigSectionId,
 } from './openClawConfigSectionState';
+import {
+  canAdoptPairedDeviceForGatewayUrl,
+  resolveOpenClawPairingFollowup,
+  resolveOpenClawStartPairingTransition,
+  shouldShowNoPendingPairingHint,
+} from './openClawPairingState';
 
 export function OpenClawConfigModule() {
   const { t } = useI18n();
@@ -46,15 +56,92 @@ export function OpenClawConfigModule() {
   const [advancedTimeoutMs, setAdvancedTimeoutMs] = useState(String(advancedConnectionConfig.timeoutMs));
   const [advancedHeartbeatMs, setAdvancedHeartbeatMs] = useState(String(advancedConnectionConfig.heartbeatMs));
   const [advancedProxyUrl, setAdvancedProxyUrl] = useState(advancedConnectionConfig.proxyUrl ?? '');
-  const [saveFeedback, setSaveFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
-  const authSecretRequired = authMode !== 'paired_device' && authSecret.trim().length === 0;
-  const authSecretRequiredMessage = authMode === 'token' ? t('setup.auth.requiredToken') : t('setup.auth.requiredPassword');
+  const [saveFeedback, setSaveFeedback] = useState<{ kind: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [pairingStatus, setPairingStatus] = useState<GatewayPairingStatusResult | null>(null);
+  const [pairingStatusLoading, setPairingStatusLoading] = useState(false);
+  const [authModeTouched, setAuthModeTouched] = useState(false);
+  const pairingBootstrapTokenInputRef = useRef<HTMLInputElement | null>(null);
+  const [pairingBootstrapToken, setPairingBootstrapToken] = useState(
+    savedAuthMode === 'token' ? savedAuthSecret : '',
+  );
+  const [pairingAttempted, setPairingAttempted] = useState(false);
+  const [pairingCompletionPending, setPairingCompletionPending] = useState(false);
+  const [pairingSucceededWithoutDeviceToken, setPairingSucceededWithoutDeviceToken] = useState(false);
+  const pairingUiAllowed = shouldAllowPairingUiForGatewayUrl(url);
+  const pairedReady = pairingStatus?.pairedReady ?? false;
+  const pairedDeviceAvailable = pairingUiAllowed && pairedReady;
+  const pairingFollowup = resolveOpenClawPairingFollowup({
+    pairedReady,
+    pairingAttempted,
+    pairingCompletionPending,
+    pairingSucceededWithoutDeviceToken,
+    lastError,
+  });
+  const awaitingPairApproval = pairingFollowup === 'awaiting_host_approval';
+  const showNoPendingPairingHint = shouldShowNoPendingPairingHint(pairingFollowup);
+  const authSecretRequired =
+    (authMode === 'token' || authMode === 'password') &&
+    authSecret.trim().length === 0;
+  const authSecretRequiredMessage = authMode === 'password' ? t('setup.auth.requiredPassword') : t('setup.auth.requiredToken');
 
   useEffect(() => {
     setUrl(gatewayUrl);
-    setAuthMode(savedAuthMode);
+    setAuthMode(resolveAuthModeForGatewayUrl(gatewayUrl, savedAuthMode));
     setAuthSecret(savedAuthSecret);
+    setAuthModeTouched(false);
+    setPairingBootstrapToken(savedAuthMode === 'token' ? savedAuthSecret : '');
+    setPairingAttempted(false);
+    setPairingCompletionPending(false);
+    setPairingSucceededWithoutDeviceToken(false);
   }, [gatewayUrl, savedAuthMode, savedAuthSecret]);
+
+  useEffect(() => {
+    if (!url.trim() || !pairingUiAllowed) {
+      setPairingStatus(null);
+      setPairingStatusLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setPairingStatus(null);
+    setPairingStatusLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const next = await gatewayPairingStatusLookup(url);
+        if (cancelled) {
+          return;
+        }
+        applyPairingStatus(next, !authModeTouched);
+      } catch {
+        if (!cancelled) {
+          setPairingStatus(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setPairingStatusLoading(false);
+        }
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [authModeTouched, pairingUiAllowed, url]);
+
+  useEffect(() => {
+    const nextMode = resolveAuthModeForGatewayUrl(url, authMode);
+    if (nextMode === authMode) {
+      return;
+    }
+
+    setAuthMode(nextMode);
+    setAuthModeTouched(false);
+    setPairingAttempted(false);
+    setPairingCompletionPending(false);
+    setPairingSucceededWithoutDeviceToken(false);
+    setSaveFeedback(null);
+  }, [authMode, url]);
 
   useEffect(() => {
     setAdvancedTimeoutMs(String(advancedConnectionConfig.timeoutMs));
@@ -62,19 +149,134 @@ export function OpenClawConfigModule() {
     setAdvancedProxyUrl(advancedConnectionConfig.proxyUrl ?? '');
   }, [advancedConnectionConfig]);
 
-  const handleTestConnection = async () => {
-    if (!url) {
+  const applyPairingStatus = (
+    next: GatewayPairingStatusResult | null,
+    adoptPairedDevice = false,
+  ) => {
+    setPairingStatus(next);
+
+    if (next?.pairedReady && adoptPairedDevice) {
+      setAuthMode('paired_device');
+      setAuthSecret('');
+      setAuthModeTouched(false);
+      return;
+    }
+
+    if (!next?.pairedReady && !authModeTouched && authMode === 'paired_device') {
+      setAuthMode('token');
+    }
+  };
+
+  const handleTestConnection = async (overrides?: {
+    mode?: AuthMode;
+    secret?: string;
+  }) => {
+    const targetUrl = url.trim();
+    const effectiveMode = overrides?.mode ?? authMode;
+    const effectiveSecret = overrides?.secret ?? authSecret;
+    const usedBootstrapToken =
+      effectiveMode === 'paired_device' && effectiveSecret.trim().length > 0;
+
+    if (!targetUrl) {
       return;
     }
 
     setIsTesting(true);
     setTestResult('none');
-    const success = await testConnection(url, authMode, authSecret);
+    setSaveFeedback(null);
+    setPairingAttempted(false);
+    setPairingCompletionPending(false);
+    setPairingSucceededWithoutDeviceToken(false);
+    const success = await testConnection(targetUrl, effectiveMode, effectiveSecret);
+
+    if (success) {
+      setPairingStatusLoading(true);
+      try {
+        const next = await gatewayPairingStatusLookup(targetUrl);
+        applyPairingStatus(next, canAdoptPairedDeviceForGatewayUrl(targetUrl));
+
+        if (next.pairedReady && usedBootstrapToken) {
+          setSaveFeedback({
+            kind: 'info',
+            message: t('setup.pairing.deviceTokenReady'),
+          });
+        }
+      } catch {
+        // Ignore refresh failures and keep the latest visible state.
+      } finally {
+        setPairingStatusLoading(false);
+      }
+    }
+
     setIsTesting(false);
     setTestResult(success ? 'success' : 'fail');
 
     if (success) {
       setTimeout(() => setTestResult('none'), 3000);
+    }
+  };
+
+  const handleStartPairing = async () => {
+    const bootstrapToken = pairingBootstrapToken.trim();
+
+    setSaveFeedback(null);
+    setPairingAttempted(true);
+    setPairingCompletionPending(false);
+    setPairingSucceededWithoutDeviceToken(false);
+
+    if (!bootstrapToken) {
+      setSaveFeedback({ kind: 'error', message: t('setup.auth.requiredToken') });
+      window.requestAnimationFrame(() => {
+        pairingBootstrapTokenInputRef.current?.focus();
+      });
+      return;
+    }
+
+    const targetUrl = url.trim();
+    if (!targetUrl) {
+      return;
+    }
+
+    setIsTesting(true);
+    setTestResult('none');
+
+    const success = await testConnection(targetUrl, 'paired_device', bootstrapToken);
+
+    if (success) {
+      setPairingStatusLoading(true);
+      try {
+        const next = await gatewayPairingStatusLookup(targetUrl);
+        applyPairingStatus(next, canAdoptPairedDeviceForGatewayUrl(targetUrl));
+        const transition = resolveOpenClawStartPairingTransition({
+          connectSucceeded: true,
+          pairedReady: next.pairedReady,
+        });
+
+        setPairingSucceededWithoutDeviceToken(
+          transition.pairingSucceededWithoutDeviceToken,
+        );
+        setPairingCompletionPending(transition.pairingCompletionPending);
+
+        if (transition.pairingCompletionPending) {
+          setPairingAttempted(false);
+          setSaveFeedback({
+            kind: 'info',
+            message: t('setup.pairing.deviceTokenReady'),
+          });
+          setTestResult('success');
+        } else {
+          setTestResult('none');
+        }
+      } catch {
+        // Ignore refresh failures and keep the latest visible state.
+      } finally {
+        setPairingStatusLoading(false);
+      }
+    }
+
+    setIsTesting(false);
+    if (!success) {
+      setTestResult('fail');
     }
   };
 
@@ -101,11 +303,20 @@ export function OpenClawConfigModule() {
       return;
     }
 
-    const success = hasBaseChanges
-      ? await updateConfig(url, authMode, authSecret)
+    const needsConnectionPersist = hasBaseChanges || pairingCompletionPending;
+    const success = needsConnectionPersist
+      ? await updateConfig(
+          url,
+          pairingCompletionPending ? 'paired_device' : authMode,
+          pairingCompletionPending ? '' : authSecret,
+        )
       : true;
     setIsSaving(false);
     setTestResult(success ? 'none' : 'fail');
+    if (success) {
+      setPairingAttempted(false);
+      setPairingCompletionPending(false);
+    }
     setSaveFeedback(
       success
         ? { kind: 'success', message: t('config.advanced.saveOk') }
@@ -151,6 +362,17 @@ export function OpenClawConfigModule() {
     return new Date(value).toLocaleString();
   };
 
+  const formatPairedTimestamp = (value: number) => new Date(value).toLocaleString();
+
+  const handleUsePairedEndpoint = (endpoint: GatewayPairedEndpoint) => {
+    setUrl(endpoint.httpUrl ?? endpoint.wsUrl.replace(/^ws:\/\//, 'http://').replace(/^wss:\/\//, 'https://'));
+    setAuthMode('paired_device');
+    setAuthSecret('');
+    setAuthModeTouched(false);
+    setPairingAttempted(false);
+    setPairingCompletionPending(false);
+  };
+
   const candidateConfidenceLabel = (confidence: (typeof discoveredGateways)[number]['confidence']) => {
     if (confidence === 'high') {
       return t('config.discovery.confidenceHigh');
@@ -176,7 +398,7 @@ export function OpenClawConfigModule() {
     Number(advancedTimeoutMs || 0) !== advancedConnectionConfig.timeoutMs ||
     Number(advancedHeartbeatMs || 0) !== advancedConnectionConfig.heartbeatMs ||
     advancedProxyUrl.trim() !== (advancedConnectionConfig.proxyUrl ?? '');
-  const hasChanges = hasBaseChanges || hasAdvancedChanges;
+  const hasChanges = hasBaseChanges || hasAdvancedChanges || pairingCompletionPending;
   const connectedLabel = connectedOrigin ?? gatewayUrl;
   const statusDescription = isConnected
     ? `${t('config.status.connected')} ${connectedLabel}`
@@ -353,7 +575,14 @@ export function OpenClawConfigModule() {
                 <input
                   type="text"
                   value={url}
-                  onChange={(e) => setUrl(e.target.value)}
+                  onChange={(e) => {
+                    setUrl(e.target.value);
+                    setAuthModeTouched(false);
+                    setPairingAttempted(false);
+                    setPairingCompletionPending(false);
+                    setPairingSucceededWithoutDeviceToken(false);
+                    setSaveFeedback(null);
+                  }}
                   placeholder="http://127.0.0.1:18789"
                   className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border rounded-xl text-sm outline-none transition-all dark:text-slate-100 ${
                     !url
@@ -364,6 +593,185 @@ export function OpenClawConfigModule() {
               </div>
               {!url && <p className="text-xs text-red-500 mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {t('config.connection.urlRequired')}</p>}
             </div>
+
+            {url && !pairingUiAllowed ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-4 dark:border-amber-900/30 dark:bg-amber-950/20 space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">
+                  {t('setup.pairing.loopbackTitle')}
+                </div>
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  {t('setup.pairing.loopbackDesc')}
+                </p>
+              </div>
+            ) : url && (pairingStatusLoading || pairingStatus) ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/40 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                      {t('setup.pairing.statusTitle')}
+                    </div>
+                    {pairingStatusLoading ? (
+                      <div className="mt-2 text-sm text-slate-500 dark:text-slate-400">{t('setup.pairing.detecting')}</div>
+                    ) : pairingStatus?.pairedReady ? (
+                      <>
+                        <div className="mt-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">{t('setup.pairing.readyTitle')}</div>
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('setup.pairing.readyDesc')}</div>
+                        <div className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">{t('setup.pairing.deviceTokenValid')}</div>
+                      </>
+                    ) : awaitingPairApproval ? (
+                      <>
+                        <div className="mt-2 text-sm font-semibold text-amber-700 dark:text-amber-300">{t('setup.pairing.awaitingApprovalTitle')}</div>
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('setup.pairing.awaitingApprovalDesc')}</div>
+                      </>
+                    ) : pairingStatus ? (
+                      <>
+                        <div className="mt-2 text-sm font-semibold text-amber-700 dark:text-amber-300">{t('setup.pairing.bootstrapTitle')}</div>
+                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('setup.pairing.bootstrapDesc')}</div>
+                      </>
+                    ) : null}
+                  </div>
+                  {pairingStatus?.pairedReady ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('paired_device');
+                        setAuthSecret('');
+                        setAuthModeTouched(false);
+                        setPairingSucceededWithoutDeviceToken(false);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {t('setup.pairing.usePaired')}
+                    </button>
+                  ) : pairingStatus ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleStartPairing()}
+                      disabled={!url.trim() || isTesting}
+                      className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300"
+                    >
+                      {isTesting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Shield className="w-3.5 h-3.5" />}
+                      {awaitingPairApproval ? t('setup.pairing.retryAfterApproval') : t('setup.pairing.startBootstrap')}
+                    </button>
+                  ) : null}
+                </div>
+
+                {!pairedDeviceAvailable && pairingStatus ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3 dark:border-amber-900/30 dark:bg-amber-950/20">
+                    {awaitingPairApproval ? (
+                      <div className="space-y-3">
+                        <p className="text-xs text-amber-800 dark:text-amber-200">{t('setup.auth.deviceApprovalHint')}</p>
+                        <code className="block rounded-lg bg-slate-900 px-3 py-2 text-xs text-slate-100 font-mono overflow-x-auto">
+                          openclaw devices approve --latest
+                        </code>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {pairingAttempted && lastError ? (
+                          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 dark:border-red-900/40 dark:bg-red-950/30">
+                            <div className="flex items-start gap-2 text-xs font-medium text-red-700 dark:text-red-300">
+                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                              <span>{lastError.message}</span>
+                            </div>
+                            {lastError.hint ? (
+                              <p className="mt-2 text-xs text-red-600 dark:text-red-300/80">
+                                {lastError.hint}
+                              </p>
+                        ) : null}
+                            {showNoPendingPairingHint ? (
+                              <p className="mt-2 text-xs text-red-700 dark:text-red-200">
+                                {pairingFollowup === 'connected_without_pairing'
+                                  ? t('setup.pairing.connectedWithoutPairingDesc')
+                                  : t('setup.pairing.requestNotQueuedDesc')}
+                              </p>
+                            ) : null}
+                            {pairingFollowup === 'token_mismatch' || pairingFollowup === 'token_required' ? (
+                              <code className="mt-2 block rounded-lg bg-slate-900 px-3 py-2 text-xs text-slate-100 font-mono overflow-x-auto">
+                                openclaw config get gateway.auth.token
+                              </code>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {pairingFollowup === 'connected_without_pairing' ? (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 dark:border-amber-900/40 dark:bg-amber-950/30">
+                            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                              {t('setup.pairing.connectedWithoutPairingTitle')}
+                            </p>
+                            <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">
+                              {t('setup.pairing.connectedWithoutPairingDesc')}
+                            </p>
+                          </div>
+                        ) : null}
+                        <label className="block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                          {t('setup.auth.pairedDeviceBootstrapLabel')}
+                        </label>
+                        <div className="relative">
+                          <Shield className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            ref={pairingBootstrapTokenInputRef}
+                            type="password"
+                            value={pairingBootstrapToken}
+                            onChange={(e) => {
+                              setPairingBootstrapToken(e.target.value);
+                              setPairingSucceededWithoutDeviceToken(false);
+                            }}
+                            placeholder={t('setup.ph.token')}
+                            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-sm outline-none transition-all focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-slate-100"
+                          />
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t('setup.auth.pairedDeviceBootstrapHint')}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {pairingUiAllowed ? (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                    {t('setup.pairing.knownTitle')}
+                  </div>
+                  {pairingStatus?.knownPairedEndpoints?.length ? (
+                    <div className="space-y-2">
+                      {pairingStatus.knownPairedEndpoints.map((endpoint) => (
+                        <div key={`${endpoint.originKey}:${endpoint.updatedAtMs}`} className="rounded-lg border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-900">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{endpoint.label}</span>
+                                {endpoint.exactMatch ? (
+                                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{t('setup.pairing.currentBadge')}</span>
+                                ) : null}
+                                {endpoint.wasUserSelected ? (
+                                  <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">{t('setup.pairing.savedBadge')}</span>
+                                ) : null}
+                              </div>
+                              <div className="mt-1 break-all text-xs text-slate-500 dark:text-slate-400">{endpoint.httpUrl ?? endpoint.wsUrl}</div>
+                              <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                {t('setup.pairing.lastSuccess', endpoint.lastSuccessAtMs ? formatTimestamp(endpoint.lastSuccessAtMs) : formatPairedTimestamp(endpoint.updatedAtMs))}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleUsePairedEndpoint(endpoint)}
+                              disabled={endpoint.exactMatch}
+                              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition-colors hover:border-sky-300 hover:text-sky-600 disabled:opacity-60 disabled:cursor-not-allowed dark:border-slate-700 dark:text-slate-300 dark:hover:border-sky-700 dark:hover:text-sky-300"
+                            >
+                              {t('setup.pairing.useEndpoint')}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                      {t('setup.pairing.knownEmpty')}
+                    </div>
+                  )}
+                </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
@@ -377,11 +785,29 @@ export function OpenClawConfigModule() {
                 ].map((modeOption) => {
                   const Icon = modeOption.icon;
                   const isActive = authMode === modeOption.id;
+                  const isDisabled = modeOption.id === 'paired_device' && !pairedDeviceAvailable;
                   return (
                     <button
                       key={modeOption.id}
-                      onClick={() => setAuthMode(modeOption.id as AuthMode)}
-                      className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${isActive ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-400' : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                      onClick={() => {
+                        if (isDisabled) {
+                          return;
+                        }
+                        setPairingAttempted(false);
+                        setPairingCompletionPending(false);
+                        setPairingSucceededWithoutDeviceToken(false);
+                        setSaveFeedback(null);
+                        setAuthMode(modeOption.id as AuthMode);
+                        setAuthModeTouched(true);
+                      }}
+                      disabled={isDisabled}
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                        isDisabled
+                          ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-500'
+                          : isActive
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-400'
+                            : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
                     >
                       <Icon className="w-4 h-4" /> {modeOption.label}
                     </button>
@@ -398,7 +824,7 @@ export function OpenClawConfigModule() {
                         type="password"
                         value={authSecret}
                         onChange={(e) => setAuthSecret(e.target.value)}
-                        placeholder={authMode === 'token' ? t('setup.ph.token') : t('setup.ph.pwd')}
+                        placeholder={authMode === 'password' ? t('setup.ph.pwd') : t('setup.ph.token')}
                         className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border rounded-xl text-sm outline-none transition-all dark:text-slate-100 ${
                           authSecretRequired
                             ? 'border-red-300 dark:border-red-500/50 focus:ring-2 focus:ring-red-500/50 focus:border-red-500'
@@ -415,9 +841,13 @@ export function OpenClawConfigModule() {
                   </motion.div>
                 )}
               </AnimatePresence>
-              {authMode === 'paired_device' && (
+              {!pairingUiAllowed ? (
+                <p className="text-xs text-slate-500 mt-2">{t('setup.pairing.loopbackDesc')}</p>
+              ) : authMode === 'paired_device' && pairedDeviceAvailable ? (
                 <p className="text-xs text-slate-500 mt-2">{t('setup.auth.pairedDeviceHint')}</p>
-              )}
+              ) : !pairedDeviceAvailable ? (
+                <p className="text-xs text-slate-500 mt-2">{t('setup.pairing.pairedDeviceDisabled')}</p>
+              ) : null}
             </div>
             </>
             ) : null}
@@ -595,6 +1025,8 @@ export function OpenClawConfigModule() {
               <div className={`rounded-xl border px-4 py-3 text-sm ${
                 saveFeedback.kind === 'success'
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300'
+                  : saveFeedback.kind === 'info'
+                    ? 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-300'
                   : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300'
               }`}>
                 {saveFeedback.message}
@@ -615,7 +1047,7 @@ export function OpenClawConfigModule() {
                   {t('config.setup.rerun')}
                 </button>
                 <button
-                  onClick={handleTestConnection}
+                  onClick={() => void handleTestConnection()}
                   disabled={!url || authSecretRequired || isTesting}
                   className="flex-1 sm:flex-none px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-semibold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-slate-400/50 active:scale-95"
                 >
@@ -638,7 +1070,3 @@ export function OpenClawConfigModule() {
     </div>
   );
 }
-
-
-
-

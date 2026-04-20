@@ -102,6 +102,34 @@ export interface GatewaySavedEndpoint {
   lastSuccessAtMs?: number | null;
 }
 
+export type GatewayPairingStatusKind = 'paired_ready' | 'bootstrap_required';
+
+export interface GatewayPairedEndpoint {
+  originKey: string;
+  label: string;
+  wsUrl: string;
+  httpUrl?: string | null;
+  role: string;
+  scopes: string[];
+  updatedAtMs: number;
+  wasUserSelected: boolean;
+  lastSuccessAtMs?: number | null;
+  exactMatch: boolean;
+}
+
+export interface GatewayPairingStatusResult {
+  originKey: string;
+  label: string;
+  wsUrl: string;
+  httpUrl?: string | null;
+  status: GatewayPairingStatusKind;
+  pairedReady: boolean;
+  bootstrapRequired: boolean;
+  savedEndpoint?: GatewaySavedEndpoint | null;
+  matchedEndpoint?: GatewayPairedEndpoint | null;
+  knownPairedEndpoints: GatewayPairedEndpoint[];
+}
+
 interface GatewayAgentIdentitySummary {
   name?: string | null;
   theme?: string | null;
@@ -891,6 +919,12 @@ export async function gatewaySavedEndpoints() {
   return invokeGateway<GatewaySavedEndpoint[]>('gateway_saved_endpoints');
 }
 
+export async function gatewayPairingStatusLookup(url: string) {
+  return invokeGateway<GatewayPairingStatusResult>('gateway_pairing_status_lookup', {
+    config: createConnectConfig(url, 'paired_device', ''),
+  });
+}
+
 export async function gatewaySelectEndpoint(candidate: GatewayDiscoveredCandidate) {
   return invokeGateway<GatewaySavedEndpoint>('gateway_select_endpoint', {
     candidate,
@@ -1207,8 +1241,13 @@ export async function gatewayAgentMemoryIndex(
   });
 }
 
-export async function gatewayConfigSetLocal(key: string, value: string) {
+export async function gatewayConfigSetLocal(
+  key: string,
+  value: string,
+  sessionId?: string,
+) {
   return invokeGateway<GatewayConfigSetResult>('gateway_config_set_local', {
+    sessionId,
     key,
     value,
   });

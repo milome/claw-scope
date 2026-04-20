@@ -58,6 +58,7 @@ describe("buildMemoryConfigStatusSummary", () => {
 
     expect(summary.configuredButNotIndexed).toBe(true);
     expect(summary.reindexMode).toBe("auto");
+    expect(summary.reindexStrategy).toBe("incremental");
     expect(summary.statusKey).toBe("configured_only");
     expect(summary.searchAvailabilityReasonKey).toBe("memory.search.reason.configuredOnly");
     expect(summary.runtimeMatchState).toBe("missing");
@@ -113,6 +114,7 @@ describe("buildMemoryConfigStatusSummary", () => {
 
     expect(summary.reindexRequired).toBe(true);
     expect(summary.reindexMode).toBe("auto");
+    expect(summary.reindexStrategy).toBe("incremental");
     expect(summary.statusKey).toBe("configured_stale");
     expect(summary.searchAvailabilityReasonKey).toBe("memory.search.reason.stale");
     expect(summary.runtimeMatchState).toBe("partial");

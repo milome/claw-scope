@@ -29,4 +29,10 @@ describe("openClawConfigSectionState", () => {
       resolveSelectedOpenClawConfigSection("sessions", buildAvailableOpenClawConfigSections({ hasConnectedNodes: false })),
     ).toBe("status");
   });
+
+  it("keeps sessions section whenever more than one connected node is still present", () => {
+    expect(
+      buildAvailableOpenClawConfigSections({ hasConnectedNodes: true }),
+    ).toContain("sessions");
+  });
 });

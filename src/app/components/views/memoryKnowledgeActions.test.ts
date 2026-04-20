@@ -46,6 +46,7 @@ describe("memoryKnowledgeActions", () => {
     expect(gatewayConfigSetLocal).toHaveBeenCalledWith(
       "agents.defaults.memorySearch.sources",
       '["memory","sessions"]',
+      undefined,
     );
     expect(result.stdout).toBe("ok");
   });
@@ -62,19 +63,20 @@ describe("memoryKnowledgeActions", () => {
     expect(gatewayConfigSetLocal).toHaveBeenCalledWith(
       "agents.defaults.memorySearch.experimental.sessionMemory",
       "true",
+      undefined,
     );
   });
 
-  it("runs reindex with full strategy when requested", async () => {
+  it("coerces requested full reindex into incremental mode", async () => {
     vi.mocked(gatewayAgentMemoryIndex).mockResolvedValueOnce({
       agentId: "agent-main",
-      forced: true,
+      forced: false,
       stdout: "reindexed",
     });
 
     const result = await runExternalKnowledgeReindex("agent-main", "full", t);
 
-    expect(gatewayAgentMemoryIndex).toHaveBeenCalledWith("agent-main", true);
+    expect(gatewayAgentMemoryIndex).toHaveBeenCalledWith("agent-main", false, undefined);
     expect(result.stdout).toBe("reindexed");
   });
 
@@ -87,7 +89,7 @@ describe("memoryKnowledgeActions", () => {
 
     const result = await runExternalKnowledgeReindex("agent-main", "incremental", t);
 
-    expect(gatewayAgentMemoryIndex).toHaveBeenCalledWith("agent-main", false);
+    expect(gatewayAgentMemoryIndex).toHaveBeenCalledWith("agent-main", false, undefined);
     expect(result.stdout).toBe("reindexed incremental");
   });
 });

@@ -45,6 +45,7 @@ import { buildEvolutionAuditReportMarkdown } from "./evolutionAuditReport";
 import { formatKnowledgePackExample, parseKnowledgeInjectionPack } from "./evolutionKnowledgePack";
 import {
   buildEvolutionTargetNodeEntries,
+  resolveEvolutionSessionIdToActivate,
   resolveSelectedEvolutionAgentId,
   resolveSelectedEvolutionNodeId,
 } from "./evolutionTargetState";
@@ -180,7 +181,7 @@ function mapRuntimePhaseToStep(phase: EvolutionOperationStatusSnapshot["phase"])
 
 export function EvolutionView() {
   const { lang, t } = useI18n();
-  const { nodes, agents, isConnected } = useOpenClaw();
+  const { nodes, agents, isConnected, setActiveSession } = useOpenClaw();
   const RECENT_HISTORY_COLLAPSED_COUNT = 3;
   const buildCustomTemplateExample = () =>
     `{\n  "mode": "append_block",\n  "title": "${t("evo.custom.example.blockTitle")}",\n  "content": "${t("evo.custom.example.blockContent")}"\n}`;
@@ -869,7 +870,17 @@ export function EvolutionView() {
                 </div>
                 <select
                   value={selectedNodeId}
-                  onChange={(e) => setSelectedNodeId(e.target.value)}
+                  onChange={(e) => {
+                    const nextNodeId = e.target.value;
+                    setSelectedNodeId(nextNodeId);
+                    const nextSessionId = resolveEvolutionSessionIdToActivate(
+                      nextNodeId,
+                      evolutionNodeEntries,
+                    );
+                    if (nextSessionId) {
+                      void setActiveSession(nextSessionId);
+                    }
+                  }}
                   disabled={state !== "idle" && state !== "diff-ready"}
                   className="w-full cursor-pointer appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-10 text-sm text-slate-900 transition-colors focus:border-sky-500/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
                 >
