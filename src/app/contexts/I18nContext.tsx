@@ -2160,6 +2160,31 @@ const BASE_DICT: Record<string, string[]> = {
   ],
   "memory.search.commands.copy": ["Copy commands", "复制命令", "複製命令"],
   "memory.search.commands.copied": ["Copied", "已复制", "已複製"],
+  "memory.search.commands.readyTitle": [
+    "Index path looks ready",
+    "索引路径看起来已就绪",
+    "索引路徑看起來已就緒",
+  ],
+  "memory.search.commands.needsAttentionTitle": [
+    "Index setup needs attention",
+    "索引建立需要处理",
+    "索引建立需要處理",
+  ],
+  "memory.search.commands.issueSummary": [
+    "What needs attention",
+    "需要处理的事项",
+    "需要處理的事項",
+  ],
+  "memory.search.commands.showGuide": [
+    "Show full guide",
+    "查看完整指引",
+    "查看完整指引",
+  ],
+  "memory.search.commands.hideGuide": [
+    "Hide guide",
+    "收起指引",
+    "收起指引",
+  ],
   "memory.search.commands.ollama": [
     "For Ollama-based embeddings, run the setup and indexing commands below on the OpenClaw host.",
     "如果你走的是 Ollama embeddings，请在 OpenClaw 所在机器上执行下面这组配置与建索引命令。",

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ChevronRight, Search } from "lucide-react";
 import { motion } from "motion/react";
 import type {
@@ -105,10 +106,37 @@ export function MemorySearchPanel({
   onOpenSearchEntry,
   onCloseSearchDetail,
 }: MemorySearchPanelProps) {
+  const [isCommandGuideExpanded, setIsCommandGuideExpanded] = useState(false);
   const focusTone = resolveInputTone(tone);
   const solidTone = resolveSolidToneButton(tone);
   const outlineTone = resolveOutlineToneButton(tone);
   const softBadgeTone = resolveViewToneClasses(tone).softBadge;
+  const providerReady = healthProbeSummary?.embeddingsReady === true;
+  const hasSetupIssue = Boolean(
+    searchPrimaryReason ||
+    memoryStatusError ||
+    healthProbeSummary?.primaryIssue ||
+    healthProbeSummary?.embeddingsReady === false ||
+    !healthProbeSummary,
+  );
+  const setupSummary = searchPrimaryReason ??
+    healthProbeSummary?.primaryIssue ??
+    memoryStatusError ??
+    (providerReady ? t("memory.search.diagHealthy") : configStatusMessage);
+  const showMemoryStatusErrorInSetup = Boolean(
+    memoryStatusError &&
+    memoryStatusError !== searchPrimaryReason &&
+    memoryStatusError !== healthProbeSummary?.primaryIssue,
+  );
+  const providerBadgeTone = providerReady
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/35 dark:text-emerald-300"
+    : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/70 dark:bg-amber-950/35 dark:text-amber-300";
+  const setupIssueTone = hasSetupIssue
+    ? "border-amber-200 bg-amber-50/80 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-100"
+    : "border-emerald-200 bg-emerald-50/80 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/25 dark:text-emerald-100";
+  const commandGuideToggleLabel = isCommandGuideExpanded
+    ? t("memory.search.commands.hideGuide")
+    : t("memory.search.commands.showGuide");
 
   return (
     <motion.div
@@ -176,23 +204,73 @@ export function MemorySearchPanel({
               </div>
             )}
           </ArchiveDiagnosticsCard>
-          <ArchiveDiagnosticsCard title={t("memory.search.commands.title")} className="mt-3 text-xs">
-            <div className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-              {healthProbeSummary?.embeddingsReady ? t("memory.search.commands.providerReady") : t("memory.search.commands.providerMissing")}
+          <ArchiveDiagnosticsCard title={t("memory.search.commands.title")} className="mt-3 text-xs" tone={hasSetupIssue ? "amber" : "emerald"}>
+            <div className="rounded-2xl border border-white/70 bg-white/85 p-3 shadow-sm dark:border-slate-800/80 dark:bg-slate-950/35">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${providerBadgeTone}`}>
+                      {providerReady ? t("memory.search.commands.providerReady") : t("memory.search.commands.providerMissing")}
+                    </span>
+                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                      {isLocalGatewaySession ? t("memory.knowledge.bridgeStatus.local") : t("memory.knowledge.bridgeStatus.remote")}
+                    </span>
+                    {runtimeStatusSummary ? (
+                      <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/35 dark:text-sky-300">
+                        {t(
+                          "memory.search.indexedSummary",
+                          runtimeStatusSummary.indexedFiles,
+                          runtimeStatusSummary.totalFiles != null ? `/${runtimeStatusSummary.totalFiles}` : "",
+                          runtimeStatusSummary.chunks,
+                        )}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-3 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {hasSetupIssue ? t("memory.search.commands.needsAttentionTitle") : t("memory.search.commands.readyTitle")}
+                  </div>
+                  <p className="mt-1 leading-5 text-slate-600 dark:text-slate-300">{setupSummary}</p>
+                </div>
+              </div>
+
+              {hasSetupIssue ? (
+                <div className={`mt-3 rounded-xl border p-3 ${setupIssueTone}`}>
+                  <div className="font-semibold">{t("memory.search.commands.issueSummary")}</div>
+                  {showMemoryStatusErrorInSetup ? (
+                    <div className="mt-1 whitespace-pre-wrap break-words leading-5">{memoryStatusError}</div>
+                  ) : null}
+                  <div className="mt-1 leading-5">{searchAvailabilityReason}</div>
+                  {providerAvailabilityReason !== searchAvailabilityReason ? (
+                    <div className="mt-1 leading-5">{providerAvailabilityReason}</div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={onCopyCommandGuide}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-sm ${solidTone}`}
+                >
+                  {copiedCommandGuide ? t("memory.search.commands.copied") : t("memory.search.commands.copy")}
+                </button>
+                <button
+                  onClick={() => setIsCommandGuideExpanded((expanded) => !expanded)}
+                  className={`inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 ${outlineTone}`}
+                >
+                  {commandGuideToggleLabel}
+                  <ChevronRight className={`h-3.5 w-3.5 transition-transform ${isCommandGuideExpanded ? "rotate-90" : ""}`} />
+                </button>
+              </div>
+
+              {isCommandGuideExpanded ? (
+                <div className="mt-3 space-y-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-slate-600 dark:border-slate-800 dark:bg-slate-950/55 dark:text-slate-300">
+                  <div className="leading-5">{configStatusMessage}</div>
+                  <div className="leading-5">{commandGuideDescription}</div>
+                  <div className="leading-5">{isLocalGatewaySession ? t("memory.knowledge.bridgeStatus.local") : t("memory.knowledge.bridgeStatus.remote")}</div>
+                  <pre className="mt-3 max-h-52 overflow-auto rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">{commandGuide}</pre>
+                </div>
+              ) : null}
             </div>
-            <div className="mt-2 text-slate-500 dark:text-slate-400">{configStatusMessage}</div>
-            {searchPrimaryReason ? <div className="font-medium text-slate-700 dark:text-slate-200">{searchPrimaryReason}</div> : null}
-            <div className="text-slate-500 dark:text-slate-400">{searchAvailabilityReason}</div>
-            <div className="text-slate-500 dark:text-slate-400">{providerAvailabilityReason}</div>
-            <div className="text-slate-500 dark:text-slate-400">{isLocalGatewaySession ? t("memory.knowledge.bridgeStatus.local") : t("memory.knowledge.bridgeStatus.remote")}</div>
-            <div className="text-slate-500 dark:text-slate-400">{commandGuideDescription}</div>
-            <pre className="mt-3 overflow-auto rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">{commandGuide}</pre>
-            <button
-                onClick={onCopyCommandGuide}
-              className={`mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 ${outlineTone}`}
-            >
-              {copiedCommandGuide ? t("memory.search.commands.copied") : t("memory.search.commands.copy")}
-            </button>
           </ArchiveDiagnosticsCard>
           {searchError ? <div className="mt-4"><ArchiveNotice tone="error">{renderNoticeContent(searchError)}</ArchiveNotice></div> : null}
         </ArchiveListPane>
