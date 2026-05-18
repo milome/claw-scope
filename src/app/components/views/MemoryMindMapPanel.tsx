@@ -1,9 +1,8 @@
-import { BrainCircuit, Cpu, Orbit, Sparkles, Workflow } from "lucide-react";
+import { BrainCircuit, Cpu, Orbit, Workflow } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import type { SemanticCluster, SemanticConcept, SemanticMindMapModel } from "./memorySemanticTypes";
-import { ArchiveDiagnosticsCard, ArchiveInfoBlock, ArchiveLayerHeader, ArchiveNotice, ArchiveSectionCard, type ArchiveTone } from "./memoryArchiveUi";
-import { debugReasonLabel, sourceKindLabel } from "./memoryDisplayLabels";
+import { ArchiveDiagnosticsCard, ArchiveLayerHeader, ArchiveNotice, ArchiveSectionCard, type ArchiveTone } from "./memoryArchiveUi";
 import { LabelValueList } from "./LabelValueList";
 
 type MemoryMindMapPanelProps = {
@@ -12,14 +11,6 @@ type MemoryMindMapPanelProps = {
   t: (key: string, ...args: (string | number)[]) => string;
   showDebug: boolean;
   onToggleDebug: () => void;
-  onOpenEvidence: (evidence: {
-    entryId: string;
-    title: string;
-    sourceKind: "document" | "timeline";
-    path?: string;
-    snippet: string;
-    matchedTerms: string[];
-  }) => void;
 };
 
 type SemanticClusterAnchor = {
@@ -84,6 +75,10 @@ function shortLabel(label: string, max = 22) {
   return label.length > max ? `${label.slice(0, max - 1)}…` : label;
 }
 
+function shortText(text: string, max = 150) {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 function buildClusterAnchors(model: SemanticMindMapModel) {
   return model.clusters.slice(0, 4).map((cluster, index) => {
     const preset = CLUSTER_PRESETS[index % CLUSTER_PRESETS.length];
@@ -113,7 +108,7 @@ function buildFloatingConcepts(anchors: SemanticClusterAnchor[]) {
   );
 }
 
-export function MemoryMindMapPanel({ tone = "sky", model, t, showDebug, onToggleDebug, onOpenEvidence }: MemoryMindMapPanelProps) {
+export function MemoryMindMapPanel({ tone = "sky", model, t, showDebug, onToggleDebug }: MemoryMindMapPanelProps) {
   const anchors = useMemo(() => buildClusterAnchors(model), [model]);
   const floatingConcepts = useMemo(() => buildFloatingConcepts(anchors), [anchors]);
   const [selectedNodeId, setSelectedNodeId] = useState<string>(anchors[0]?.cluster.id ?? model.concepts[0]?.id ?? "");
@@ -122,35 +117,9 @@ export function MemoryMindMapPanel({ tone = "sky", model, t, showDebug, onToggle
   const selectedConcept = model.concepts.find((concept) => concept.id === selectedNodeId) ?? null;
   const selectedNode = selectedCluster ?? selectedConcept;
   const selectedEvidence = selectedCluster?.evidence ?? selectedConcept?.evidence ?? [];
-
-  const groupedAnchors = useMemo(() => {
-    const bySourceKind = new Map<string, Map<string, typeof selectedEvidence[number]>>();
-    selectedEvidence.forEach((evidence) => {
-      const kindBucket = bySourceKind.get(evidence.sourceKind) ?? new Map<string, typeof evidence>();
-      const key = `${evidence.title}::${evidence.path ?? ""}`;
-      if (!kindBucket.has(key)) {
-        kindBucket.set(key, evidence);
-      }
-      bySourceKind.set(evidence.sourceKind, kindBucket);
-    });
-
-    return Array.from(bySourceKind.entries()).map(([sourceKind, bucket]) => ({
-      sourceKind,
-      anchors: Array.from(bucket.values()),
-    }));
-  }, [selectedEvidence]);
-
-  const sourceCorpus = useMemo(
-    () => model.entries.map((entry) => ({
-      id: entry.id,
-      title: entry.title,
-      sourceKind: entry.sourceKind,
-      timestamp: entry.timestamp,
-      path: entry.path,
-    })),
-    [model.entries],
-  );
-
+  const selectedEvidenceCount = selectedEvidence.length;
+  const selectedSummary = selectedCluster?.summary ?? selectedConcept?.explanation ?? "";
+  const selectedKeywords = selectedConcept?.keywords.slice(0, 4) ?? [];
 
   return (
     <motion.div
@@ -168,7 +137,7 @@ export function MemoryMindMapPanel({ tone = "sky", model, t, showDebug, onToggle
         tone={tone}
       />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.95fr)_minmax(320px,0.72fr)]">
+      <div className="space-y-4">
         <ArchiveSectionCard tone={tone}>
             <div className="mb-3 flex items-start justify-between gap-3 rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,rgba(240,249,255,0.95),rgba(236,253,245,0.88))] p-4 dark:border-sky-900/60 dark:bg-[linear-gradient(135deg,rgba(12,74,110,0.2),rgba(6,95,70,0.14))]">
               <div>
@@ -188,7 +157,14 @@ export function MemoryMindMapPanel({ tone = "sky", model, t, showDebug, onToggle
 
             <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{t("memory.mindmap.debug.title")}</div>
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  {t("memory.mindmap.debug.title")}
+                  {showDebug ? (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] tracking-normal text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
+                      {t("memory.diag.ready")}
+                    </span>
+                  ) : null}
+                </div>
                 <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.mindmap.debug.inspect")}</div>
               </div>
               <button
@@ -200,17 +176,70 @@ export function MemoryMindMapPanel({ tone = "sky", model, t, showDebug, onToggle
               </button>
             </div>
 
-            <ArchiveDiagnosticsCard title={t("memory.mindmap.semanticSummary")} className="mb-3 text-xs" tone={tone}>
-              <LabelValueList
-                className="md:grid-cols-2"
-                items={[
-                  { label: t("memory.mindmap.entriesStat"), value: model.entries.length },
-                  { label: t("memory.mindmap.clustersStat"), value: model.clusters.length },
-                  { label: t("memory.mindmap.conceptsStat"), value: model.concepts.length },
-                  { label: t("memory.mindmap.edgesStat"), value: model.edges.length },
-                ]}
-              />
-            </ArchiveDiagnosticsCard>
+            <div className="mb-3 rounded-2xl border border-slate-200 bg-white/90 p-3 dark:border-slate-700 dark:bg-slate-950/70">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{t("memory.mindmap.selectedNode")}</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedNode?.label ?? t("memory.mindmap.noNode")}</div>
+                </div>
+                <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                  {selectedEvidenceCount} {t("memory.mindmap.evidenceStat")}
+                </div>
+              </div>
+              {selectedSummary ? (
+                <div className="mt-2 text-xs leading-6 text-slate-600 dark:text-slate-400">
+                  {shortText(selectedSummary)}
+                </div>
+              ) : null}
+              {selectedConcept ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300">
+                    {t("memory.search.score", selectedConcept.score)}
+                  </span>
+                  {selectedKeywords.map((keyword) => (
+                    <span key={keyword} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {selectedEvidence[0] ? (
+                <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+                  <div className="truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">{selectedEvidence[0].title}</div>
+                  <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-slate-500 dark:text-slate-400">{selectedEvidence[0].snippet}</div>
+                </div>
+              ) : null}
+            </div>
+
+            {showDebug ? (
+              <ArchiveDiagnosticsCard title={t("memory.mindmap.debug.title")} className="mb-3 text-xs" tone={tone}>
+                <LabelValueList
+                  className="md:grid-cols-2"
+                  items={[
+                    { label: t("memory.mindmap.inputDocuments"), value: model.debug?.diagnostics.inputDocuments ?? 0 },
+                    { label: t("memory.mindmap.inputTimelineEntries"), value: model.debug?.diagnostics.inputTimelineEntries ?? 0 },
+                    { label: t("memory.mindmap.timelineWithContent"), value: model.debug?.diagnostics.timelineEntriesWithContent ?? 0 },
+                    { label: t("memory.mindmap.timelineMissingContent"), value: model.debug?.diagnostics.timelineEntriesMissingContent ?? 0 },
+                    { label: t("memory.mindmap.timelineTooShort"), value: model.debug?.diagnostics.timelineEntriesTooShort ?? 0 },
+                    { label: t("memory.mindmap.timelineSource"), value: model.debug?.diagnostics.timelineSource ?? t("memory.documents.none") },
+                    { label: t("memory.mindmap.timelineProbeDays"), value: model.debug?.diagnostics.timelineProbeDays ?? 0 },
+                    { label: t("memory.mindmap.selectedTimelineEntry"), value: model.debug?.diagnostics.timelineSelectedEntry ?? t("memory.documents.none") },
+                  ]}
+                />
+              </ArchiveDiagnosticsCard>
+            ) : (
+              <ArchiveDiagnosticsCard title={t("memory.mindmap.semanticSummary")} className="mb-3 text-xs" tone={tone}>
+                <LabelValueList
+                  className="md:grid-cols-4"
+                  items={[
+                    { label: t("memory.mindmap.entriesStat"), value: model.entries.length },
+                    { label: t("memory.mindmap.clustersStat"), value: model.clusters.length },
+                    { label: t("memory.mindmap.conceptsStat"), value: model.concepts.length },
+                    { label: t("memory.mindmap.edgesStat"), value: model.edges.length },
+                  ]}
+                />
+              </ArchiveDiagnosticsCard>
+            )}
 
             {anchors.length === 0 ? (
               <ArchiveNotice>{t("memory.mindmap.noClusters")}</ArchiveNotice>
@@ -364,204 +393,7 @@ export function MemoryMindMapPanel({ tone = "sky", model, t, showDebug, onToggle
               </div>
             )}
         </ArchiveSectionCard>
-
-        <ArchiveSectionCard>
-            <div className="rounded-3xl border border-slate-700 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.92))] p-4 shadow-[0_18px_40px_rgba(2,6,23,0.32)]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{t("memory.mindmap.selectedNode")}</div>
-                  <div className="mt-2 text-lg font-semibold tracking-tight text-slate-100">{selectedNode?.label ?? t("memory.mindmap.noNode")}</div>
-                  {selectedCluster ? <div className="mt-1 text-xs text-slate-400">{t("memory.mindmap.cluster")}</div> : null}
-                  {selectedConcept ? <div className="mt-1 text-xs text-slate-400">{t("memory.mindmap.concept")}</div> : null}
-                </div>
-                <div className="rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-[11px] font-semibold text-slate-200">
-                  {selectedEvidence.length} {t("memory.mindmap.evidenceStat")}
-                </div>
-              </div>
-            </div>
-
-            {selectedCluster ? (
-              <ArchiveDiagnosticsCard title={t("memory.mindmap.clusterSummary")} className="mt-4 text-sm leading-7 text-slate-800 dark:text-slate-100">
-                <div className="space-y-3">
-                  <div>{selectedCluster.summary}</div>
-                  <div className="text-xs leading-6 text-slate-500 dark:text-slate-400">{selectedCluster.explanation}</div>
-                </div>
-              </ArchiveDiagnosticsCard>
-            ) : null}
-
-            {selectedConcept ? (
-              <>
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <ArchiveInfoBlock title={t("memory.search.score", selectedConcept.score)}>
-                    <div className="mt-1 text-slate-800 dark:text-slate-100">{selectedConcept.score}</div>
-                  </ArchiveInfoBlock>
-                  <ArchiveInfoBlock title={t("memory.mindmap.concept")}>
-                    <div className="mt-1 text-slate-800 dark:text-slate-100">{selectedConcept.keywords.join(", ")}</div>
-                  </ArchiveInfoBlock>
-                </div>
-                <ArchiveDiagnosticsCard title={t("memory.mindmap.whyConcept")} className="mt-4 text-sm leading-7 text-slate-800 dark:text-slate-100">
-                  {selectedConcept.explanation}
-                </ArchiveDiagnosticsCard>
-              </>
-            ) : null}
-
-            <ArchiveDiagnosticsCard title={t("memory.mindmap.supportingEvidence")} className="mt-4 text-sm leading-7 text-slate-800 dark:text-slate-100">
-              {selectedEvidence.length > 0 ? (
-                <div className="space-y-3">
-                  {selectedEvidence.map((evidence) => (
-                    <button
-                      key={`${evidence.entryId}-${evidence.snippet}`}
-                      type="button"
-                      onClick={() => onOpenEvidence(evidence)}
-                      className="block w-full rounded-2xl border border-slate-200 bg-white p-3 text-left transition hover:border-sky-300 hover:bg-sky-50/50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-sky-700 dark:hover:bg-slate-800"
-                    >
-                      <div className="rounded-md bg-sky-100 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">{evidence.title}</div>
-                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{sourceKindLabel(evidence.sourceKind, t)}{evidence.path ? ` · ${evidence.path}` : ""}</div>
-                      <div className="mt-2 text-sm text-slate-800 dark:text-slate-100">{evidence.snippet}</div>
-                      <div className="mt-3 text-xs font-semibold text-sky-700 dark:text-sky-300">
-                        {evidence.sourceKind === "document" ? t("memory.mindmap.openInDocuments") : t("memory.mindmap.openInFootprints")}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                t("memory.mindmap.noEvidence")
-              )}
-            </ArchiveDiagnosticsCard>
-
-            <ArchiveDiagnosticsCard title={t("memory.mindmap.sourceAnchors")} className="mt-4 text-xs">
-              {groupedAnchors.length > 0 ? (
-                <div className="space-y-3">
-                  {groupedAnchors.map((group) => (
-                    <div key={group.sourceKind}>
-                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        {group.sourceKind === "document" ? t("memory.tab.documents") : t("memory.tab.footprints")}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {group.anchors.map((evidence) => (
-                          <button
-                            key={`anchor-${group.sourceKind}-${evidence.title}-${evidence.path ?? ""}`}
-                            type="button"
-                            onClick={() => onOpenEvidence(evidence)}
-                            className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 font-semibold text-sky-700 transition hover:border-sky-300 hover:bg-sky-100 dark:border-sky-800/70 dark:bg-sky-950/30 dark:text-sky-300 dark:hover:border-sky-700 dark:hover:bg-sky-900/30"
-                          >
-                            {evidence.title}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                t("memory.mindmap.noSourceAnchors")
-              )}
-            </ArchiveDiagnosticsCard>
-
-            <ArchiveDiagnosticsCard title={t("memory.mindmap.sourceCorpus")} className="mt-4 text-xs">
-              {sourceCorpus.length > 0 ? (
-                <div className="space-y-2">
-                  {sourceCorpus.map((source) => (
-                    <div key={source.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
-                      <div className="font-semibold text-slate-800 dark:text-slate-100">{source.title}</div>
-                      <div className="mt-1 text-slate-500 dark:text-slate-400">{sourceKindLabel(source.sourceKind, t)}{source.timestamp ? ` · ${new Date(source.timestamp).toLocaleString()}` : ""}</div>
-                      {source.path ? <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{source.path}</div> : null}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                t("memory.mindmap.noSourceCorpus")
-              )}
-            </ArchiveDiagnosticsCard>
-
-            {showDebug ? (
-              <ArchiveDiagnosticsCard title={t("memory.mindmap.debug.title")} className="mt-4 text-xs">
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-700 dark:bg-slate-950/40">
-                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{t("memory.mindmap.diagnostics")}</div>
-                    <LabelValueList
-                      className="md:grid-cols-2"
-                      items={[
-                        { label: t("memory.mindmap.inputDocuments"), value: model.debug?.diagnostics.inputDocuments ?? 0 },
-                        { label: t("memory.mindmap.inputTimelineEntries"), value: model.debug?.diagnostics.inputTimelineEntries ?? 0 },
-                        { label: t("memory.mindmap.timelineWithContent"), value: model.debug?.diagnostics.timelineEntriesWithContent ?? 0 },
-                        { label: t("memory.mindmap.timelineMissingContent"), value: model.debug?.diagnostics.timelineEntriesMissingContent ?? 0 },
-                        { label: t("memory.mindmap.timelineTooShort"), value: model.debug?.diagnostics.timelineEntriesTooShort ?? 0 },
-                        { label: t("memory.mindmap.timelineSource"), value: model.debug?.diagnostics.timelineSource ?? t("memory.documents.none") },
-                        { label: t("memory.mindmap.timelineProbeDays"), value: model.debug?.diagnostics.timelineProbeDays ?? 0 },
-                        { label: t("memory.mindmap.selectedTimelineEntry"), value: model.debug?.diagnostics.timelineSelectedEntry ?? t("memory.documents.none") },
-                      ]}
-                    />
-                  </div>
-                  <div>
-                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">{t("memory.mindmap.debug.included")}</div>
-                    {model.debug?.included?.length ? (
-                      <div className="space-y-2">
-                        {model.debug.included.map((item) => (
-                          <div key={`included-${item.id}`} className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900/60 dark:bg-emerald-950/20">
-                            <div className="font-semibold text-slate-800 dark:text-slate-100">{item.title}</div>
-                            <div className="mt-1 text-slate-600 dark:text-slate-300">{sourceKindLabel(item.sourceKind, t)} · {t("memory.mindmap.charCount", item.length)}</div>
-                            {item.path ? <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{item.path}</div> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-slate-500 dark:text-slate-400">{t("memory.mindmap.noIncludedCorpus")}</div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-300">{t("memory.mindmap.debug.excluded")}</div>
-                    {model.debug?.excluded?.length ? (
-                      <div className="space-y-2">
-                        {model.debug.excluded.map((item) => (
-                          <div key={`excluded-${item.id}`} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900/60 dark:bg-rose-950/20">
-                            <div className="font-semibold text-slate-800 dark:text-slate-100">{item.title}</div>
-                            <div className="mt-1 text-slate-600 dark:text-slate-300">{sourceKindLabel(item.sourceKind, t)} · {t("memory.mindmap.charCount", item.length)} · {debugReasonLabel(item.reason, t)}</div>
-                            {item.path ? <div className="mt-1 break-all text-slate-500 dark:text-slate-400">{item.path}</div> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-slate-500 dark:text-slate-400">{t("memory.mindmap.noExcludedCorpus")}</div>
-                    )}
-                  </div>
-                </div>
-              </ArchiveDiagnosticsCard>
-            ) : null}
-        </ArchiveSectionCard>
       </div>
-
-      <ArchiveSectionCard>
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("memory.knowledge.drawerFields")}</div>
-            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("memory.knowledge.note")}</div>
-          </div>
-          <div className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-            <Sparkles className="mr-1 inline h-3.5 w-3.5" /> {t("memory.mindmap.figmaSemanticBadge")}
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-          <ArchiveDiagnosticsCard title={t("memory.mindmap.pipelineContract")} className="text-xs">
-            <LabelValueList
-              items={[
-                { label: t("memory.mindmap.entriesStat"), value: model.entries.length },
-                { label: t("memory.mindmap.clustersStat"), value: model.clusters.length },
-                { label: t("memory.mindmap.conceptsStat"), value: model.concepts.length },
-                { label: t("memory.mindmap.edgesStat"), value: model.edges.length },
-              ]}
-            />
-          </ArchiveDiagnosticsCard>
-
-          <ArchiveDiagnosticsCard title={t("memory.mindmap.implementationNote")} className="text-xs">
-            <div className="space-y-1.5 text-slate-500 dark:text-slate-400">
-              <div>{t("memory.knowledge.note")}</div>
-              <div>{t("memory.mindmap.semanticMap")}</div>
-              <div>{t("memory.resources.desc")}</div>
-            </div>
-          </ArchiveDiagnosticsCard>
-        </div>
-      </ArchiveSectionCard>
 
     </motion.div>
   );
