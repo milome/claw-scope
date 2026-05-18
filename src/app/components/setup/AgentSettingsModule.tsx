@@ -450,7 +450,7 @@ function OverrideFieldRow({
             "bg-violet-500 text-white shadow-violet-500/25 dark:bg-violet-400 dark:text-slate-950",
           icon:
             "bg-violet-100 text-violet-700 dark:bg-violet-950/70 dark:text-violet-300",
-          title: "text-violet-700 dark:text-violet-300",
+          headingClassName: "text-violet-700 dark:text-violet-300",
           shell:
             "border-violet-200/60 bg-white/80 dark:border-violet-900/40 dark:bg-slate-950/45",
         }
@@ -459,7 +459,7 @@ function OverrideFieldRow({
             "bg-emerald-500 text-white shadow-emerald-500/25 dark:bg-emerald-400 dark:text-slate-950",
           icon:
             "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300",
-          title: "text-emerald-700 dark:text-emerald-300",
+          headingClassName: "text-emerald-700 dark:text-emerald-300",
           shell:
             "border-emerald-200/60 bg-white/80 dark:border-emerald-900/40 dark:bg-slate-950/45",
         };
@@ -479,7 +479,7 @@ function OverrideFieldRow({
             {icon}
           </div>
           <div
-            className={`mt-3 text-xs font-semibold uppercase tracking-[0.18em] ${toneClasses.title}`}
+            className={`mt-3 text-xs font-semibold uppercase tracking-[0.18em] ${toneClasses.headingClassName}`}
           >
             {title}
           </div>
