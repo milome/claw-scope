@@ -430,7 +430,7 @@ export function MemoryTopologyGraph({
   };
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-slate-50 p-6 dark:bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),linear-gradient(180deg,rgba(2,6,23,0.98),rgba(15,23,42,0.94))]">
+    <div className="flex h-full w-full flex-col items-center justify-start gap-4 bg-slate-50 p-6 dark:bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_26%),linear-gradient(180deg,rgba(2,6,23,0.98),rgba(15,23,42,0.94))]">
       <div className="mb-1 flex w-full max-w-[700px] shrink-0 items-end justify-between">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 shadow-sm dark:border-slate-800/80 dark:bg-slate-900/75 dark:text-slate-400">
