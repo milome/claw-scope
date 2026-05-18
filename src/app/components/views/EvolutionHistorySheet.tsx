@@ -310,8 +310,8 @@ export function EvolutionHistorySheet({
           </div>
         </SheetHeader>
 
-        <div className="grid h-full min-h-0 grid-cols-[360px_minmax(0,1fr)]">
-          <div className="border-r border-slate-200 px-5 py-5 dark:border-slate-800">
+        <div className="grid min-h-0 flex-1 grid-cols-[360px_minmax(0,1fr)]">
+          <div className="flex min-h-0 flex-col overflow-hidden border-r border-slate-200 px-5 py-5 dark:border-slate-800">
             <div className="mb-4 grid gap-3">
               <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3.5 dark:border-slate-800 dark:bg-slate-900/70">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
@@ -403,7 +403,7 @@ export function EvolutionHistorySheet({
               </div>
             </div>
 
-            <div className="min-h-0 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
               {filteredEntries.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
                   {t("evo.historySheet.empty.filtered")}
