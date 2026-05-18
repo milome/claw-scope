@@ -68,36 +68,54 @@ export function AgentSettingsFieldMetadataSummary({
     return null;
   }
 
+  const source = sourceLabel(metadata.source, t);
+
   return (
-    <div className="grid gap-2 pt-1 sm:grid-cols-2">
-      <div
-        className={`rounded-xl border px-3 py-2.5 ${metadataTone(metadata.source)}`}
-      >
-        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-75">
-          {t("config.agentSettings.meta.sourceLabel")}
-        </div>
-        <div className="mt-1 text-xs font-semibold break-words">
-          {sourceLabel(metadata.source, t)}
-        </div>
-        {metadata.path ? (
-          <div className="mt-1 break-all font-mono text-[11px] opacity-80">
-            {metadata.path}
-          </div>
-        ) : null}
-      </div>
-      {metadata.writeActions.map((action) => (
+    <details className="group pt-1">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 text-xs">
+        <span className={`rounded-full border px-2.5 py-1 font-semibold ${metadataTone(metadata.source)}`}>
+          {t("config.agentSettings.meta.sourceLabel")}: {source}
+        </span>
+        <span className="rounded-full border border-slate-200 bg-white/70 px-2.5 py-1 font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
+          {t(
+            "config.agentSettings.meta.writeCount",
+            metadata.writeActions.length,
+          )}
+        </span>
+        <span className="text-[11px] font-medium text-slate-400 transition-colors group-open:text-slate-600 dark:text-slate-500 dark:group-open:text-slate-300">
+          {t("config.agentSettings.meta.details")}
+        </span>
+      </summary>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <div
-          key={`${action.kind}:${action.path ?? "none"}`}
           className={`rounded-xl border px-3 py-2.5 ${metadataTone(metadata.source)}`}
         >
           <div className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-75">
-            {t("config.agentSettings.meta.writeLabel")}
+            {t("config.agentSettings.meta.sourceLabel")}
           </div>
-          <div className="mt-1 break-all text-[11px] font-mono leading-5">
-            {writeActionLabel(action, t)}
+          <div className="mt-1 text-xs font-semibold break-words">
+            {source}
           </div>
+          {metadata.path ? (
+            <div className="mt-1 break-all font-mono text-[11px] opacity-80">
+              {metadata.path}
+            </div>
+          ) : null}
         </div>
-      ))}
-    </div>
+        {metadata.writeActions.map((action) => (
+          <div
+            key={`${action.kind}:${action.path ?? "none"}`}
+            className={`rounded-xl border px-3 py-2.5 ${metadataTone(metadata.source)}`}
+          >
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-75">
+              {t("config.agentSettings.meta.writeLabel")}
+            </div>
+            <div className="mt-1 break-all text-[11px] font-mono leading-5">
+              {writeActionLabel(action, t)}
+            </div>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }

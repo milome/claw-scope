@@ -1406,6 +1406,21 @@ const BASE_DICT: Record<string, string[]> = {
     "这个页面同时包含 Gateway 全局配置、默认 Agent 路由、通用默认值以及当前 Agent 覆盖。下面的说明会按真实层级描述它们，而不是假装所有字段都只属于当前 Agent。",
     "這個頁面同時包含 Gateway 全域配置、預設 Agent 路由、通用預設值以及目前 Agent 覆蓋。下方說明會按真實層級描述它們，而不是假裝所有欄位都只屬於目前 Agent。",
   ],
+  "config.agentSettings.scopeNavigatorTitle": [
+    "Scope Navigator",
+    "Scope 导航",
+    "Scope 導航",
+  ],
+  "config.agentSettings.scopeNavigatorDesc": [
+    "Pick a layer first. The editor only shows fields that belong to the selected scope.",
+    "先选择配置层级，右侧只显示属于该 scope 的字段。",
+    "先選擇配置層級，右側只顯示屬於該 scope 的欄位。",
+  ],
+  "config.agentSettings.scopeFieldCount": [
+    "{0} fields",
+    "{0} 个字段",
+    "{0} 個欄位",
+  ],
   "config.agentSettings.scopeGlobalTitle": [
     "Gateway Global",
     "Gateway 全局",
@@ -1465,6 +1480,16 @@ const BASE_DICT: Record<string, string[]> = {
     "Writes",
     "写向",
     "寫向",
+  ],
+  "config.agentSettings.meta.writeCount": [
+    "{0} write targets",
+    "{0} 个写入目标",
+    "{0} 個寫入目標",
+  ],
+  "config.agentSettings.meta.details": [
+    "Details",
+    "查看详情",
+    "查看詳情",
   ],
   "config.agentSettings.meta.source.gatewayGlobal": [
     "Gateway Global",
@@ -1640,6 +1665,56 @@ const BASE_DICT: Record<string, string[]> = {
     "这里是共享默认值与当前 Agent 覆盖真正落地的区域。每个编辑器都会沿用图例里的 scope 颜色，便于你在保存前判断自己正在碰哪一层。",
     "這裡是共享預設值與目前 Agent 覆蓋真正落地的區域。每個編輯器都會沿用圖例裡的 scope 顏色，方便你在儲存前判斷自己正在碰哪一層。",
   ],
+  "config.agentSettings.selectedOverrideWorkbenchTitle": [
+    "Selected Agent Override",
+    "当前 Agent 覆盖工作台",
+    "目前 Agent 覆蓋工作台",
+  ],
+  "config.agentSettings.selectedOverrideWorkbenchDesc": [
+    "Group agent-local overrides by what they change, so the page reads as one override layer rather than separate cards.",
+    "把当前 Agent 的覆盖按作用分组，让页面读起来是一个覆盖层，而不是几张卡片拼贴。",
+    "把目前 Agent 的覆蓋按作用分組，讓頁面讀起來是一個覆蓋層，而不是幾張卡片拼貼。",
+  ],
+  "config.agentSettings.universalDefaultsWorkbenchTitle": [
+    "Shared Defaults Workbench",
+    "通用默认值工作台",
+    "通用預設值工作台",
+  ],
+  "config.agentSettings.universalDefaultsWorkbenchDesc": [
+    "Group universal defaults by the same workflow language so this page matches the selected-agent override layout.",
+    "把通用默认值也按同一套工作流语言组织，让它和当前 Agent 覆盖保持一致。",
+    "把通用預設值也按同一套工作流語言組織，讓它和目前 Agent 覆蓋保持一致。",
+  ],
+  "config.agentSettings.selectedOverrideIdentityTitle": [
+    "Identity",
+    "身份",
+    "身份",
+  ],
+  "config.agentSettings.selectedOverrideIdentityDesc": [
+    "Agent-local directory and identity path override.",
+    "Agent 本地的目录与身份路径覆盖。",
+    "Agent 本地的目錄與身份路徑覆蓋。",
+  ],
+  "config.agentSettings.selectedOverrideCollabTitle": [
+    "Collaboration",
+    "协作",
+    "協作",
+  ],
+  "config.agentSettings.selectedOverrideCollabDesc": [
+    "Agent-local group-chat coordination settings.",
+    "Agent 本地的群聊协作设置。",
+    "Agent 本地的群聊協作設定。",
+  ],
+  "config.agentSettings.selectedOverrideToolsTitle": [
+    "Tools",
+    "工具",
+    "工具",
+  ],
+  "config.agentSettings.selectedOverrideToolsDesc": [
+    "Agent-local tool profile and allow/deny surface.",
+    "Agent 本地的工具配置与 allow/deny 表面。",
+    "Agent 本地的工具設定與 allow/deny 表面。",
+  ],
   "config.agentSettings.conditionalDefaultsDefaultHint": [
     "You are viewing this page on the current default agent. Universal-default fields here may write back to agents.defaults.* for all agents.",
     "你当前看到的是默认 Agent；这里的通用默认字段可能会写回 agents.defaults.*，并影响所有 Agent。",
@@ -1685,6 +1760,21 @@ const BASE_DICT: Record<string, string[]> = {
     "路径：",
     "路徑：",
   ],
+  "config.agentSettings.schemaFieldCount": [
+    "{0} fields",
+    "{0} 个字段",
+    "{0} 個欄位",
+  ],
+  "config.agentSettings.schemaDetails": [
+    "Details",
+    "详情",
+    "詳情",
+  ],
+  "config.agentSettings.schemaRequired": [
+    "Required",
+    "必填",
+    "必填",
+  ],
   "config.agentSettings.groupChat": [
     "Group Chat",
     "Group Chat",
@@ -1728,14 +1818,19 @@ const BASE_DICT: Record<string, string[]> = {
     "Memory Search",
   ],
   "config.agentSettings.memorySearchDesc": [
-    "Configure how this agent indexes, stores, and ranks searchable memory.",
-    "配置当前 Agent 如何索引、存储并排序可检索记忆。",
-    "配置目前 Agent 如何索引、儲存並排序可檢索記憶。",
+    "Configure memory search in five steps: control, provider, behavior, tuning, and corpus.",
+    "按控制、提供器、行为、调参、语料五段配置当前 Agent 的记忆检索。",
+    "按控制、提供器、行為、調參、語料五段配置目前 Agent 的記憶檢索。",
+  ],
+  "config.agentSettings.memorySearchSchemaTitle": [
+    "Schema Snapshot",
+    "Schema 快照",
+    "Schema 快照",
   ],
   "config.agentSettings.memorySearchControlTitle": [
-    "Control Surface",
-    "控制面",
-    "控制面",
+    "Control",
+    "控制",
+    "控制",
   ],
   "config.agentSettings.memorySearchControlDesc": [
     "Decide whether this agent should index and query semantic memory at all.",
@@ -1743,9 +1838,9 @@ const BASE_DICT: Record<string, string[]> = {
     "先決定這個 Agent 是否真的要啟用語義記憶索引與檢索。",
   ],
   "config.agentSettings.memorySearchProviderBlockTitle": [
-    "Embedding And Store",
-    "Embedding 与存储",
-    "Embedding 與儲存",
+    "Provider",
+    "提供器",
+    "提供器",
   ],
   "config.agentSettings.memorySearchProviderBlockDesc": [
     "Choose the embedding backend and the storage target for this agent's vectors.",
@@ -1753,9 +1848,9 @@ const BASE_DICT: Record<string, string[]> = {
     "這裡定義 embedding 後端，以及目前 Agent 向量存到哪裡。",
   ],
   "config.agentSettings.memorySearchBehaviorTitle": [
-    "Behavior Switches",
-    "行为开关",
-    "行為開關",
+    "Behavior",
+    "行为",
+    "行為",
   ],
   "config.agentSettings.memorySearchBehaviorDesc": [
     "These switches shape what gets indexed and how retrieval expands beyond the base vector search.",
@@ -1763,9 +1858,9 @@ const BASE_DICT: Record<string, string[]> = {
     "這些開關決定索引覆蓋什麼內容，以及檢索是否在基礎向量召回之外繼續擴展。",
   ],
   "config.agentSettings.memorySearchTuningTitle": [
-    "Ranking Tuning",
-    "排序调参",
-    "排序調參",
+    "Tuning",
+    "调参",
+    "調參",
   ],
   "config.agentSettings.memorySearchTuningDesc": [
     "Touch these numbers only when retrieval quality needs explicit diversity or recency tuning.",
@@ -1773,9 +1868,9 @@ const BASE_DICT: Record<string, string[]> = {
     "只有在檢索品質確實需要人工干預時，再改這裡的多樣性與時間偏置參數。",
   ],
   "config.agentSettings.memorySearchCorpusTitle": [
-    "Indexed Inputs",
-    "索引输入",
-    "索引輸入",
+    "Corpus",
+    "语料",
+    "語料",
   ],
   "config.agentSettings.memorySearchCorpusDesc": [
     "Point memory search at extra folders and source pools when the default corpus is not enough.",

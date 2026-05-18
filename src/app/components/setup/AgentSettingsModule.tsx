@@ -399,37 +399,214 @@ function ScopeFieldCard({
   );
 }
 
-function MemorySearchSubsection({
-  icon,
+function ScopeSection({
   title,
   description,
   children,
-  className = "",
 }: {
-  icon: ReactNode;
   title: string;
   description: string;
   children: ReactNode;
-  className?: string;
 }) {
   return (
-    <div
-      className={`rounded-2xl border border-white/70 bg-white/70 p-4 space-y-4 dark:border-slate-800 dark:bg-slate-950/70 ${className}`}
-    >
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 text-slate-400 dark:text-slate-500">{icon}</div>
-        <div className="min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-            {title}
-          </div>
-          <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
-            {description}
-          </p>
-        </div>
+    <section className="space-y-4">
+      <div>
+        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+          {title}
+        </h4>
+        <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+          {description}
+        </p>
       </div>
       {children}
+    </section>
+  );
+}
+
+function OverrideFieldRow({
+  step,
+  icon,
+  title,
+  hint,
+  metadata,
+  schema,
+  loading = false,
+  children,
+}: {
+  step: string;
+  icon: ReactNode;
+  title: string;
+  hint: string;
+  metadata?: GatewayAgentSettingsFieldMetadata | null;
+  schema?: GatewayConfigSchemaLookupResult | null;
+  loading?: boolean;
+  children: ReactNode;
+}) {
+  const tone = metadata?.source === "universal_defaults" ? "violet" : "emerald";
+  const toneClasses =
+    tone === "violet"
+      ? {
+          step:
+            "bg-violet-500 text-white shadow-violet-500/25 dark:bg-violet-400 dark:text-slate-950",
+          icon:
+            "bg-violet-100 text-violet-700 dark:bg-violet-950/70 dark:text-violet-300",
+          title: "text-violet-700 dark:text-violet-300",
+          shell:
+            "border-violet-200/60 bg-white/80 dark:border-violet-900/40 dark:bg-slate-950/45",
+        }
+      : {
+          step:
+            "bg-emerald-500 text-white shadow-emerald-500/25 dark:bg-emerald-400 dark:text-slate-950",
+          icon:
+            "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300",
+          title: "text-emerald-700 dark:text-emerald-300",
+          shell:
+            "border-emerald-200/60 bg-white/80 dark:border-emerald-900/40 dark:bg-slate-950/45",
+        };
+
+  return (
+    <div className="grid gap-4 py-4 xl:grid-cols-[16rem_minmax(0,1fr)]">
+      <div className="flex items-start gap-3">
+        <div
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-xs font-bold shadow-lg ${toneClasses.step}`}
+        >
+          {step}
+        </div>
+        <div className="min-w-0">
+          <div
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${toneClasses.icon}`}
+          >
+            {icon}
+          </div>
+          <div
+            className={`mt-3 text-xs font-semibold uppercase tracking-[0.18em] ${toneClasses.title}`}
+          >
+            {title}
+          </div>
+          <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+            {hint}
+          </p>
+          {schema ? (
+            <div className="mt-3">
+              <ConfigSchemaSummary
+                schema={schema}
+                loading={loading}
+                variant="compact"
+              />
+            </div>
+          ) : null}
+          <AgentSettingsFieldMetadataSummary metadata={metadata} />
+        </div>
+      </div>
+      <div className={`min-w-0 rounded-2xl border p-3 ${toneClasses.shell}`}>
+        {children}
+      </div>
     </div>
   );
+}
+
+const MEMORY_SEARCH_SECTION_TONES = {
+  sky: {
+    shell:
+      "border-sky-100 bg-gradient-to-br from-sky-50/95 via-white/80 to-white/70 dark:border-sky-950/60 dark:from-sky-950/30 dark:via-slate-950/80 dark:to-slate-950/60",
+    marker:
+      "bg-sky-500 text-white shadow-sky-500/25 dark:bg-sky-400 dark:text-slate-950",
+    icon: "bg-sky-100 text-sky-700 dark:bg-sky-950/70 dark:text-sky-300",
+  },
+  cyan: {
+    shell:
+      "border-cyan-100 bg-gradient-to-br from-cyan-50/95 via-white/80 to-white/70 dark:border-cyan-950/60 dark:from-cyan-950/30 dark:via-slate-950/80 dark:to-slate-950/60",
+    marker:
+      "bg-cyan-500 text-white shadow-cyan-500/25 dark:bg-cyan-400 dark:text-slate-950",
+    icon: "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/70 dark:text-cyan-300",
+  },
+  emerald: {
+    shell:
+      "border-emerald-100 bg-gradient-to-br from-emerald-50/95 via-white/80 to-white/70 dark:border-emerald-950/60 dark:from-emerald-950/25 dark:via-slate-950/80 dark:to-slate-950/60",
+    marker:
+      "bg-emerald-500 text-white shadow-emerald-500/25 dark:bg-emerald-400 dark:text-slate-950",
+    icon:
+      "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300",
+  },
+  amber: {
+    shell:
+      "border-amber-100 bg-gradient-to-br from-amber-50/95 via-white/80 to-white/70 dark:border-amber-950/60 dark:from-amber-950/25 dark:via-slate-950/80 dark:to-slate-950/60",
+    marker:
+      "bg-amber-500 text-white shadow-amber-500/25 dark:bg-amber-400 dark:text-slate-950",
+    icon: "bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300",
+  },
+  rose: {
+    shell:
+      "border-rose-100 bg-gradient-to-br from-rose-50/95 via-white/80 to-white/70 dark:border-rose-950/60 dark:from-rose-950/25 dark:via-slate-950/80 dark:to-slate-950/60",
+    marker:
+      "bg-rose-500 text-white shadow-rose-500/25 dark:bg-rose-400 dark:text-slate-950",
+    icon: "bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300",
+  },
+  violet: {
+    shell:
+      "border-violet-100 bg-gradient-to-br from-violet-50/95 via-white/80 to-white/70 dark:border-violet-950/60 dark:from-violet-950/30 dark:via-slate-950/80 dark:to-slate-950/60",
+    marker:
+      "bg-violet-500 text-white shadow-violet-500/25 dark:bg-violet-400 dark:text-slate-950",
+    icon:
+      "bg-violet-100 text-violet-700 dark:bg-violet-950/70 dark:text-violet-300",
+  },
+} as const;
+
+function MemorySearchSubsection({
+  icon,
+  step,
+  title,
+  description,
+  children,
+  tone = "violet",
+  className = "",
+}: {
+  icon: ReactNode;
+  step: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+  tone?: keyof typeof MEMORY_SEARCH_SECTION_TONES;
+  className?: string;
+}) {
+  const toneClasses = MEMORY_SEARCH_SECTION_TONES[tone];
+
+  return (
+    <section
+      className={`relative overflow-hidden rounded-3xl border p-4 shadow-sm shadow-slate-950/5 ${toneClasses.shell} ${className}`}
+    >
+      <div className="pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-white/60 blur-2xl dark:bg-white/5" />
+      <div className="relative grid gap-4 xl:grid-cols-[15rem_minmax(0,1fr)]">
+        <div className="flex items-start gap-3">
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl shadow-lg ${toneClasses.marker}`}
+          >
+            <span className="text-xs font-bold">{step}</span>
+          </div>
+          <div className="min-w-0">
+            <div
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${toneClasses.icon}`}
+            >
+              {icon}
+            </div>
+            <div className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">
+              {title}
+            </div>
+            <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              {description}
+            </p>
+          </div>
+        </div>
+        <div className="min-w-0">{children}</div>
+      </div>
+    </section>
+  );
+}
+
+function resolveMemorySearchSectionTone(
+  scope: AgentSettingsScopeId,
+): keyof typeof MEMORY_SEARCH_SECTION_TONES {
+  return scope === "universal_defaults" ? "violet" : "emerald";
 }
 
 function MemorySearchToggleTile({
@@ -438,13 +615,24 @@ function MemorySearchToggleTile({
   checked,
   disabled,
   onChange,
+  tone = "sky",
 }: {
   title: string;
   description: string;
   checked: boolean;
   disabled: boolean;
   onChange: (checked: boolean) => void;
+  tone?: keyof typeof MEMORY_SEARCH_SECTION_TONES;
 }) {
+  const checkTone =
+    tone === "violet"
+      ? "text-violet-600 focus:ring-violet-500"
+      : tone === "emerald"
+        ? "text-emerald-600 focus:ring-emerald-500"
+        : "text-sky-600 focus:ring-sky-500";
+  const accentColor =
+    tone === "violet" ? "#7c3aed" : tone === "emerald" ? "#059669" : "#0284c7";
+
   return (
     <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
       <input
@@ -452,7 +640,8 @@ function MemorySearchToggleTile({
         checked={checked}
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
-        className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+        style={{ accentColor }}
+        className={`mt-1 h-4 w-4 shrink-0 rounded border-slate-300 ${checkTone}`}
       />
       <div className="min-w-0">
         <div className="text-sm font-medium text-slate-700 dark:text-slate-100">
@@ -712,9 +901,8 @@ export function AgentSettingsModule() {
   const saveTruthMessage = isSelectedDefaultAgent
     ? t("config.agentSettings.saveTruthDefault")
     : t("config.agentSettings.saveTruthOverride");
-  const advancedScopeTone = resolveScopeTone(
-    isSelectedDefaultAgent ? "universal_defaults" : "selected_agent_override",
-  );
+  const activeScopeTone = resolveScopeTone(activeScope);
+  const overrideWorkbenchTone = resolveScopeTone("selected_agent_override");
 
   useEffect(() => {
     let cancelled = false;
@@ -883,6 +1071,70 @@ export function AgentSettingsModule() {
   const sandboxScope = deriveAgentSettingsScope(sandboxMetadata);
   const toolsScope = deriveAgentSettingsScope(toolsMetadata);
   const memorySearchScope = deriveAgentSettingsScope(memorySearchMetadata);
+  const scopeCounts = useMemo(() => {
+    const next = {
+      gateway_global: 0,
+      default_agent_routing: 0,
+      universal_defaults: 0,
+      selected_agent_override: 0,
+      mixed: 0,
+    } satisfies Record<AgentSettingsScopeId, number>;
+
+    [
+      workspaceScope,
+      modelScope,
+      agentDirScope,
+      defaultRoutingScope,
+      bindingsScope,
+      groupChatScope,
+      sandboxScope,
+      toolsScope,
+      memorySearchScope,
+    ].forEach((scope) => {
+      next[scope] += 1;
+    });
+
+    return next;
+  }, [
+    agentDirScope,
+    bindingsScope,
+    defaultRoutingScope,
+    groupChatScope,
+    memorySearchScope,
+    modelScope,
+    sandboxScope,
+    toolsScope,
+    workspaceScope,
+  ]);
+  const hasEffectiveFieldsInActiveScope = [
+    workspaceScope,
+    modelScope,
+    agentDirScope,
+  ].includes(activeScope);
+  const hasAdvancedFieldsInActiveScope = [
+    bindingsScope,
+    groupChatScope,
+    sandboxScope,
+    toolsScope,
+  ].includes(activeScope);
+  const activeSchemaErrorEntries = schemaErrorEntries.filter(([path]) => {
+    if (path === ADVANCED_SCHEMA_PATHS.bindings) {
+      return bindingsScope === activeScope;
+    }
+    if (path === ADVANCED_SCHEMA_PATHS.groupChat) {
+      return groupChatScope === activeScope;
+    }
+    if (path === ADVANCED_SCHEMA_PATHS.sandbox) {
+      return sandboxScope === activeScope;
+    }
+    if (path === ADVANCED_SCHEMA_PATHS.tools) {
+      return toolsScope === activeScope;
+    }
+    if (path === ADVANCED_SCHEMA_PATHS.memorySearch) {
+      return memorySearchScope === activeScope;
+    }
+    return false;
+  });
 
   const workspacePatch = buildTextDelta(workspaceDraft, settings?.workspace);
   const modelPatch = buildTextDelta(modelDraft, settings?.model);
@@ -1226,10 +1478,6 @@ export function AgentSettingsModule() {
               </div>
             ) : null}
 
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/30 px-5 py-4 text-sm text-slate-600 dark:text-slate-300">
-                {t("config.agentSettings.resolvedTruth")}
-              </div>
-
             {loadError ? (
               <div className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
                 {t("config.agentSettings.loadFailed")} {loadError}
@@ -1257,6 +1505,7 @@ export function AgentSettingsModule() {
                   activeScope={activeScope}
                   onSelectScope={setActiveScope}
                   layout="lane"
+                  counts={scopeCounts}
                 />
               </div>
             </div>
@@ -1286,97 +1535,169 @@ export function AgentSettingsModule() {
                   </button>
                 </div>
               </div>
-        {[workspaceScope, modelScope, agentDirScope, defaultRoutingScope].some(
-          (scope) => scope === activeScope,
-        ) ? (
+        {hasEffectiveFieldsInActiveScope &&
+        activeScope !== "selected_agent_override" ? (
           <>
-            <div className="space-y-4">
-              <div>
-                <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  {t("config.agentSettings.effectiveSectionTitle")}
-                </h4>
-                <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                  {t("config.agentSettings.effectiveSectionDesc")}
-                </p>
-              </div>
-
+            <ScopeSection
+              title={t("config.agentSettings.effectiveSectionTitle")}
+              description={t("config.agentSettings.effectiveSectionDesc")}
+            >
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ScopeFieldCard
-                  title={t("config.agentSettings.workspace")}
-                  hint={t("config.agentSettings.workspaceHint")}
-                  metadata={workspaceMetadata}
-                >
-                  <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/70 bg-white/70 px-3 py-3 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-400">
-                    <Folder className="w-4 h-4 shrink-0 text-slate-400 dark:text-slate-500" />
-                    {canEdit ? (
-                      <input
-                        type="text"
-                        value={workspaceDraft}
-                        onChange={(event) => setWorkspaceDraft(event.target.value)}
-                        placeholder={t("config.agentSettings.workspacePlaceholder")}
-                        className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
-                      />
-                    ) : (
-                      <span
-                        className={`min-w-0 break-all ${settings?.workspace ? "text-slate-700 dark:text-slate-100" : ""}`}
-                      >
-                        {isLoadingSettings
-                          ? t("config.agentSettings.loading")
-                          : workspaceValue}
-                      </span>
-                    )}
-                  </div>
-                </ScopeFieldCard>
-
-                <ScopeFieldCard
-                  title={t("config.agentSettings.model")}
-                  hint={t("config.agentSettings.modelHint")}
-                  metadata={modelMetadata}
-                >
-                  <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/70 bg-white/70 px-3 py-3 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-400">
-                    <Wrench className="w-4 h-4 shrink-0 text-slate-400 dark:text-slate-500" />
-                    {canEdit ? (
-                      <select
-                        value={modelDraft}
-                        onChange={(event) => setModelDraft(event.target.value)}
-                        className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none [color-scheme:light] focus:border-sky-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:[color-scheme:dark] dark:focus:border-sky-500"
-                      >
-                        <option value="">
-                          {t("config.agentSettings.unset")}
-                        </option>
-                        {unresolvedCurrentModel ? (
-                          <option value={unresolvedCurrentModel} disabled>
-                            {t("config.agentSettings.modelCurrentUnavailable")} {unresolvedCurrentModel}
-                          </option>
-                        ) : null}
-                        {readyModelOptions.map((model) => (
-                          <option key={model} value={model}>
-                            {model}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span
-                        className={`min-w-0 break-all ${settings?.model ? "text-slate-700 dark:text-slate-100" : ""}`}
-                      >
-                        {isLoadingSettings
-                          ? t("config.agentSettings.loading")
-                          : modelValue}
-                      </span>
-                    )}
-                  </div>
-                  {canEdit && readyModelOptions.length === 0 ? (
-                    <div className="mt-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
-                      {t("config.agentSettings.modelNoReadyOptions")}
+                {workspaceScope === activeScope ? (
+                  <ScopeFieldCard
+                    title={t("config.agentSettings.workspace")}
+                    hint={t("config.agentSettings.workspaceHint")}
+                    metadata={workspaceMetadata}
+                  >
+                    <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/70 bg-white/70 px-3 py-3 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-400">
+                      <Folder className="w-4 h-4 shrink-0 text-slate-400 dark:text-slate-500" />
+                      {canEdit ? (
+                        <input
+                          type="text"
+                          value={workspaceDraft}
+                          onChange={(event) => setWorkspaceDraft(event.target.value)}
+                          placeholder={t("config.agentSettings.workspacePlaceholder")}
+                          className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
+                        />
+                      ) : (
+                        <span
+                          className={`min-w-0 break-all ${settings?.workspace ? "text-slate-700 dark:text-slate-100" : ""}`}
+                        >
+                          {isLoadingSettings
+                            ? t("config.agentSettings.loading")
+                            : workspaceValue}
+                        </span>
+                      )}
                     </div>
-                  ) : null}
-                </ScopeFieldCard>
+                  </ScopeFieldCard>
+                ) : null}
 
-                <ScopeFieldCard
-                  title={t("config.agentSettings.agentDir")}
-                  hint={t("config.agentSettings.agentDirHint")}
+                {modelScope === activeScope ? (
+                  <ScopeFieldCard
+                    title={t("config.agentSettings.model")}
+                    hint={t("config.agentSettings.modelHint")}
+                    metadata={modelMetadata}
+                  >
+                    <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/70 bg-white/70 px-3 py-3 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-400">
+                      <Wrench className="w-4 h-4 shrink-0 text-slate-400 dark:text-slate-500" />
+                      {canEdit ? (
+                        <select
+                          value={modelDraft}
+                          onChange={(event) => setModelDraft(event.target.value)}
+                          className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none [color-scheme:light] focus:border-sky-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:[color-scheme:dark] dark:focus:border-sky-500"
+                        >
+                          <option value="">
+                            {t("config.agentSettings.unset")}
+                          </option>
+                          {unresolvedCurrentModel ? (
+                            <option value={unresolvedCurrentModel} disabled>
+                              {t("config.agentSettings.modelCurrentUnavailable")} {unresolvedCurrentModel}
+                            </option>
+                          ) : null}
+                          {readyModelOptions.map((model) => (
+                            <option key={model} value={model}>
+                              {model}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span
+                          className={`min-w-0 break-all ${settings?.model ? "text-slate-700 dark:text-slate-100" : ""}`}
+                        >
+                          {isLoadingSettings
+                            ? t("config.agentSettings.loading")
+                            : modelValue}
+                        </span>
+                      )}
+                    </div>
+                    {canEdit && readyModelOptions.length === 0 ? (
+                      <div className="mt-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
+                        {t("config.agentSettings.modelNoReadyOptions")}
+                      </div>
+                    ) : null}
+                  </ScopeFieldCard>
+                ) : null}
+
+                {agentDirScope === activeScope ? (
+                  <ScopeFieldCard
+                    title={t("config.agentSettings.agentDir")}
+                    hint={t("config.agentSettings.agentDirHint")}
+                    metadata={agentDirMetadata}
+                    className="lg:col-span-2"
+                  >
+                    <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/70 bg-white/70 px-3 py-3 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-400">
+                      <Folder className="w-4 h-4 shrink-0 text-slate-400 dark:text-slate-500" />
+                      {canEdit ? (
+                        <input
+                          type="text"
+                          value={agentDirDraft}
+                          onChange={(event) => setAgentDirDraft(event.target.value)}
+                          placeholder={t("config.agentSettings.agentDirPlaceholder")}
+                          className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
+                        />
+                      ) : (
+                        <span
+                          className={`min-w-0 break-all ${settings?.agentDir ? "text-slate-700 dark:text-slate-100" : ""}`}
+                        >
+                          {isLoadingSettings
+                            ? t("config.agentSettings.loading")
+                            : agentDirValue}
+                        </span>
+                      )}
+                    </div>
+                  </ScopeFieldCard>
+                ) : null}
+              </div>
+            </ScopeSection>
+          </>
+        ) : null}
+
+        {defaultRoutingScope === activeScope ? (
+          <AgentSettingsDefaultRoutingCard
+            canEdit={canEdit}
+            isDefaultDraft={isDefaultDraft}
+            onChange={setIsDefaultDraft}
+            metadata={defaultAgentMetadata}
+          />
+        ) : null}
+
+        {activeScope === "selected_agent_override" ? (
+          <div className={`rounded-3xl border p-5 space-y-5 ${overrideWorkbenchTone.panel}`}>
+            <div>
+              <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                {t("config.agentSettings.selectedOverrideWorkbenchTitle")}
+              </h4>
+              <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                {t("config.agentSettings.selectedOverrideWorkbenchDesc")}
+              </p>
+            </div>
+
+            <div className={`rounded-xl border px-4 py-3 text-sm ${overrideWorkbenchTone.badge}`}>
+              {conditionalScopeHint}
+            </div>
+
+            {activeSchemaErrorEntries.length > 0 ? (
+              <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 space-y-2 text-xs text-amber-800 dark:text-amber-300">
+                <div>{t("config.agentSettings.schemaUnavailable")}</div>
+                <div className="flex flex-col gap-1">
+                  {activeSchemaErrorEntries.map(([path, message]) => (
+                    <div key={path}>
+                      <span className="font-mono">{path}</span>: {message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="relative divide-y divide-emerald-200/70 dark:divide-emerald-900/45">
+              <div className="pointer-events-none absolute bottom-8 left-[2.65rem] top-8 hidden w-px bg-gradient-to-b from-emerald-200 via-teal-200 to-sky-200 dark:from-emerald-900/70 dark:via-teal-900/70 dark:to-sky-900/70 xl:block" />
+              {agentDirScope === activeScope ? (
+                <OverrideFieldRow
+                  step="01"
+                  icon={<Folder className="w-4 h-4" />}
+                  title={t("config.agentSettings.selectedOverrideIdentityTitle")}
+                  hint={t("config.agentSettings.selectedOverrideIdentityDesc")}
                   metadata={agentDirMetadata}
-                  className="lg:col-span-2"
                 >
                   <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/70 bg-white/70 px-3 py-3 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-400">
                     <Folder className="w-4 h-4 shrink-0 text-slate-400 dark:text-slate-500" />
@@ -1398,51 +1719,178 @@ export function AgentSettingsModule() {
                       </span>
                     )}
                   </div>
-                </ScopeFieldCard>
-              </div>
-            </div>
-
-            <AgentSettingsDefaultRoutingCard
-              canEdit={canEdit}
-              isDefaultDraft={isDefaultDraft}
-              onChange={setIsDefaultDraft}
-              metadata={defaultAgentMetadata}
-            />
-          </>
-        ) : null}
-
-        {[bindingsScope, groupChatScope, sandboxScope, toolsScope].some(
-          (scope) => scope === activeScope,
-        ) ? (
-            <div className={`rounded-2xl border p-5 space-y-4 ${advancedScopeTone.panel}`}>
-              <div>
-                <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  {t("config.agentSettings.advancedPatchTitle")}
-                </h4>
-                <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                  {t("config.agentSettings.advancedPatchDesc")}
-                </p>
-              </div>
-
-              <div className={`rounded-xl border px-4 py-3 text-sm ${advancedScopeTone.badge}`}>
-                {conditionalScopeHint}
-              </div>
-
-              {schemaErrorEntries.length > 0 ? (
-                <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 space-y-2 text-xs text-amber-800 dark:text-amber-300">
-                  <div>{t("config.agentSettings.schemaUnavailable")}</div>
-                  <div className="flex flex-col gap-1">
-                    {schemaErrorEntries.map(([path, message]) => (
-                      <div key={path}>
-                        <span className="font-mono">{path}</span>: {message}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                </OverrideFieldRow>
               ) : null}
 
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <label className={`flex flex-col gap-3 rounded-2xl border p-4 xl:col-span-2 ${bindingsTone.panel}`}>
+              {groupChatScope === activeScope ? (
+                <OverrideFieldRow
+                  step="02"
+                  icon={<ListTree className="w-4 h-4" />}
+                  title={t("config.agentSettings.selectedOverrideCollabTitle")}
+                  hint={t("config.agentSettings.selectedOverrideCollabDesc")}
+                  metadata={groupChatMetadata}
+                  schema={schemas[ADVANCED_SCHEMA_PATHS.groupChat] ?? null}
+                  loading={isLoadingSchemas}
+                >
+                  <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                    {t("config.agentSettings.groupChat")}
+                  </span>
+                  {canEdit ? (
+                    <textarea
+                      value={groupChatDraft}
+                      onChange={(event) => setGroupChatDraft(event.target.value)}
+                      placeholder={t("config.agentSettings.groupChatPlaceholder")}
+                      rows={7}
+                      className={`mt-3 w-full rounded-xl border px-3 py-3 font-mono text-xs leading-6 text-slate-700 outline-none placeholder:text-slate-400 focus:border-sky-400 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500 ${groupChatTone.shell}`}
+                    />
+                  ) : (
+                    <div className={`mt-3 rounded-xl border px-3 py-3 ${groupChatTone.shell}`}>
+                      <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs leading-6 text-slate-700 dark:text-slate-100">
+                        {isLoadingSettings ? t("config.agentSettings.loading") : groupChatValue}
+                      </pre>
+                    </div>
+                  )}
+                  <span className="mt-2 block text-xs text-slate-500 dark:text-slate-400">
+                    {t("config.agentSettings.groupChatHint")}
+                  </span>
+                </OverrideFieldRow>
+              ) : null}
+
+              {toolsScope === activeScope ? (
+                <OverrideFieldRow
+                  step="03"
+                  icon={<Wrench className="w-4 h-4" />}
+                  title={t("config.agentSettings.selectedOverrideToolsTitle")}
+                  hint={t("config.agentSettings.selectedOverrideToolsDesc")}
+                  metadata={toolsMetadata}
+                  schema={schemas[ADVANCED_SCHEMA_PATHS.tools] ?? null}
+                  loading={isLoadingSchemas}
+                >
+                  <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                    {t("config.agentSettings.tools")}
+                  </span>
+                  {canEdit ? (
+                    <textarea
+                      value={toolsDraft}
+                      onChange={(event) => setToolsDraft(event.target.value)}
+                      placeholder={t("config.agentSettings.toolsPlaceholder")}
+                      rows={7}
+                      className={`mt-3 w-full rounded-xl border px-3 py-3 font-mono text-xs leading-6 text-slate-700 outline-none placeholder:text-slate-400 focus:border-sky-400 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-500 ${toolsTone.shell}`}
+                    />
+                  ) : (
+                    <div className={`mt-3 rounded-xl border px-3 py-3 ${toolsTone.shell}`}>
+                      <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs leading-6 text-slate-700 dark:text-slate-100">
+                        {isLoadingSettings ? t("config.agentSettings.loading") : toolsValue}
+                      </pre>
+                    </div>
+                  )}
+                  <span className="mt-2 block text-xs text-slate-500 dark:text-slate-400">
+                    {t("config.agentSettings.toolsHint")}
+                  </span>
+                </OverrideFieldRow>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {activeScope === "universal_defaults" ? (
+          <div className={`rounded-3xl border p-5 space-y-5 ${activeScopeTone.panel}`}>
+            <div>
+              <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                {t("config.agentSettings.universalDefaultsWorkbenchTitle")}
+              </h4>
+              <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                {t("config.agentSettings.universalDefaultsWorkbenchDesc")}
+              </p>
+            </div>
+
+            <div className={`rounded-xl border px-4 py-3 text-sm ${activeScopeTone.badge}`}>
+              {conditionalScopeHint}
+            </div>
+
+            {activeSchemaErrorEntries.length > 0 ? (
+              <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 space-y-2 text-xs text-amber-800 dark:text-amber-300">
+                <div>{t("config.agentSettings.schemaUnavailable")}</div>
+                <div className="flex flex-col gap-1">
+                  {activeSchemaErrorEntries.map(([path, message]) => (
+                    <div key={path}>
+                      <span className="font-mono">{path}</span>: {message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="relative divide-y divide-violet-200/70 dark:divide-violet-900/45">
+              <div className="pointer-events-none absolute bottom-8 left-[2.65rem] top-8 hidden w-px bg-gradient-to-b from-violet-200 via-purple-200 to-fuchsia-200 dark:from-violet-900/70 dark:via-purple-900/70 dark:to-fuchsia-900/70 xl:block" />
+              {sandboxScope === activeScope ? (
+                <OverrideFieldRow
+                  step="01"
+                  icon={<ShieldAlert className="w-4 h-4" />}
+                  title={t("config.agentSettings.sandbox")}
+                  hint={t("config.agentSettings.sandboxHint")}
+                  metadata={sandboxMetadata}
+                  schema={schemas[ADVANCED_SCHEMA_PATHS.sandbox] ?? null}
+                  loading={isLoadingSchemas}
+                >
+                  <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                    {t("config.agentSettings.sandbox")}
+                  </span>
+                  {canEdit ? (
+                    <textarea
+                      value={sandboxDraft}
+                      onChange={(event) => setSandboxDraft(event.target.value)}
+                      placeholder={t("config.agentSettings.sandboxPlaceholder")}
+                      rows={7}
+                      className={`mt-3 w-full rounded-xl border px-3 py-3 font-mono text-xs leading-6 text-slate-700 outline-none placeholder:text-slate-400 focus:border-violet-400 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-violet-500 ${activeScopeTone.shell}`}
+                    />
+                  ) : (
+                    <div className={`mt-3 rounded-xl border px-3 py-3 ${activeScopeTone.shell}`}>
+                      <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs leading-6 text-slate-700 dark:text-slate-100">
+                        {isLoadingSettings ? t("config.agentSettings.loading") : sandboxValue}
+                      </pre>
+                    </div>
+                  )}
+                  <span className="mt-2 block text-xs text-slate-500 dark:text-slate-400">
+                    {t("config.agentSettings.sandboxHint")}
+                  </span>
+                </OverrideFieldRow>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {hasAdvancedFieldsInActiveScope &&
+        activeScope !== "selected_agent_override" &&
+        activeScope !== "universal_defaults" ? (
+          <div className={`rounded-2xl border p-5 space-y-4 ${activeScopeTone.panel}`}>
+            <div>
+              <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                {t("config.agentSettings.advancedPatchTitle")}
+              </h4>
+              <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                {t("config.agentSettings.advancedPatchDesc")}
+              </p>
+            </div>
+
+            {activeSchemaErrorEntries.length > 0 ? (
+              <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 space-y-2 text-xs text-amber-800 dark:text-amber-300">
+                <div>{t("config.agentSettings.schemaUnavailable")}</div>
+                <div className="flex flex-col gap-1">
+                  {activeSchemaErrorEntries.map(([path, message]) => (
+                    <div key={path}>
+                      <span className="font-mono">{path}</span>: {message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {bindingsScope === activeScope ? (
+                <label
+                  className={`flex flex-col gap-3 rounded-2xl border p-4 xl:col-span-2 ${bindingsTone.panel}`}
+                >
                   <ConfigSchemaSummary
                     schema={schemas[ADVANCED_SCHEMA_PATHS.bindings] ?? null}
                     loading={isLoadingSchemas}
@@ -1470,7 +1918,9 @@ export function AgentSettingsModule() {
                   </span>
                   <AgentSettingsFieldMetadataSummary metadata={bindingsMetadata} />
                 </label>
+              ) : null}
 
+              {groupChatScope === activeScope ? (
                 <label className={`flex flex-col gap-3 rounded-2xl border p-4 ${groupChatTone.panel}`}>
                   <ConfigSchemaSummary
                     schema={schemas[ADVANCED_SCHEMA_PATHS.groupChat] ?? null}
@@ -1499,7 +1949,9 @@ export function AgentSettingsModule() {
                   </span>
                   <AgentSettingsFieldMetadataSummary metadata={groupChatMetadata} />
                 </label>
+              ) : null}
 
+              {sandboxScope === activeScope ? (
                 <label className={`flex flex-col gap-3 rounded-2xl border p-4 ${sandboxTone.panel}`}>
                   <ConfigSchemaSummary
                     schema={schemas[ADVANCED_SCHEMA_PATHS.sandbox] ?? null}
@@ -1528,7 +1980,9 @@ export function AgentSettingsModule() {
                   </span>
                   <AgentSettingsFieldMetadataSummary metadata={sandboxMetadata} />
                 </label>
+              ) : null}
 
+              {toolsScope === activeScope ? (
                 <label className={`flex flex-col gap-3 rounded-2xl border p-4 ${toolsTone.panel}`}>
                   <ConfigSchemaSummary
                     schema={schemas[ADVANCED_SCHEMA_PATHS.tools] ?? null}
@@ -1557,13 +2011,15 @@ export function AgentSettingsModule() {
                   </span>
                   <AgentSettingsFieldMetadataSummary metadata={toolsMetadata} />
                 </label>
-
-              </div>
+              ) : null}
             </div>
+          </div>
         ) : null}
 
         {memorySearchScope === activeScope ? (
-            <div className={`rounded-2xl border p-5 space-y-4 ${memorySearchTone.panel}`}>
+          <div
+            className={`rounded-3xl border p-5 space-y-5 ${memorySearchTone.panel}`}
+          >
               <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                 <div className="min-w-0">
                   <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -1577,15 +2033,30 @@ export function AgentSettingsModule() {
                   <ConfigSchemaSummary
                     schema={schemas[ADVANCED_SCHEMA_PATHS.memorySearch] ?? null}
                     loading={isLoadingSchemas}
+                    title={t("config.agentSettings.memorySearchSchemaTitle")}
+                    variant="compact"
                   />
                 </div>
               </div>
 
               <AgentSettingsFieldMetadataSummary metadata={memorySearchMetadata} />
 
-              <div className="grid grid-cols-1 xl:grid-cols-[0.78fr_1.22fr] gap-4">
+              {activeSchemaErrorEntries.length > 0 ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-300">
+                  {activeSchemaErrorEntries.map(([path, message]) => (
+                    <div key={path}>
+                      <span className="font-mono">{path}</span>: {message}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="relative space-y-4">
+                <div className="pointer-events-none absolute bottom-8 left-[2.65rem] top-8 hidden w-px bg-gradient-to-b from-violet-200 via-purple-200 to-fuchsia-200 dark:from-violet-900/70 dark:via-purple-900/70 dark:to-fuchsia-900/70 xl:block" />
                 <MemorySearchSubsection
                   icon={<BrainCircuit className="w-4 h-4" />}
+                  step="01"
+                  tone={resolveMemorySearchSectionTone(activeScope)}
                   title={t("config.agentSettings.memorySearchControlTitle")}
                   description={t("config.agentSettings.memorySearchControlDesc")}
                 >
@@ -1600,7 +2071,17 @@ export function AgentSettingsModule() {
                           enabled: event.target.checked,
                         }))
                       }
-                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                      className={`h-4 w-4 rounded border-slate-300 ${
+                        resolveMemorySearchSectionTone(activeScope) === "violet"
+                          ? "text-violet-600 focus:ring-violet-500"
+                          : "text-emerald-600 focus:ring-emerald-500"
+                      }`}
+                      style={{
+                        accentColor:
+                          resolveMemorySearchSectionTone(activeScope) === "violet"
+                            ? "#7c3aed"
+                            : "#059669",
+                      }}
                     />
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-slate-700 dark:text-slate-100">
@@ -1615,10 +2096,12 @@ export function AgentSettingsModule() {
 
                 <MemorySearchSubsection
                   icon={<Database className="w-4 h-4" />}
+                  step="02"
+                  tone={resolveMemorySearchSectionTone(activeScope)}
                   title={t("config.agentSettings.memorySearchProviderBlockTitle")}
                   description={t("config.agentSettings.memorySearchProviderBlockDesc")}
                 >
-                  <div className="grid grid-cols-1 gap-3">
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-[0.8fr_1fr_1.4fr]">
                     <label className="flex flex-col gap-2">
                       <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
                         {t("config.agentSettings.memorySearchProvider")}
@@ -1683,10 +2166,11 @@ export function AgentSettingsModule() {
                     </label>
                   </div>
                 </MemorySearchSubsection>
-              </div>
 
               <MemorySearchSubsection
                 icon={<ListTree className="w-4 h-4" />}
+                step="03"
+                tone={resolveMemorySearchSectionTone(activeScope)}
                 title={t("config.agentSettings.memorySearchBehaviorTitle")}
                 description={t("config.agentSettings.memorySearchBehaviorDesc")}
               >
@@ -1696,6 +2180,7 @@ export function AgentSettingsModule() {
                     description={t("config.agentSettings.memorySearchSessionMemoryHint")}
                     checked={memorySearchDraft.sessionMemoryEnabled}
                     disabled={!canEdit}
+                    tone={resolveMemorySearchSectionTone(activeScope)}
                     onChange={(checked) =>
                       setMemorySearchDraft((current) => ({
                         ...current,
@@ -1708,6 +2193,7 @@ export function AgentSettingsModule() {
                     description={t("config.agentSettings.memorySearchHybridEnabledHint")}
                     checked={memorySearchDraft.hybridEnabled}
                     disabled={!canEdit}
+                    tone={resolveMemorySearchSectionTone(activeScope)}
                     onChange={(checked) =>
                       setMemorySearchDraft((current) => ({
                         ...current,
@@ -1721,6 +2207,7 @@ export function AgentSettingsModule() {
                       description={t("config.agentSettings.memorySearchMmrEnabledHint")}
                       checked={memorySearchDraft.mmrEnabled}
                       disabled={!canEdit}
+                      tone={resolveMemorySearchSectionTone(activeScope)}
                       onChange={(checked) =>
                         setMemorySearchDraft((current) => ({
                           ...current,
@@ -1732,13 +2219,14 @@ export function AgentSettingsModule() {
                 </div>
               </MemorySearchSubsection>
 
-              <div className="grid grid-cols-1 xl:grid-cols-[0.7fr_1.3fr] gap-4">
                 <MemorySearchSubsection
                   icon={<SlidersHorizontal className="w-4 h-4" />}
+                  step="04"
+                  tone={resolveMemorySearchSectionTone(activeScope)}
                   title={t("config.agentSettings.memorySearchTuningTitle")}
                   description={t("config.agentSettings.memorySearchTuningDesc")}
                 >
-                  <div className="grid grid-cols-1 gap-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <label className="flex flex-col gap-2">
                       <span className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
                         {t("config.agentSettings.memorySearchMmr")}
@@ -1787,6 +2275,8 @@ export function AgentSettingsModule() {
 
                 <MemorySearchSubsection
                   icon={<Folder className="w-4 h-4" />}
+                  step="05"
+                  tone={resolveMemorySearchSectionTone(activeScope)}
                   title={t("config.agentSettings.memorySearchCorpusTitle")}
                   description={t("config.agentSettings.memorySearchCorpusDesc")}
                 >
