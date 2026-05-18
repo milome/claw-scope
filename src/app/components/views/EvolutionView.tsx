@@ -24,6 +24,7 @@ import {
   type EvolutionCustomTemplateInput,
   type EvolutionExecuteResult,
   type EvolutionHistoryEntry,
+  type EvolutionOperationType,
   type EvolutionKnowledgeInjectionInput,
   type EvolutionOperationStatusSnapshot,
   type EvolutionPreviewChange,
@@ -120,6 +121,19 @@ function formatTemplateLabel(template: EvolutionTemplateKind | null, t: (key: st
     case "conservative":
     default:
       return t("evo.template.conservative.title");
+  }
+}
+
+function formatOperationTypeLabel(operationType: EvolutionOperationType, t: (key: string, ...args: (string | number)[]) => string) {
+  switch (operationType) {
+    case "custom_transform":
+      return t("evo.historySheet.operation.custom");
+    case "inject_knowledge":
+      return t("evo.historySheet.operation.inject");
+    case "restore_snapshot":
+      return t("evo.historySheet.operation.restore");
+    default:
+      return t("evo.historySheet.operation.optimize");
   }
 }
 
@@ -1772,42 +1786,69 @@ export function EvolutionView() {
             {visibleHistoryEntries.map((entry) => {
               const statusLabel = formatHistoryStatus(entry, t);
               const canRollback = entry.operationKind === "execute" && entry.status === "success";
+              const detailLines = [
+                `${t("evo.historySheet.detail.template")}: ${formatTemplateLabel(entry.template, t)}`,
+                `${t("evo.historySheet.detail.operationType")}: ${formatOperationTypeLabel(entry.operationType, t)}`,
+                `${t("evo.historySheet.detail.sourceDocument")}: ${entry.sourceDocument}`,
+                `${t("evo.historySheet.detail.snapshot")}: ${entry.snapshotId}`,
+                `${t("evo.historySheet.detail.sourceRef")}: ${entry.sourceRef ?? t("evo.reason.none")}`,
+                `${t("evo.historySheet.detail.sourceRefs")}: ${entry.sourceRefs.length > 0 ? entry.sourceRefs.join(", ") : entry.sourceRef ?? t("evo.reason.none")}`,
+                `${t("evo.historySheet.detail.tags")}: ${entry.capabilityTags.length > 0 ? entry.capabilityTags.join(", ") : t("evo.reason.none")}`,
+              ];
               return (
-              <div
-                key={entry.operationId}
-                className="group cursor-pointer rounded-lg border border-slate-200 bg-white p-3 transition-colors hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
-                onClick={() => {
-                  setHistorySheetSelectionId(entry.operationId);
-                  setIsHistorySheetOpen(true);
-                }}
-              >
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{entry.nodeLabel}</span>
-                  <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm ${
-                    entry.status === "failed" || entry.status === "cancelled"
-                      ? "bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-400"
-                      : entry.status === "rolled_back"
-                        ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
-                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
-                  }`}>{statusLabel}</span>
-                </div>
-                <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-500">{renderEvolutionHistorySummary(entry, t)}</div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-500">
-                  <span>{formatRelativeTime(entry.createdAtMs, t)}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[10px] opacity-70 dark:bg-slate-950">{entry.snapshotId}</span>
-                    {canRollback ? (
-                    <button
-                      onClick={() => void handleRollback(entry)}
-                      className="flex items-center gap-1 font-medium text-sky-600 opacity-0 transition-opacity hover:text-sky-500 group-hover:opacity-100 dark:text-sky-500 dark:hover:text-sky-400"
+                <Tooltip key={entry.operationId}>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="group cursor-pointer rounded-lg border border-slate-200 bg-white p-3 transition-colors hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+                      onClick={() => {
+                        setHistorySheetSelectionId(entry.operationId);
+                        setIsHistorySheetOpen(true);
+                      }}
                     >
-                      <Undo2 className="w-3 h-3" /> {t("evo.hist.rollback")}
-                    </button>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            );
+                      <div className="mb-1.5 flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate text-xs font-medium text-slate-700 dark:text-slate-300">{entry.nodeLabel}</span>
+                        <span
+                          className={`shrink-0 rounded-sm px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${
+                            entry.status === "failed" || entry.status === "cancelled"
+                              ? "bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-400"
+                              : entry.status === "rolled_back"
+                                ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400"
+                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
+                          }`}
+                        >
+                          {statusLabel}
+                        </span>
+                      </div>
+                      <div className="mb-1 truncate text-[11px] text-slate-500 dark:text-slate-500">
+                        {renderEvolutionHistorySummary(entry, t)}
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-500">
+                        <span className="shrink-0">{formatRelativeTime(entry.createdAtMs, t)}</span>
+                        {canRollback ? (
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleRollback(entry);
+                            }}
+                            className="ml-auto flex items-center gap-1 font-medium text-sky-600 opacity-0 transition-opacity hover:text-sky-500 group-hover:opacity-100 dark:text-sky-500 dark:hover:text-sky-400"
+                          >
+                            <Undo2 className="h-3 w-3" /> {t("evo.hist.rollback")}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="left" align="start" sideOffset={8} className="max-w-[360px] space-y-1.5 text-left">
+                    <div className="font-medium">{entry.nodeLabel}</div>
+                    <div>{renderEvolutionHistorySummary(entry, t)}</div>
+                    <div className="border-t border-white/20 pt-1 text-[11px] leading-5 opacity-90">
+                      {detailLines.map((line) => (
+                        <div key={line}>{line}</div>
+                      ))}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              );
             })}
             {!isHistoryLoading && historyEntries.length > RECENT_HISTORY_COLLAPSED_COUNT ? (
               <Button
