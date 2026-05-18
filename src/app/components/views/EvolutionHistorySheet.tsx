@@ -12,6 +12,7 @@ import { useI18n } from "../../contexts/I18nContext";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Input } from "../ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "../ui/sheet";
 import { buildEvolutionOperatorHealth } from "./evolutionAuditReport";
 import {
@@ -310,8 +311,8 @@ export function EvolutionHistorySheet({
           </div>
         </SheetHeader>
 
-        <div className="grid h-full min-h-0 grid-cols-[360px_minmax(0,1fr)]">
-          <div className="border-r border-slate-200 px-5 py-5 dark:border-slate-800">
+        <div className="grid min-h-0 flex-1 grid-cols-[360px_minmax(0,1fr)]">
+          <div className="flex min-h-0 flex-col overflow-hidden border-r border-slate-200 px-5 py-5 dark:border-slate-800">
             <div className="mb-4 grid gap-3">
               <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3.5 dark:border-slate-800 dark:bg-slate-900/70">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
@@ -403,7 +404,7 @@ export function EvolutionHistorySheet({
               </div>
             </div>
 
-            <div className="min-h-0 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
               {filteredEntries.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
                   {t("evo.historySheet.empty.filtered")}
@@ -411,37 +412,51 @@ export function EvolutionHistorySheet({
               ) : null}
               {filteredEntries.map((entry) => {
                 const isSelected = entry.operationId === selectedEntry?.operationId;
-                const canRollback = entry.operationKind === "execute" && entry.status === "success";
+                const detailLines = [
+                  `${t("evo.historySheet.detail.template")}: ${formatTemplateLabel(entry.template, t)}`,
+                  `${t("evo.historySheet.detail.operationType")}: ${formatOperationTypeLabel(entry.operationType, t)}`,
+                  `${t("evo.historySheet.detail.sourceDocument")}: ${entry.sourceDocument}`,
+                  `${t("evo.historySheet.detail.snapshot")}: ${entry.snapshotId}`,
+                  `${t("evo.historySheet.detail.sourceRef")}: ${entry.sourceRef ?? t("evo.reason.none")}`,
+                  `${t("evo.historySheet.detail.sourceRefs")}: ${entry.sourceRefs.length > 0 ? entry.sourceRefs.join(", ") : entry.sourceRef ?? t("evo.reason.none")}`,
+                  `${t("evo.historySheet.detail.tags")}: ${entry.capabilityTags.length > 0 ? entry.capabilityTags.join(", ") : t("evo.reason.none")}`,
+                ];
                 return (
-                  <button
-                    key={entry.operationId}
-                    type="button"
-                    onClick={() => onSelectedOperationIdChange(entry.operationId)}
-                    className={`w-full rounded-xl border p-3 text-left transition-colors ${
-                      isSelected
-                        ? "border-sky-300 bg-sky-50 shadow-sm dark:border-sky-700 dark:bg-sky-950/20"
-                        : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/70 dark:hover:border-slate-700"
-                    }`}
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{entry.nodeLabel}</span>
-                      <Badge className={statusTone(entry.status)}>{formatStatusLabel(entry.status, t)}</Badge>
-                    </div>
-                    <div className="mb-1 text-[11px] text-slate-500 dark:text-slate-400">{renderEvolutionHistorySummary(entry, t)}</div>
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-                      <span>{formatTemplateLabel(entry.template, t)}</span>
-                      <span>·</span>
-                      <span>{formatOperationTypeLabel(entry.operationType, t)}</span>
-                      <span>·</span>
-                      <span>{formatRelativeTime(entry.createdAtMs, t)}</span>
-                    </div>
-                    {canRollback ? (
-                      <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 dark:text-sky-400">
-                        <Undo2 className="h-3 w-3" />
-                        {t("evo.historySheet.rollback.available")}
+                  <Tooltip key={entry.operationId}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => onSelectedOperationIdChange(entry.operationId)}
+                        className={`group w-full rounded-xl border p-3 text-left transition-colors ${
+                          isSelected
+                            ? "border-sky-300 bg-sky-50 shadow-sm dark:border-sky-700 dark:bg-sky-950/20"
+                            : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/70 dark:hover:border-slate-700"
+                        }`}
+                      >
+                        <div className="mb-1.5 flex items-center justify-between gap-3">
+                          <span className="min-w-0 truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                            {entry.nodeLabel}
+                          </span>
+                          <Badge className={statusTone(entry.status)}>{formatStatusLabel(entry.status, t)}</Badge>
+                        </div>
+                        <div className="mb-1 truncate text-[11px] text-slate-500 dark:text-slate-400">
+                          {renderEvolutionHistorySummary(entry, t)}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {formatRelativeTime(entry.createdAtMs, t)}
+                        </div>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" align="start" sideOffset={8} className="max-w-[360px] space-y-1.5 text-left">
+                      <div className="font-medium">{entry.nodeLabel}</div>
+                      <div className="break-words">{renderEvolutionHistorySummary(entry, t)}</div>
+                      <div className="break-words border-t border-white/20 pt-1 text-[11px] leading-5 opacity-90">
+                        {detailLines.map((line) => (
+                          <div key={line}>{line}</div>
+                        ))}
                       </div>
-                    ) : null}
-                  </button>
+                    </TooltipContent>
+                  </Tooltip>
                 );
               })}
             </div>

@@ -13,10 +13,12 @@ export function AgentSettingsScopeLegend({
   activeScope,
   onSelectScope,
   layout = "grid",
+  counts,
 }: {
   activeScope?: AgentSettingsScopeId | null;
   onSelectScope?: (scope: AgentSettingsScopeId) => void;
   layout?: "grid" | "lane";
+  counts?: Partial<Record<AgentSettingsScopeId, number>>;
 }) {
   const { t } = useI18n();
   const isLane = layout === "lane";
@@ -59,10 +61,10 @@ export function AgentSettingsScopeLegend({
       <div className={isLane ? "space-y-4" : "p-6 md:p-7 space-y-4"}>
         <div>
           <h3 className="text-[15px] font-semibold mb-1.5">
-            {t("config.agentSettings.scopeLegendTitle")}
+            {t("config.agentSettings.scopeNavigatorTitle")}
           </h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 leading-6">
-            {t("config.agentSettings.scopeLegendDesc")}
+          <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+            {t("config.agentSettings.scopeNavigatorDesc")}
           </p>
         </div>
         <div
@@ -97,8 +99,20 @@ export function AgentSettingsScopeLegend({
               >
                 {item.title}
               </div>
-              <div className={isLane ? "text-xs leading-5" : "text-sm leading-6"}>
+              <div
+                className={
+                  isLane
+                    ? "line-clamp-2 text-xs leading-5"
+                    : "line-clamp-2 text-sm leading-6"
+                }
+              >
                 {item.desc}
+              </div>
+              <div className="mt-2 text-[11px] font-semibold opacity-80">
+                {t(
+                  "config.agentSettings.scopeFieldCount",
+                  counts?.[item.id] ?? 0,
+                )}
               </div>
             </button>
           ))}

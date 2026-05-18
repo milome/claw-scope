@@ -32,7 +32,8 @@ export function AgentSettingsDefaultRoutingCard({
           checked={isDefaultDraft}
           disabled={!canEdit}
           onChange={(event) => onChange(event.target.checked)}
-          className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+          style={{ accentColor: "#d97706" }}
+          className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
         />
         <div className="min-w-0">
           <div className="text-sm font-medium text-slate-700 dark:text-slate-100">

@@ -257,7 +257,7 @@ export function ArchiveDiagnosticsLayout({
 }) {
   const { t } = useOptionalI18n();
   return (
-    <div className="absolute inset-y-0 right-0 z-20 w-full max-w-xl overflow-hidden border-l border-slate-800 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] p-5 shadow-[0_24px_64px_rgba(2,6,23,0.55)] backdrop-blur-xl">
+    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-xl overflow-hidden border-l border-slate-800 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] p-5 shadow-[0_24px_64px_rgba(2,6,23,0.55)] backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3 rounded-[24px] border border-slate-800/90 bg-slate-950/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(148,163,184,0.08)]">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-slate-100">{title}</div>
@@ -270,7 +270,7 @@ export function ArchiveDiagnosticsLayout({
           {t("common.close")}
         </button>
       </div>
-      <div className="mt-4 h-[calc(100vh-120px)] space-y-3 overflow-y-auto pr-2 pb-8">{children}</div>
+      <div className="mt-4 h-[calc(100dvh-120px)] space-y-3 overflow-y-auto pr-2 pb-8">{children}</div>
     </div>
   );
 }
@@ -335,7 +335,7 @@ export function ArchiveDrawer({
   children: ReactNode;
 }) {
   return (
-    <div className="absolute inset-0 z-20 bg-slate-950/40 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-[2px]">
       {children}
     </div>
   );
