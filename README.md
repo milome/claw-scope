@@ -1,7 +1,7 @@
 # ClawScope
 
 <p align="center">
-  <img src="public/images/covers/clawscope-cover-v4-animated-en.webp" alt="ClawScope cover" width="100%" />
+  <img src="public/images/covers/clawscope-cover-v5-animated-en.webp" alt="ClawScope cover" width="100%" />
 </p>
 
 **Memory Made Visible, Evolution Enabled** · [中文](README.zh.md)
@@ -16,6 +16,12 @@ An OpenClaw memory and evolution management tool — a cross-platform desktop ap
 - **Evolution Tracking** — Review and trace OpenClaw evolution history, generate audit reports
 - **Configuration Management** — Centrally manage OpenClaw node configurations and state
 - **Cross-Platform** — Native desktop app for Windows / macOS / Linux
+
+## Architecture Overview
+
+ClawScope is a local-first desktop control plane: React renders the memory, configuration, and evolution workspaces; Tauri IPC forwards UI actions into the Rust command layer; and Rust talks to OpenClaw Gateway over WebSocket to access agents, memory, configuration, and evolution targets. Local JSON storage only keeps connection identity, endpoints, audit history, and snapshots for reconnect, traceability, and rollback.
+
+![ClawScope system architecture](public/images/diagrams/clawscope-system-architecture.svg)
 
 ## Quick Start
 
