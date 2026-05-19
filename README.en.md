@@ -4,7 +4,7 @@
   <img src="public/images/covers/clawscope-cover-v3-animated-en.webp" alt="ClawScope cover" width="100%" />
 </p>
 
-**Memory Made Visible, Evolution Enabled** · [中文](README.md)
+**Memory Made Visible, Evolution Enabled** · [中文](README.zh.md)
 
 An OpenClaw memory and evolution management tool — a cross-platform desktop app built with Tauri 2 + Rust.
 
