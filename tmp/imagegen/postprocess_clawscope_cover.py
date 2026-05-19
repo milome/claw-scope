@@ -14,7 +14,7 @@ ICON = ROOT / "icon-source.png"
 OUT_DIR = ROOT / "public/images/covers"
 LOCALE = os.environ.get("COVER_LOCALE", "zh").strip().lower()
 IS_EN = LOCALE in {"en", "eng", "english"}
-OUTPUT_VERSION = "v4"
+OUTPUT_VERSION = os.environ.get("COVER_VERSION", "v4").strip() or "v4"
 OUTPUT_SUFFIX = "-en" if IS_EN else ""
 OUT_STATIC = OUT_DIR / f"clawscope-cover-{OUTPUT_VERSION}-final{OUTPUT_SUFFIX}.png"
 OUT_WEBP = OUT_DIR / f"clawscope-cover-{OUTPUT_VERSION}-animated{OUTPUT_SUFFIX}.webp"
@@ -246,7 +246,7 @@ def draw_typography(base: Image.Image, scale: float) -> None:
 
     draw = ImageDraw.Draw(base)
     title_font = font(LATIN_FONT_BOLD, max(24, int(286 * scale)))
-    slogan_font = font(LATIN_FONT_BOLD if IS_EN else SC_FONT, max(20, int((98 if IS_EN else 116) * scale)))
+    slogan_font = font(LATIN_FONT if IS_EN else SC_FONT, max(20, int((98 if IS_EN else 116) * scale)))
     sub_font = font(LATIN_FONT if IS_EN else SC_FONT, max(12, int((60 if IS_EN else 68) * scale)))
     label_font = font(LATIN_FONT_BOLD, max(10, int(42 * scale)))
 
@@ -280,8 +280,9 @@ def draw_typography(base: Image.Image, scale: float) -> None:
     slogan = "Memory Made Visible, Evolution Enabled" if IS_EN else "记忆可见，进化可期"
     sy = y + 370 * scale
     slogan_color = (4, 50, 76, 255)
-    # Same-color micro-offsets create weight without a visible shadow or outline.
-    for dx, dy in ((0, 0), (1 * scale, 0), (0, 1 * scale), (1 * scale, 1 * scale)):
+    slogan_offsets = ((0, 0),) if IS_EN else ((0, 0), (1 * scale, 0), (0, 1 * scale), (1 * scale, 1 * scale))
+    # Chinese glyphs need slight reinforcement at README scale; English stays lighter.
+    for dx, dy in slogan_offsets:
         draw.text((x + dx, sy + dy), slogan, font=slogan_font, fill=slogan_color)
 
     sub = (
