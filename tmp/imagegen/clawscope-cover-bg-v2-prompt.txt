@@ -1,0 +1,48 @@
+Use case: ads-marketing
+Asset type: GitHub README / project cover banner
+
+Primary request:
+Create a premium hero cover background for a desktop developer tool named "ClawScope". The final exact project icon will be composited later in post-production, so do not redraw, imitate, distort, reinterpret, or generate the icon/logo. The image should feel like a vibrant dark-mode macOS product poster: high-end, colorful, playful, technical, and memorable, but not like a rigid enterprise control room.
+
+Input image:
+If Image 1 is provided, treat it only as a brand mood reference for color energy and personality. Do not reproduce or redraw the icon.
+
+Brand interpretation:
+ClawScope is a memory visibility and agent evolution desktop app. It should feel like a polished macOS productivity tool for exploring memory, timelines, semantic search, knowledge graphs, and evolution diffs. The tone is smart, lively, precise, and approachable, not cold or militarized.
+
+Visual direction:
+Use a rich dark-mode foundation, but avoid monochrome black. Build the scene with deep midnight blue, ink teal, soft slate, and subtle graphite gradients, energized by colorful semantic accents: cyan/sky blue, coral red, emerald green, violet, amber, and rose. The color system should feel diverse and alive, echoing a modern app UI with multiple feature modules.
+
+Icon landing zone:
+Reserve a natural icon docking area on the left-center of the canvas for the exact original project icon to be composited later. The safe zone should be approximately 620x620 px on a 3840x2160 canvas, centered around x=900, y=1080, designed to receive a 512x512 rounded-square icon with 50-70 px breathing room.
+The landing area should not look like an empty acrylic panel or placeholder box. Instead, create a subtle soft halo, gentle cyan/coral ambient glow, and a natural shadow-receiving surface so the real icon will feel integrated after compositing. Keep this zone clean, uncluttered, and free of lines crossing behind the icon. Do not draw any fake icon, logo frame, symbol, app mark, or placeholder graphic inside it.
+
+Scene/backdrop:
+A refined dark-mode spatial desktop interface, with floating rounded app cards, soft layered surfaces, memory timeline strips, small semantic graph nodes, colorful knowledge arcs, diff-like green/red accent bands, and delicate data paths. The visual language should resemble a beautiful product launch image for a macOS developer tool, not a sci-fi command center.
+
+Composition/framing:
+16:9 wide banner. Left-center is the reserved icon landing zone. From the icon zone, let the visual energy flow toward the right side through colorful memory nodes, timeline fragments, knowledge graph ribbons, and clean UI card layers. Reserve clean negative space on the right half for post-production typography: "ClawScope" and "记忆可见，进化可期". Do not render any text in the image.
+
+Lighting/mood:
+Premium dark-mode lighting with depth, but lively and clear. Use soft studio glow, subtle rim light, colorful reflections, and gentle atmospheric gradients. The image should feel vivid, modern, and optimistic, not gloomy.
+
+Materials/textures:
+Soft frosted UI surfaces, rounded cards, subtle grain, luminous vector-like paths, delicate grid hints, small colorful particles, polished but lightweight macOS-style translucency. Avoid heavy acrylic blocks.
+
+Color palette:
+Deep midnight blue, ink teal, slate, soft graphite, bright cyan/sky blue, coral red from the icon mood, emerald green, violet, amber, rose, restrained silver highlights. No purple dominance. No flat black dominance.
+
+Text:
+No rendered text. No fake UI labels. No pseudo text. Leave clean space for exact typography to be added later.
+
+Constraints:
+Do not include any logo, icon, app mark, fake text, watermark, UI screenshot, humans, animals, claws, cartoon mascot, hacker imagery, terminal wall, surveillance dashboard, or sci-fi cockpit. Do not create a visible empty badge panel. The reserved icon area must remain clean and natural for exact compositing.
+
+Avoid:
+monochrome dark control center, cyberpunk clutter, cheap sci-fi, blue-black corporate SOC dashboard, hard acrylic capsule, giant lens flare, fake glass pedestal, generic AI network background, noisy background, distorted symbols, illegible pseudo text, purple-on-black cliché, overly serious military/operations-room mood.
+
+Quality:
+high
+
+Size:
+3840x2160

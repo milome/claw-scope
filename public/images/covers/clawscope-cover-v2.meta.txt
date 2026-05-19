@@ -1,0 +1,12 @@
+background=D:\Dev\claw-scope\public\images\covers\clawscope-cover-bg-v2.png
+icon=D:\Dev\claw-scope\icon-source.png
+output=D:\Dev\claw-scope\public\images\covers\clawscope-cover-v2.png
+canvas=3840x2160
+icon_compositing=original 512x512 pixels, no resize, no crop, no recolor, no model redraw
+icon_size=(512, 512)
+icon_center=(920, 1100)
+icon_top_left=(664, 844)
+title=ClawScope
+tagline=记忆可见，进化可期
+title_font=C:\Windows\Fonts\segoeuib.ttf
+tagline_font=C:\Windows\Fonts\NotoSansSC-VF.ttf

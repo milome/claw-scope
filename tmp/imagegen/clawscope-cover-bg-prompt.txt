@@ -1,0 +1,18 @@
+Use case: ads-marketing
+Asset type: GitHub README / project cover banner
+Primary request: Create a premium hero cover background for a desktop developer tool named "ClawScope". The final project icon will be composited later as an exact original image, so do not redraw, imitate, distort, transform, or generate the logo/icon. Leave a clean central-left glass badge area reserved for the exact icon overlay.
+
+Input image: Image 1 is a brand reference only. Use it only to infer the project's visual language, geometry, color temperament, and technology mood. Do not reproduce, redraw, modify, or embed the icon from the input image.
+
+Scene/backdrop: A refined Apple-style technology cover with a dark polished spatial interface, subtle depth layers, translucent glass panels, soft metallic surfaces, and a high-end macOS product-launch feeling.
+Subject: ClawScope as a memory visibility and agent evolution control center; abstract visual metaphors of memory nodes, knowledge graph arcs, audit trails, and a precise observation lens.
+Style/medium: Premium 3D editorial product render, Apple keynote aesthetic, clean high-end technology visual, cinematic but restrained.
+Composition/framing: 16:9 wide banner. Reserve a 360x360 px circular or rounded-square glass badge area on the left-center for the exact project icon to be composited later. Keep the reserved area empty, clean, uncluttered, and visually prominent. Put the main visual energy flowing from the icon area toward the right side with elegant node networks and luminous interface depth.
+Lighting/mood: Soft studio lighting, dark graphite background, subtle cyan and blue highlights, controlled rim light, polished glass reflections, strong depth without clutter.
+Color palette: Deep slate black, graphite, frosted glass, cyan-blue glow, small emerald accents, restrained silver highlights. Avoid purple-dominant styling.
+Materials/textures: Frosted glass, anodized aluminum, subtle etched grid, luminous particles, thin vector-like data paths, premium macOS-style translucency.
+Text: No rendered text inside the image. Leave clean negative space on the right for post-production typography: "ClawScope" and "记忆可见，进化可期".
+Constraints: Do not include any logo, icon, app mark, fake text, watermark, UI screenshots, humans, animals, claws, cartoon mascots, or generic hacker imagery. The reserved icon badge must remain empty and clean for exact compositing.
+Avoid: cheap sci-fi, cyberpunk clutter, neon overload, stock-photo look, noisy backgrounds, distorted symbols, illegible pseudo text, oversized lens flare, purple-on-black cliche.
+Quality: high
+Size: 3840x2160
