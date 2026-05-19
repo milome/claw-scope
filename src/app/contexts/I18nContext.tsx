@@ -2134,6 +2134,8 @@ const BASE_DICT: Record<string, string[]> = {
     "探测范围",
     "探測範圍",
   ],
+  "memory.footprints.probeStart": ["Start date", "开始日期", "開始日期"],
+  "memory.footprints.probeEnd": ["End date", "结束日期", "結束日期"],
   "memory.footprints.probePlaceholder": [
     "YYYY-MM-DD",
     "YYYY-MM-DD",

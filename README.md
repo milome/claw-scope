@@ -1,7 +1,7 @@
 # ClawScope
 
 <p align="center">
-  <img src="public/images/covers/clawscope-cover-v3-animated-en.webp" alt="ClawScope cover" width="100%" />
+  <img src="public/images/covers/clawscope-cover-v4-animated-en.webp" alt="ClawScope cover" width="100%" />
 </p>
 
 **Memory Made Visible, Evolution Enabled** · [中文](README.zh.md)
@@ -28,7 +28,7 @@ npm run tauri dev
 
 ClawScope connects to OpenClaw through the OpenClaw Gateway. When troubleshooting, verify the Gateway bind mode first, then verify authentication. If TCP / WebSocket cannot connect, the token or password has not been checked yet.
 
-![OpenClaw Gateway binding and authentication flow](public/images/diagrams/openclaw-gateway-auth-binding.svg)
+![OpenClaw Gateway binding and authentication flow](public/images/diagrams/openclaw-gateway-auth-binding-en.svg)
 
 ### Config File And jq
 

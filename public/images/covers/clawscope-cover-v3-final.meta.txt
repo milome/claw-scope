@@ -1,0 +1,12 @@
+ClawScope README cover post-processing
+locale=zh
+background=D:\Dev\claw-scope\public\images\covers\clawscope-cover-bg-v3.png
+icon=D:\Dev\claw-scope\icon-source.png
+static=D:\Dev\claw-scope\public\images\covers\clawscope-cover-v3-final.png
+animated_webp=D:\Dev\claw-scope\public\images\covers\clawscope-cover-v3-animated.webp
+animated_gif=D:\Dev\claw-scope\public\images\covers\clawscope-cover-v3-animated.gif
+canvas=3840x2160
+icon_display=900x900
+icon_center=(860, 1080)
+icon_policy=uniform upscale from icon-source.png, preserve silhouette/proportions/colors/transparency; no redraw or recolor
+motion_language=flowing memory currents, pulsing knowledge nodes, semantic search ripples, OpenClaw ecosystem paths, evolution diff streams

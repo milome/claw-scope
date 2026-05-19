@@ -95,6 +95,19 @@ export function MemoryFootprintsPanel({
     chip: tonePalette.softBadge,
     outline: `${tonePalette.softBadge} bg-transparent`,
   };
+  const formatProbeDateLabel = (date: string) => date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, "$2/$3");
+
+  const formatProbeDateList = (dates: string[], limit = 3) => {
+    if (dates.length === 0) {
+      return [];
+    }
+
+    return dates.slice(0, limit).map(formatProbeDateLabel);
+  };
+
+  const coveredPreview = formatProbeDateList(timelineProbeFeedback.coveredDates);
+  const missingPreviewDates = timelineProbeFeedback.missingDates.slice(0, 6);
+  const probingPreview = formatProbeDateList(timelineProbeFeedback.probingDates);
 
   const highlightSelection = useMemo(() => {
     if (!timelineEntryContent || !selectedHighlightTerm) {
@@ -256,19 +269,25 @@ export function MemoryFootprintsPanel({
                   </button>
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center">
-                  <input
-                    value={timelineProbeRange.startDate}
-                    onChange={(event) => onProbeRangeChange({ ...timelineProbeRange, startDate: event.target.value })}
-                    className={`h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950 ${toneClasses.focus}`}
-                    placeholder={t("memory.footprints.probePlaceholder")}
-                  />
-                  <input
-                    value={timelineProbeRange.endDate}
-                    onChange={(event) => onProbeRangeChange({ ...timelineProbeRange, endDate: event.target.value })}
-                    className={`h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950 ${toneClasses.focus}`}
-                    placeholder={t("memory.footprints.probePlaceholder")}
-                  />
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+                  <label className="grid gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    <span>{t("memory.footprints.probeStart")}</span>
+                    <input
+                      type="date"
+                      value={timelineProbeRange.startDate}
+                      onChange={(event) => onProbeRangeChange({ ...timelineProbeRange, startDate: event.target.value })}
+                      className={`h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950 ${toneClasses.focus}`}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    <span>{t("memory.footprints.probeEnd")}</span>
+                    <input
+                      type="date"
+                      value={timelineProbeRange.endDate}
+                      onChange={(event) => onProbeRangeChange({ ...timelineProbeRange, endDate: event.target.value })}
+                      className={`h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs outline-none dark:border-slate-700 dark:bg-slate-950 ${toneClasses.focus}`}
+                    />
+                  </label>
                   <button
                     onClick={onProbeTimelineRange}
                     className={`inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-xs font-medium text-white ${toneClasses.primary}`}
@@ -285,96 +304,150 @@ export function MemoryFootprintsPanel({
                 </div>
 
                 {isProbeFeedbackExpanded ? (
-                  <div className="grid gap-2 text-[11px] xl:grid-cols-3">
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
-                      {t("memory.footprints.probe.covered")}: {timelineProbeFeedback.coveredDates.length > 0 ? timelineProbeFeedback.coveredDates.join(", ") : t("memory.footprints.probe.none")}
+                  <div className="grid gap-3 text-[11px] xl:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-3 text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-950/35 dark:text-slate-200">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-semibold">{t("memory.footprints.probe.covered")}</div>
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
+                          {timelineProbeFeedback.coveredDates.length}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {coveredPreview.length > 0 ? (
+                          coveredPreview.map((date) => (
+                            <span key={date} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[10px] tabular-nums text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                              {date}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-slate-500 dark:text-slate-400">{t("memory.footprints.probe.none")}</span>
+                        )}
+                        {timelineProbeFeedback.coveredDates.length > coveredPreview.length ? (
+                          <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 font-mono text-[10px] tabular-nums text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                            +{timelineProbeFeedback.coveredDates.length - coveredPreview.length}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
-                      <div>{t("memory.footprints.probe.missing")}:</div>
+                    <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-3 text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-950/35 dark:text-slate-200">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-semibold">{t("memory.footprints.probe.missing")}</div>
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                          {timelineProbeFeedback.missingDates.length}
+                        </span>
+                      </div>
                       {timelineProbeFeedback.missingDates.length > 0 ? (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {timelineProbeFeedback.missingDates.map((date) => (
-                            <div key={date} className="flex items-center gap-2 rounded-full border border-amber-300 bg-white px-2.5 py-1 text-[10px] font-semibold text-amber-700 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {missingPreviewDates.map((date) => {
+                            const formattedDate = formatProbeDateLabel(date);
+                            return (
                               <button
+                                key={date}
                                 type="button"
                                 onClick={() => onRetryProbeDate(date)}
-                                className="transition hover:text-amber-900 dark:hover:text-amber-100"
+                                className="group inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-mono text-[10px] tabular-nums text-amber-700 transition hover:border-amber-300 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300 dark:hover:border-amber-700 dark:hover:bg-amber-950/35"
                               >
-                                {date}
+                                <span>{formattedDate}</span>
+                                {timelineProbeFeedback.failureReasons[date] ? (
+                                  <span className="max-w-[10ch] truncate rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-semibold text-rose-700 dark:bg-slate-900 dark:text-rose-300" title={timelineProbeFeedback.failureReasons[date]}>
+                                    {timelineProbeFeedback.failureReasons[date]}
+                                  </span>
+                                ) : null}
                               </button>
-                              {timelineProbeFeedback.failureReasons[date] ? (
-                                <span className="rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300">
-                                  {timelineProbeFeedback.failureReasons[date]}
-                                </span>
-                              ) : null}
-                            </div>
-                          ))}
+                            );
+                          })}
+                          {timelineProbeFeedback.missingDates.length > missingPreviewDates.length ? (
+                            <span className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 font-mono text-[10px] tabular-nums text-amber-600 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                              +{timelineProbeFeedback.missingDates.length - missingPreviewDates.length}
+                            </span>
+                          ) : null}
                         </div>
                       ) : (
-                        <div className="mt-1">{t("memory.footprints.probe.none")}</div>
+                        <div className="mt-2 text-slate-500 dark:text-slate-400">{t("memory.footprints.probe.none")}</div>
                       )}
                     </div>
-                    <div className={`rounded-lg border px-3 py-2 ${toneClasses.chip}`}>
-                      {t("memory.footprints.probe.probingDays")}: {timelineProbeFeedback.probingDates.length > 0 ? timelineProbeFeedback.probingDates.join(", ") : t("memory.footprints.probe.idleState")}
+                    <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-3 text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-950/35 dark:text-slate-200">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-semibold">{t("memory.footprints.probe.probingDays")}</div>
+                        <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300">
+                          {timelineProbeFeedback.probingDates.length}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {probingPreview.length > 0 ? (
+                          probingPreview.map((date) => (
+                            <span key={date} className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 font-mono text-[10px] tabular-nums text-sky-700 dark:border-sky-800 dark:bg-sky-950/20 dark:text-sky-300">
+                              {date}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-slate-500 dark:text-slate-400">{t("memory.footprints.probe.idleState")}</span>
+                        )}
+                        {timelineProbeFeedback.probingDates.length > probingPreview.length ? (
+                          <span className="rounded-full border border-sky-200 bg-sky-100 px-2 py-0.5 font-mono text-[10px] tabular-nums text-sky-600 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300">
+                            +{timelineProbeFeedback.probingDates.length - probingPreview.length}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{t("memory.footprints.probeHint")}</div>
+                  <div className="text-[11px] leading-5 text-slate-500 dark:text-slate-400">{t("memory.footprints.probeHint")}</div>
                 )}
               </div>
               {timelineError ? <div className="mt-3"><ArchiveNotice tone="error">{timelineError}</ArchiveNotice></div> : null}
             </ArchiveCapsule>
             <div className="min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
-            <ArchiveSectionCard tone={tone}>
-              {filteredFootprintGroups.length === 0 ? (
-                <div className="mx-4 mt-8 flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                    <Footprints className="h-8 w-8 text-slate-400 dark:text-slate-500" />
-                  </div>
-                  <h3 className="mb-1 text-base font-semibold text-slate-900 dark:text-slate-100">{t("memory.footprints.emptyTitle")}</h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{t("memory.footprints.emptyDesc")}</p>
-                </div>
-              ) : (
-                <div className="ml-4 space-y-8 border-l-[2px] border-slate-200 pb-8 pt-2 dark:border-slate-800 rtl:ml-0 rtl:mr-4 rtl:border-l-0 rtl:border-r-[2px] md:ml-8 md:space-y-10 rtl:md:mr-8">
-                  {filteredFootprintGroups.map((group) => (
-                    <div key={group.id} className="relative pl-6 rtl:pl-0 rtl:pr-6 md:pl-10 rtl:md:pr-10">
-                      <div className="absolute -left-[15px] top-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border-[2px] border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 rtl:left-auto rtl:-right-[15px] md:-left-[17px] md:h-8 md:w-8 rtl:md:-right-[17px]">
-                        <Calendar className={`h-3.5 w-3.5 md:h-4 md:w-4 ${toneClasses.icon}`} />
-                      </div>
-                      <div className={`mb-4 rounded-2xl border p-4 transition md:mb-5 ${group.entries.some((entry) => entry.name === selectedTimelineEntryName) ? `${toneClasses.selected} shadow-sm` : "border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/70"}`}>
-                        <div className="flex flex-wrap items-center gap-3 pt-0.5 md:pt-1">
-                          <h3 className="text-[15px] font-bold tracking-tight text-slate-800 dark:text-slate-200 md:text-[16px]" dir="ltr">{group.dateLabel}</h3>
-                          <span className="rounded-full border border-slate-200/80 bg-slate-200/60 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 md:text-[11px]">{t("memory.footprints.entries", group.entries.length)}</span>
-                          {group.probeDay ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold md:text-[11px] ${toneClasses.chip}`}>{probeStatusLabel(group.probeDay.status, t)}</span> : null}
-                        </div>
-                        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto] md:items-start">
-                          <div className="text-xs leading-5 text-slate-600 dark:text-slate-300">{group.entries[0]?.content ? group.entries[0].content.slice(0, 180) : group.entries[0]?.path ?? t("memory.footprints.noDetail")}</div>
-                          <div className={`rounded-xl border px-3 py-2 text-[11px] font-medium shadow-sm ${group.entries.some((entry) => entry.name === selectedTimelineEntryName) ? toneClasses.selectedBadge : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>{group.entries[0]?.updatedAtMs ? new Date(group.entries[0].updatedAtMs).toLocaleTimeString() : t("memory.footprints.noTime")}</div>
-                        </div>
-                      </div>
-                      <div className="space-y-3 md:space-y-4">
-                        {group.entries.map((item) => (
-                          <div key={item.name} className="group relative outline-none" tabIndex={0} onClick={() => onSelectTimelineEntry(item.name)}>
-                            <div className={`absolute -left-[29.5px] top-[16px] h-2.5 w-2.5 rounded-full border-[2px] border-slate-300 bg-white transition-colors dark:border-slate-600 dark:bg-slate-800 rtl:left-auto rtl:-right-[29.5px] md:-left-[45px] md:top-[20px] md:h-3 md:w-3 md:border-[2.5px] rtl:md:-right-[45px] ${toneClasses.hoverDot}`} />
-                            <div className={`cursor-pointer rounded-xl border p-3.5 shadow-sm transition-all group-focus:ring-2 md:rounded-lg md:p-4 dark:md:hover:border-slate-700 ${toneClasses.ring} ${selectedTimelineEntryName === item.name ? toneClasses.selected : "border-slate-200 bg-white md:hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900"}`}>
-                              <div className="mb-2 flex items-center justify-between">
-                                <div className="flex items-center gap-1.5 md:gap-2">
-                                  <span className="flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-mono text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 md:text-[11px]" dir="ltr"><Clock className="h-2.5 w-2.5 md:h-3 md:w-3" /> {item.updatedAtMs ? new Date(item.updatedAtMs).toLocaleTimeString() : "-"}</span>
-                                  <span className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium ${toneClasses.chip}`}><Network className="h-2.5 w-2.5 md:h-3 md:w-3" /><span className="max-w-[120px] truncate md:max-w-none">{timelineAccess?.mode ?? timelineResult?.source ?? t("memory.footprints.timelineFallback")}</span></span>
-                                  {getAgentBadge(selectedAgentId)}
-                                </div>
-                                <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium md:px-2 md:text-[11px] ${toneClasses.chip}`}>{item.name}</span>
-                              </div>
-                              <p className="text-[13px] leading-relaxed text-slate-700 dark:text-slate-300">{item.path}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+              <ArchiveSectionCard tone={tone}>
+                {filteredFootprintGroups.length === 0 ? (
+                  <div className="mx-4 mt-8 flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                      <Footprints className="h-8 w-8 text-slate-400 dark:text-slate-500" />
                     </div>
-                  ))}
-                </div>
-              )}
-            </ArchiveSectionCard>
+                    <h3 className="mb-1 text-base font-semibold text-slate-900 dark:text-slate-100">{t("memory.footprints.emptyTitle")}</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">{t("memory.footprints.emptyDesc")}</p>
+                  </div>
+                ) : (
+                  <div className="ml-4 space-y-8 border-l-[2px] border-slate-200 pb-8 pt-2 dark:border-slate-800 rtl:ml-0 rtl:mr-4 rtl:border-l-0 rtl:border-r-[2px] md:ml-8 md:space-y-10 rtl:md:mr-8">
+                    {filteredFootprintGroups.map((group) => (
+                      <div key={group.id} className="relative pl-6 rtl:pl-0 rtl:pr-6 md:pl-10 rtl:md:pr-10">
+                        <div className="absolute -left-[15px] top-0 z-10 flex h-7 w-7 items-center justify-center rounded-full border-[2px] border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 rtl:left-auto rtl:-right-[15px] md:-left-[17px] md:h-8 md:w-8 rtl:md:-right-[17px]">
+                          <Calendar className={`h-3.5 w-3.5 md:h-4 md:w-4 ${toneClasses.icon}`} />
+                        </div>
+                        <div className={`mb-4 rounded-2xl border p-4 transition md:mb-5 ${group.entries.some((entry) => entry.name === selectedTimelineEntryName) ? `${toneClasses.selected} shadow-sm` : "border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/70"}`}>
+                          <div className="flex flex-wrap items-center gap-3 pt-0.5 md:pt-1">
+                            <h3 className="text-[15px] font-bold tracking-tight text-slate-800 dark:text-slate-200 md:text-[16px]" dir="ltr">{group.dateLabel}</h3>
+                            <span className="rounded-full border border-slate-200/80 bg-slate-200/60 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 md:text-[11px]">{t("memory.footprints.entries", group.entries.length)}</span>
+                            {group.probeDay ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold md:text-[11px] ${toneClasses.chip}`}>{probeStatusLabel(group.probeDay.status, t)}</span> : null}
+                          </div>
+                          <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto] md:items-start">
+                            <div className="text-xs leading-5 text-slate-600 dark:text-slate-300">{group.entries[0]?.content ? group.entries[0].content.slice(0, 180) : group.entries[0]?.path ?? t("memory.footprints.noDetail")}</div>
+                            <div className={`rounded-xl border px-3 py-2 text-[11px] font-medium shadow-sm ${group.entries.some((entry) => entry.name === selectedTimelineEntryName) ? toneClasses.selectedBadge : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>{group.entries[0]?.updatedAtMs ? new Date(group.entries[0].updatedAtMs).toLocaleTimeString() : t("memory.footprints.noTime")}</div>
+                          </div>
+                        </div>
+                        <div className="space-y-3 md:space-y-4">
+                          {group.entries.map((item) => (
+                            <div key={item.name} className="group relative outline-none" tabIndex={0} onClick={() => onSelectTimelineEntry(item.name)}>
+                              <div className={`absolute -left-[29.5px] top-[16px] h-2.5 w-2.5 rounded-full border-[2px] border-slate-300 bg-white transition-colors dark:border-slate-600 dark:bg-slate-800 rtl:left-auto rtl:-right-[29.5px] md:-left-[45px] md:top-[20px] md:h-3 md:w-3 md:border-[2.5px] rtl:md:-right-[45px] ${toneClasses.hoverDot}`} />
+                              <div className={`cursor-pointer rounded-xl border p-3.5 shadow-sm transition-all group-focus:ring-2 md:rounded-lg md:p-4 dark:md:hover:border-slate-700 ${toneClasses.ring} ${selectedTimelineEntryName === item.name ? toneClasses.selected : "border-slate-200 bg-white md:hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900"}`}>
+                                <div className="mb-2 flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 md:gap-2">
+                                    <span className="flex items-center gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-mono text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 md:text-[11px]" dir="ltr"><Clock className="h-2.5 w-2.5 md:h-3 md:w-3" /> {item.updatedAtMs ? new Date(item.updatedAtMs).toLocaleTimeString() : "-"}</span>
+                                    <span className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium ${toneClasses.chip}`}><Network className="h-2.5 w-2.5 md:h-3 md:w-3" /><span className="max-w-[120px] truncate md:max-w-none">{timelineAccess?.mode ?? timelineResult?.source ?? t("memory.footprints.timelineFallback")}</span></span>
+                                    {getAgentBadge(selectedAgentId)}
+                                  </div>
+                                  <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium md:px-2 md:text-[11px] ${toneClasses.chip}`}>{item.name}</span>
+                                </div>
+                                <p className="text-[13px] leading-relaxed text-slate-700 dark:text-slate-300">{item.path}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ArchiveSectionCard>
             </div>
           </div>
         </div>

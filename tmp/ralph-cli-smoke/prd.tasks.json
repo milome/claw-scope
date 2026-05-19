@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "ralph_prd_v2",
+  "branchName": "release/v0.1.3",
+  "taskDescription": "Execute speckit implement tasks from tasks",
+  "projectContext": {},
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "T001 Implement smoke runtime flow in src/app.ts",
+      "description": "T001 Implement smoke runtime flow in src/app.ts",
+      "acceptanceCriteria": [
+        "T001 Implement smoke runtime flow in src/app.ts"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Source task checkbox: [ ]",
+      "involvesProductionCode": true,
+      "tddSteps": [
+        {
+          "phase": "TDD-RED",
+          "passes": true,
+          "note": "T001 vitest smoke/runtime.test.ts => 1 failed",
+          "timestamp": "2026-04-20T01:20:00+08:00"
+        },
+        {
+          "phase": "TDD-GREEN",
+          "passes": true,
+          "note": "T001 vitest smoke/runtime.test.ts => 1 passed",
+          "timestamp": "2026-04-20T01:21:00+08:00"
+        },
+        {
+          "phase": "TDD-REFACTOR",
+          "passes": true,
+          "note": "T001 no refactor needed",
+          "timestamp": "2026-04-20T01:22:00+08:00"
+        }
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "T002 Update README copy",
+      "description": "T002 Update README copy",
+      "acceptanceCriteria": [
+        "T002 Update README copy"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Source task checkbox: [x]",
+      "involvesProductionCode": false,
+      "tddSteps": [
+        {
+          "phase": "DONE",
+          "passes": true,
+          "note": "T002 docs updated",
+          "timestamp": "2026-04-20T01:23:00+08:00"
+        }
+      ]
+    }
+  ]
+}

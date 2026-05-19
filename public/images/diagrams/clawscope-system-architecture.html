@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClawScope System Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js" integrity="sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      padding: 32px;
+      background:
+        radial-gradient(circle at top left, rgba(34, 211, 238, 0.14), transparent 28rem),
+        radial-gradient(circle at 85% 18%, rgba(167, 139, 250, 0.12), transparent 30rem),
+        #020617;
+      color: #f8fafc;
+      font-family: 'JetBrains Mono', 'Noto Sans SC', ui-monospace, monospace;
+    }
+    .container { max-width: 1280px; margin: 0 auto; }
+    .header { margin-bottom: 22px; }
+    .header-row { display: flex; align-items: center; gap: 14px; }
+    .pulse-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #22d3ee;
+      box-shadow: 0 0 24px rgba(34, 211, 238, 0.8);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+    h1 { font-size: 25px; line-height: 1.2; letter-spacing: -0.04em; }
+    .subtitle { margin-left: 26px; margin-top: 8px; color: #94a3b8; font-size: 13px; }
+    .diagram-container {
+      padding: 18px;
+      border: 1px solid #1e293b;
+      border-radius: 22px;
+      background: rgba(15, 23, 42, 0.62);
+      box-shadow: 0 24px 80px rgba(2, 6, 23, 0.55);
+      overflow-x: auto;
+    }
+    svg { display: block; width: 100%; min-width: 980px; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .card {
+      min-height: 144px;
+      padding: 18px;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.62);
+    }
+    .card-header { display: flex; gap: 9px; align-items: center; margin-bottom: 10px; }
+    .card-dot { width: 9px; height: 9px; border-radius: 50%; }
+    .cyan { background: #22d3ee; }
+    .emerald { background: #34d399; }
+    .violet { background: #a78bfa; }
+    .card h3 { font-size: 14px; }
+    .card ul { list-style: none; color: #94a3b8; font-size: 12px; line-height: 1.7; }
+    .footer { margin-top: 18px; text-align: center; color: #475569; font-size: 12px; }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .toolbar-toggle {
+      padding: 4px 10px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: #64748b;
+      cursor: pointer;
+      font: inherit;
+      font-size: 22px;
+      line-height: 1;
+    }
+    .toolbar-toggle:hover { background: rgba(30, 41, 59, 0.7); color: #cbd5e1; }
+    .toolbar-actions { display: none; gap: 8px; }
+    .toolbar.expanded .toolbar-actions { display: flex; }
+    .toolbar-actions button {
+      padding: 7px 11px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: rgba(30, 41, 59, 0.85);
+      color: #cbd5e1;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .toolbar-actions button:hover { border-color: #64748b; background: rgba(51, 65, 85, 0.85); color: white; }
+    @media (max-width: 860px) {
+      body { padding: 16px; }
+      .cards { grid-template-columns: 1fr; }
+      .header-row { align-items: flex-start; }
+    }
+    @media print {
+      body { background: #020617; padding: 16px; }
+      .toolbar { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="report-container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>ClawScope System Architecture</h1>
+        <div class="toolbar">
+          <div class="toolbar-actions">
+            <button onclick="copyAsImage(this)">📋 Copy</button>
+            <button onclick="downloadPNG(this)">🖼️ PNG</button>
+            <button onclick="downloadPDF(this)">📄 PDF</button>
+          </div>
+          <button class="toolbar-toggle" onclick="this.parentElement.classList.toggle('expanded')" title="Export options" aria-label="Export options">⋯</button>
+        </div>
+      </div>
+      <p class="subtitle">OpenClaw 记忆可视化、配置管理与进化审计的本地桌面控制面</p>
+    </div>
+
+    <div class="diagram-container">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 860" role="img" aria-labelledby="title desc">
+        <title id="title">ClawScope 系统架构图</title>
+        <desc id="desc">ClawScope 由 React 视图层、Tauri 命令桥、Rust 本地能力、OpenClaw Gateway 与本地 JSON 状态存储组成。</desc>
+        <defs>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+          </pattern>
+          <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+          </marker>
+          <marker id="arrowCyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee"/>
+          </marker>
+          <marker id="arrowEmerald" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#34d399"/>
+          </marker>
+          <marker id="arrowRose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#fb7185"/>
+          </marker>
+          <style>
+            .canvas { fill: #020617; }
+            .grid-bg { fill: url(#grid); }
+            .title { font: 700 28px 'JetBrains Mono', 'Noto Sans SC', ui-monospace, monospace; fill: #f8fafc; letter-spacing: -0.6px; }
+            .subtitle { font: 500 13px 'JetBrains Mono', 'Noto Sans SC', ui-monospace, monospace; fill: #94a3b8; }
+            .boundary-label { font: 700 12px 'JetBrains Mono', 'Noto Sans SC', ui-monospace, monospace; letter-spacing: 0.4px; }
+            .box-title { font: 700 13px 'JetBrains Mono', 'Noto Sans SC', ui-monospace, monospace; fill: #f8fafc; }
+            .box-text { font: 500 10px 'JetBrains Mono', 'Noto Sans SC', ui-monospace, monospace; fill: #94a3b8; }
+            .box-accent { font: 600 9px 'JetBrains Mono', 'Noto Sans SC', ui-monospace, monospace; }
+            .tiny { font: 500 8px 'JetBrains Mono', 'Noto Sans SC', ui-monospace, monospace; fill: #94a3b8; }
+            .flow-label { font: 600 9px 'JetBrains Mono', 'Noto Sans SC', ui-monospace, monospace; fill: #cbd5e1; }
+            .legend { font: 600 9px 'JetBrains Mono', 'Noto Sans SC', ui-monospace, monospace; fill: #94a3b8; }
+            .pill { font: 700 9px 'JetBrains Mono', 'Noto Sans SC', ui-monospace, monospace; fill: #020617; }
+          </style>
+        </defs>
+
+        <rect class="canvas" width="1280" height="860"/>
+        <rect class="grid-bg" width="1280" height="860" opacity="0.9"/>
+        <circle cx="72" cy="54" r="7" fill="#22d3ee" filter="url(#softGlow)"/>
+        <text class="title" x="92" y="64">ClawScope System Architecture</text>
+        <text class="subtitle" x="92" y="88">OpenClaw 记忆可视化、配置管理与进化审计的本地桌面控制面</text>
+
+        <line x1="188" y1="343" x2="248" y2="343" stroke="#22d3ee" stroke-width="2" marker-end="url(#arrowCyan)"/>
+        <path d="M 480 250 L 516 250 L 516 302 L 548 302" fill="none" stroke="#22d3ee" stroke-width="1.8" marker-end="url(#arrowCyan)"/>
+        <line x1="480" y1="360" x2="548" y2="360" stroke="#22d3ee" stroke-width="1.8" marker-end="url(#arrowCyan)"/>
+        <path d="M 652 322 L 672 322 L 672 264 L 698 264" fill="none" stroke="#34d399" stroke-width="1.8" marker-end="url(#arrowEmerald)"/>
+        <path d="M 652 360 L 672 360 L 672 579 L 698 579" fill="none" stroke="#34d399" stroke-width="1.8" marker-end="url(#arrowEmerald)"/>
+        <path d="M 880 579 L 895 579 L 895 264 L 880 264" fill="none" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#arrowEmerald)"/>
+        <line x1="900" y1="260" x2="994" y2="260" stroke="#34d399" stroke-width="2" marker-end="url(#arrowEmerald)"/>
+        <path d="M 880 468 L 930 468 L 930 283 L 995 283" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#arrowRose)"/>
+        <line x1="800" y1="608" x2="800" y2="626" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrowhead)"/>
+        <path d="M 700 483 L 600 483 L 600 626" fill="none" stroke="#a78bfa" stroke-width="1.6" marker-end="url(#arrowhead)"/>
+        <line x1="370" y1="532" x2="370" y2="586" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path d="M 1097 302 L 1097 334" fill="none" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path d="M 1097 392 L 1097 425" fill="none" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path d="M 1097 510 L 1097 538" fill="none" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+
+        <rect x="220" y="118" width="710" height="595" rx="18" fill="#0f172a" fill-opacity="0.7" stroke="#fbbf24" stroke-width="1.3" stroke-dasharray="9,5"/>
+        <text class="boundary-label" x="240" y="142" fill="#fbbf24">ClawScope Desktop App / Tauri 2 runtime</text>
+        <rect x="245" y="165" width="260" height="440" rx="14" fill="#083344" fill-opacity="0.2" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="5,4"/>
+        <text class="boundary-label" x="265" y="188" fill="#22d3ee">React UI Layer</text>
+        <rect x="675" y="165" width="230" height="440" rx="14" fill="#064e3b" fill-opacity="0.18" stroke="#34d399" stroke-width="1.2" stroke-dasharray="5,4"/>
+        <text class="boundary-label" x="695" y="188" fill="#34d399">Rust Core Layer</text>
+        <rect x="965" y="165" width="265" height="470" rx="16" fill="#1e293b" fill-opacity="0.5" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="8,5"/>
+        <text class="boundary-label" x="985" y="189" fill="#cbd5e1">External OpenClaw Runtime</text>
+
+        <rect x="55" y="302" width="132" height="82" rx="10" fill="#1e293b" fill-opacity="0.86" stroke="#94a3b8" stroke-width="1.5"/>
+        <text class="box-title" x="121" y="332" text-anchor="middle">Operator</text>
+        <text class="box-text" x="121" y="351" text-anchor="middle">搜索 / 审计 / 配置</text>
+        <text class="box-accent" x="121" y="370" text-anchor="middle" fill="#94a3b8">桌面工作台</text>
+
+        <rect x="270" y="210" width="210" height="72" rx="8" fill="#083344" fill-opacity="0.48" stroke="#22d3ee" stroke-width="1.5"/>
+        <text class="box-title" x="375" y="236" text-anchor="middle">Shell + Router</text>
+        <text class="box-text" x="375" y="254" text-anchor="middle">Profile / Memory / Config</text>
+        <text class="box-accent" x="375" y="270" text-anchor="middle" fill="#22d3ee">Evolution views</text>
+        <rect x="270" y="318" width="210" height="90" rx="8" fill="#083344" fill-opacity="0.48" stroke="#22d3ee" stroke-width="1.5"/>
+        <text class="box-title" x="375" y="344" text-anchor="middle">OpenClawContext</text>
+        <text class="box-text" x="375" y="363" text-anchor="middle">连接状态 / 心跳 / 会话列表</text>
+        <text class="box-text" x="375" y="380" text-anchor="middle">LAN discovery / saved endpoints</text>
+        <text class="box-accent" x="375" y="397" text-anchor="middle" fill="#22d3ee">统一前端命令入口</text>
+        <rect x="270" y="444" width="210" height="88" rx="8" fill="#083344" fill-opacity="0.48" stroke="#22d3ee" stroke-width="1.5"/>
+        <text class="box-title" x="375" y="470" text-anchor="middle">Domain Panels</text>
+        <text class="box-text" x="375" y="489" text-anchor="middle">记忆搜索 / 知识图谱 / 足迹</text>
+        <text class="box-text" x="375" y="506" text-anchor="middle">Agent 设置 / 配置 schema</text>
+        <text class="box-accent" x="375" y="523" text-anchor="middle" fill="#22d3ee">进化预览与审计报告</text>
+        <rect x="270" y="586" width="210" height="58" rx="8" fill="#4c1d95" fill-opacity="0.42" stroke="#a78bfa" stroke-width="1.5"/>
+        <text class="box-title" x="375" y="611" text-anchor="middle">Browser localStorage</text>
+        <text class="box-text" x="375" y="629" text-anchor="middle">URL / auth mode / setup flags</text>
+
+        <rect x="548" y="285" width="104" height="98" rx="10" fill="#78350f" fill-opacity="0.42" stroke="#fbbf24" stroke-width="1.5"/>
+        <text class="box-title" x="600" y="315" text-anchor="middle">Tauri IPC</text>
+        <text class="box-text" x="600" y="335" text-anchor="middle">invoke(...)</text>
+        <text class="box-text" x="600" y="352" text-anchor="middle">gateway_*</text>
+        <text class="box-accent" x="600" y="369" text-anchor="middle" fill="#fbbf24">evolution_*</text>
+
+        <rect x="700" y="220" width="180" height="88" rx="8" fill="#064e3b" fill-opacity="0.48" stroke="#34d399" stroke-width="1.5"/>
+        <text class="box-title" x="790" y="246" text-anchor="middle">Gateway Orchestrator</text>
+        <text class="box-text" x="790" y="265" text-anchor="middle">commands + connector</text>
+        <text class="box-accent" x="790" y="284" text-anchor="middle" fill="#34d399">WebSocket RPC / methods</text>
+        <rect x="700" y="340" width="180" height="74" rx="8" fill="#064e3b" fill-opacity="0.48" stroke="#34d399" stroke-width="1.5"/>
+        <text class="box-title" x="790" y="366" text-anchor="middle">Session State</text>
+        <text class="box-text" x="790" y="385" text-anchor="middle">active sessions / snapshots</text>
+        <text class="box-accent" x="790" y="401" text-anchor="middle" fill="#34d399">pending request router</text>
+        <rect x="700" y="446" width="180" height="74" rx="8" fill="#881337" fill-opacity="0.42" stroke="#fb7185" stroke-width="1.5"/>
+        <text class="box-title" x="790" y="472" text-anchor="middle">Auth + Discovery</text>
+        <text class="box-text" x="790" y="491" text-anchor="middle">device identity / signer</text>
+        <text class="box-accent" x="790" y="507" text-anchor="middle" fill="#fb7185">challenge / token fallback</text>
+        <rect x="700" y="550" width="180" height="58" rx="8" fill="#064e3b" fill-opacity="0.48" stroke="#34d399" stroke-width="1.5"/>
+        <text class="box-title" x="790" y="574" text-anchor="middle">Evolution Engine</text>
+        <text class="box-text" x="790" y="592" text-anchor="middle">preview / execute / rollback</text>
+        <rect x="515" y="626" width="170" height="58" rx="8" fill="#4c1d95" fill-opacity="0.42" stroke="#a78bfa" stroke-width="1.5"/>
+        <text class="box-title" x="600" y="651" text-anchor="middle">Gateway Store</text>
+        <text class="box-text" x="600" y="669" text-anchor="middle">identity / tokens / endpoints</text>
+        <rect x="715" y="626" width="170" height="58" rx="8" fill="#4c1d95" fill-opacity="0.42" stroke="#a78bfa" stroke-width="1.5"/>
+        <text class="box-title" x="800" y="651" text-anchor="middle">Evolution Store</text>
+        <text class="box-text" x="800" y="669" text-anchor="middle">history / audit / snapshots</text>
+
+        <rect x="995" y="220" width="205" height="82" rx="8" fill="#1e293b" fill-opacity="0.82" stroke="#94a3b8" stroke-width="1.5"/>
+        <text class="box-title" x="1098" y="246" text-anchor="middle">OpenClaw Gateway</text>
+        <text class="box-text" x="1098" y="265" text-anchor="middle">ws://host:18789</text>
+        <text class="box-accent" x="1098" y="284" text-anchor="middle" fill="#94a3b8">protocol verified endpoint</text>
+        <rect x="995" y="334" width="205" height="60" rx="8" fill="#1e293b" fill-opacity="0.82" stroke="#94a3b8" stroke-width="1.5"/>
+        <text class="box-title" x="1098" y="359" text-anchor="middle">Agent Registry</text>
+        <text class="box-text" x="1098" y="377" text-anchor="middle">agents / identity / workspace</text>
+        <rect x="995" y="425" width="205" height="86" rx="8" fill="#1e293b" fill-opacity="0.82" stroke="#94a3b8" stroke-width="1.5"/>
+        <text class="box-title" x="1098" y="451" text-anchor="middle">Memory Runtime</text>
+        <text class="box-text" x="1098" y="470" text-anchor="middle">MEMORY.md / daily memory</text>
+        <text class="box-text" x="1098" y="487" text-anchor="middle">semantic search / timeline</text>
+        <text class="box-accent" x="1098" y="503" text-anchor="middle" fill="#94a3b8">index + diagnostics</text>
+        <rect x="995" y="538" width="205" height="60" rx="8" fill="#1e293b" fill-opacity="0.82" stroke="#94a3b8" stroke-width="1.5"/>
+        <text class="box-title" x="1098" y="563" text-anchor="middle">Config Surface</text>
+        <text class="box-text" x="1098" y="581" text-anchor="middle">agent settings / config schema</text>
+
+        <rect x="202" y="322" width="38" height="18" rx="9" fill="#22d3ee"/>
+        <text class="pill" x="221" y="335" text-anchor="middle">UI</text>
+        <text class="flow-label" x="520" y="278" text-anchor="middle">views call context</text>
+        <text class="flow-label" x="671" y="307" text-anchor="middle">commands</text>
+        <text class="flow-label" x="950" y="247" text-anchor="middle">WebSocket RPC</text>
+        <text class="flow-label" x="932" y="410" text-anchor="middle" fill="#fb7185">challenge + signed connect</text>
+        <text class="flow-label" x="922" y="542" text-anchor="middle" fill="#34d399">memory get/set/index</text>
+        <text class="flow-label" x="625" y="716" text-anchor="middle">本地 JSON 状态保障离线重连、审计与回滚</text>
+
+        <text class="boundary-label" x="72" y="760" fill="#f8fafc">Legend</text>
+        <rect x="72" y="778" width="18" height="12" rx="3" fill="#083344" fill-opacity="0.48" stroke="#22d3ee"/>
+        <text class="legend" x="100" y="788">Frontend</text>
+        <rect x="190" y="778" width="18" height="12" rx="3" fill="#064e3b" fill-opacity="0.48" stroke="#34d399"/>
+        <text class="legend" x="218" y="788">Rust backend</text>
+        <rect x="338" y="778" width="18" height="12" rx="3" fill="#4c1d95" fill-opacity="0.42" stroke="#a78bfa"/>
+        <text class="legend" x="366" y="788">Local store</text>
+        <rect x="484" y="778" width="18" height="12" rx="3" fill="#881337" fill-opacity="0.42" stroke="#fb7185"/>
+        <text class="legend" x="512" y="788">Security/auth</text>
+        <rect x="648" y="778" width="18" height="12" rx="3" fill="#78350f" fill-opacity="0.42" stroke="#fbbf24"/>
+        <text class="legend" x="676" y="788">IPC/runtime boundary</text>
+        <line x1="850" y1="784" x2="884" y2="784" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,5"/>
+        <text class="legend" x="896" y="788">Auth flow</text>
+        <line x1="1012" y1="784" x2="1046" y2="784" stroke="#34d399" stroke-width="1.7" marker-end="url(#arrowEmerald)"/>
+        <text class="legend" x="1058" y="788">Data/control flow</text>
+        <text class="tiny" x="72" y="826">Source: README architecture overview, src/app/contexts/OpenClawContext.tsx, src-tauri/src/lib.rs, gateway/*, evolution/*</text>
+      </svg>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-header"><span class="card-dot cyan"></span><h3>用户看见的是控制面</h3></div>
+        <ul>
+          <li>• React 负责 Profile、Memory、Config、Evolution 四类工作视图。</li>
+          <li>• OpenClawContext 将连接、心跳、会话与发现逻辑收束到一个入口。</li>
+          <li>• Browser localStorage 只保存界面级配置，不保存 Rust 审计状态。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-dot emerald"></span><h3>本机 Rust 负责可信执行</h3></div>
+        <ul>
+          <li>• Tauri IPC 将前端动作映射到 gateway_* 与 evolution_* commands。</li>
+          <li>• Gateway connector 维护 WebSocket 会话、请求路由与协议能力。</li>
+          <li>• Auth/Discovery 处理设备身份、签名连接、token fallback 与局域网发现。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-dot violet"></span><h3>进化流程可审计、可回滚</h3></div>
+        <ul>
+          <li>• Evolution 先读取 MEMORY 文档生成 preview，再进入 execute。</li>
+          <li>• 本地 history、audit-log 与 snapshots 记录关键决策和恢复点。</li>
+          <li>• 执行后回写 OpenClaw memory，并触发 index 刷新。</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="footer">ClawScope • Tauri 2 + React 18 + Rust • Diagram source for README SVG export</p>
+  </div>
+
+  <script>
+    async function copyAsImage(btn) {
+      const orig = btn.textContent;
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        btn.textContent = '✓ Copied!';
+      } catch (e) {
+        btn.textContent = '✗ Failed';
+      }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+
+    async function downloadPNG(btn) {
+      const orig = btn.textContent;
+      btn.textContent = '⏳ ...';
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const link = document.createElement('a');
+        link.download = 'clawscope-system-architecture.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        btn.textContent = '✓ Done!';
+      } catch (e) {
+        btn.textContent = '✗ Failed';
+      }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+
+    async function downloadPDF(btn) {
+      const orig = btn.textContent;
+      btn.textContent = '⏳ ...';
+      try {
+        const el = document.getElementById('report-container');
+        const r = el.getBoundingClientRect();
+        const pad = 32;
+        const canvas = await html2canvas(document.body, { backgroundColor: '#020617', scale: 2, useCORS: true, ignoreElements: (e) => e.classList && e.classList.contains('toolbar'), x: r.left + window.scrollX - pad, y: r.top + window.scrollY - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const orientation = canvas.width > canvas.height ? 'landscape' : 'portrait';
+        const pdf = new jsPDF({ orientation, unit: 'px', format: [canvas.width, canvas.height], hotfixes: ['px_scaling'] });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save('clawscope-system-architecture.pdf');
+        btn.textContent = '✓ Done!';
+      } catch (e) {
+        btn.textContent = '✗ Failed';
+      }
+      setTimeout(() => btn.textContent = orig, 2000);
+    }
+  </script>
+</body>
+</html>

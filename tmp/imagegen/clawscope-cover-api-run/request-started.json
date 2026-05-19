@@ -1,0 +1,17 @@
+{
+  "stage": "request_started",
+  "url": "https://ai-api-cn.db-kj.com/v1/images/generations",
+  "method": "POST",
+  "model": "gpt-image-2",
+  "size": "3840x2160",
+  "quality": "high",
+  "output_format": "png",
+  "n": 1,
+  "has_api_key": true,
+  "input_image": "D:\\Dev\\claw-scope\\icon-source.png",
+  "input_image_bytes": 329197,
+  "prompt_path": "D:\\Dev\\claw-scope\\tmp\\imagegen\\clawscope-cover-bg-prompt.txt",
+  "prompt_chars": 2629,
+  "body_bytes": 441766,
+  "started_ms": 1779106195743
+}

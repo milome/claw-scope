@@ -1,0 +1,57 @@
+Use case: ads-marketing
+Asset type: GitHub README / project cover banner
+
+Primary request:
+Create a bright, colorful, motion-ready hero cover background for a desktop developer tool named "ClawScope". The final exact project icon and all title typography will be composited later in post-production. Do not redraw, imitate, distort, reinterpret, or generate the logo/icon. Do not render any text.
+
+Input image:
+If Image 1 is provided, treat it only as a brand mood reference for color personality: aqua/cyan app-icon background, coral-red character energy, and blue observation-lens feeling. Do not reproduce, redraw, or imitate the icon. The exact icon will be added later.
+
+Brand interpretation:
+ClawScope is an OpenClaw ecosystem desktop tool. It makes agent memory visible and agent evolution controllable. It connects to OpenClaw Gateway, observes agents, inspects memory documents, maps timeline traces, performs semantic search, visualizes knowledge graphs, previews evolution diffs, tracks audit trails, and supports rollback paths. The image should immediately communicate: observe memory, search knowledge, understand evolution, and control change.
+
+Visual direction:
+Use an ocean-inspired bright technology palette. Do not use a dark sci-fi control room style. Build the scene with luminous aqua, cyan, lagoon blue, seafoam, soft sky blue, pearl white, and clean slate, energized by coral red, emerald green, violet, amber, and rose accents. The mood should be vivid, optimistic, lively, premium, and product-like. It should feel like a polished macOS app launch artwork for an intelligent developer tool, not a generic AI network background.
+
+Scene/backdrop:
+Create an abstract ocean-current product map rather than a literal ocean scene. Use flowing translucent currents, soft gradients, rounded UI cards, memory document tiles, timeline beads, semantic knowledge graph nodes, search ripple rings, and evolution diff streams. Show the OpenClaw ecosystem as a readable abstract flow: a central OpenClaw Gateway-like hub connects to multiple agent nodes, memory cards, timeline traces, knowledge clusters, audit trails, and green/red evolution diff paths. No text labels are needed.
+
+Icon integration area:
+Leave a natural open visual focus area on the left-center for the exact project icon to be composited later as a large hero app icon, approximately 900px wide on a 3840x2160 canvas. The icon will be uniformly scaled from the original source in post-production, preserving its shape, colors, proportions, transparency, and rounded-square silhouette.
+
+The open visual focus area should be about 1000x1000px to 1080x1080px, centered around x=860, y=1080. It must feel naturally sized for a large hero app icon, not a small badge. This area must not look like a reserved empty slot. Do not draw any visible frame, panel, badge, pedestal, rounded rectangle, square, glass plate, docking card, border, shadow box, or placeholder container.
+
+The icon area should be open luminous ocean-gradient space only: soft aqua/cyan ambient glow, subtle coral warmth, and smooth background depth that will blend naturally with the real icon's cyan background and coral-red subject. All memory nodes, cards, particles, graph paths, ribbons, and motion trails must curve around this area and fade before entering it. Nothing should cross behind or touch the future icon area.
+
+Composition/framing:
+16:9 wide banner. Left-center is the natural icon focus area. The main visual energy should flow from the future icon area toward the center and right through ocean-current paths, OpenClaw ecosystem flows, memory cards, timeline beads, semantic search ripples, knowledge graph clusters, audit trails, and green/red evolution diff streams. Reserve clean readable space on the right side for post-production typography: "ClawScope" and "记忆可见，进化可期". The right side should be rich, bright, and energetic, but not cluttered.
+
+Motion language:
+Design the image as the first frame of a looping animated README banner. Include clear motion cues that can be animated later: flowing ocean-current paths, pulsing knowledge nodes, drifting rounded memory cards, expanding search ripple rings, moving timeline beads, and green/red diff streams traveling through the OpenClaw ecosystem. The still image should already feel alive and directional.
+
+Style/medium:
+Premium editorial product illustration, clean vector-3D hybrid, macOS app launch aesthetic, bright oceanic technology artwork, crisp rounded shapes, soft depth, gentle translucency, playful but precise, polished but approachable.
+
+Lighting/mood:
+Bright ocean glow, soft studio lighting, airy depth, gentle ambient bloom, optimistic and vivid. Avoid gloomy lighting, heavy black shadows, and cold enterprise dashboard mood.
+
+Color palette:
+Aqua, cyan, lagoon blue, seafoam, sky blue, pearl white, soft slate, coral red, emerald green, violet, amber, and rose. Diverse and lively module accents. No monochrome blue. No dark graphite dominance. No purple dominance.
+
+Materials/textures:
+Soft translucent UI surfaces, rounded cards, subtle glass-like highlights, clean vector paths, luminous nodes, fine grain, light ocean-current gradients, delicate grid hints, smooth depth layers. Keep the image breathable and fresh.
+
+Text:
+No rendered text. No fake UI labels. No pseudo text. No watermark. Leave clean space for exact title typography to be added later.
+
+Constraints:
+Do not include any logo, icon, app mark, fake text, watermark, humans, animals, claws, cartoon mascots, literal lobster, hacker imagery, terminal wall, surveillance dashboard, cockpit, data center, enterprise command center, or cyberpunk scene. Do not create a visible empty icon container. Do not create any large rounded-square placeholder behind the future icon area.
+
+Avoid:
+dark sci-fi control room, black-blue corporate dashboard, cyberpunk clutter, generic AI neural network background, empty glass badge, acrylic panel, hard icon container, literal underwater scene, fish, waves, beach, boats, coral reef, noisy particles, illegible pseudo text, distorted symbols, military mood, operations-room mood, cold monochrome technology poster.
+
+Quality:
+high
+
+Size:
+3840x2160

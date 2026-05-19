@@ -1,7 +1,7 @@
 # ClawScope
 
 <p align="center">
-  <img src="public/images/covers/clawscope-cover-v3-animated.webp" alt="ClawScope 封面" width="100%" />
+  <img src="public/images/covers/clawscope-cover-v4-animated.webp" alt="ClawScope 封面" width="100%" />
 </p>
 
 **记忆可见，进化可期** · [English](README.md)
