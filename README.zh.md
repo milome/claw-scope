@@ -21,7 +21,7 @@ OpenClaw 记忆与进化管理工具 — 基于 Tauri 2 + Rust 构建的跨平�
 
 ClawScope 是一个本地优先的桌面控制面：React 负责记忆、配置、进化等工作视图，Tauri IPC 将界面动作转发到 Rust 命令层，Rust 侧再通过 OpenClaw Gateway 的 WebSocket 协议访问 Agent、记忆、配置与进化目标。本地 JSON 存储只保存连接身份、端点、审计历史与快照，用于重连、追踪和回滚。
 
-![ClawScope 系统架构图](public/images/diagrams/clawscope-system-architecture.svg)
+![ClawScope 系统架构图](public/images/diagrams/clawscope-system-architecture-zh.svg)
 
 ## 快速开始
 

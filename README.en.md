@@ -21,7 +21,7 @@ An OpenClaw memory and evolution management tool — a cross-platform desktop ap
 
 ClawScope is a local-first desktop control plane: React renders the memory, configuration, and evolution workspaces; Tauri IPC forwards UI actions into the Rust command layer; and Rust talks to OpenClaw Gateway over WebSocket to access agents, memory, configuration, and evolution targets. Local JSON storage only keeps connection identity, endpoints, audit history, and snapshots for reconnect, traceability, and rollback.
 
-![ClawScope system architecture](public/images/diagrams/clawscope-system-architecture.svg)
+![ClawScope system architecture](public/images/diagrams/clawscope-system-architecture-en.svg)
 
 ## Quick Start
 
